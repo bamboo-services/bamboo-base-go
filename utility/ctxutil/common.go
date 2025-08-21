@@ -2,7 +2,6 @@ package xCtxUtil
 
 import (
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xModels "github.com/bamboo-services/bamboo-base-go/models"
 	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
 	"github.com/gin-gonic/gin"
@@ -61,7 +60,6 @@ func GetConfig(c *gin.Context) *xModels.Config {
 	if exists {
 		return value.(*xModels.Config)
 	}
-	GetLogger(c).Named(xConsts.LogUTIL).Panic("在上下文中找不到应用配置，真的注入成功了吗？")
 	return nil
 }
 
@@ -76,23 +74,6 @@ func GetConfig(c *gin.Context) *xModels.Config {
 //   - 请求唯一标识字符串
 func GetRequestKey(c *gin.Context) string {
 	return c.GetString(xConsts.ContextRequestKey)
-}
-
-// GetErrorCode 从上下文中获取错误代码。
-//
-// 该函数获取当前请求的错误代码，如果不存在则返回 nil。
-//
-// 参数说明:
-//   - c: `*gin.Context` 上下文对象
-//
-// 返回值:
-//   - `*xError.ErrorCode` 错误代码，如果不存在则返回 nil
-func GetErrorCode(c *gin.Context) *xError.ErrorCode {
-	value, exists := c.Get(xConsts.ContextErrorCode)
-	if exists {
-		return value.(*xError.ErrorCode)
-	}
-	return nil
 }
 
 // GetErrorMessage 从上下文中获取错误消息。

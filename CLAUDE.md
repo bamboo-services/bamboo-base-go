@@ -153,7 +153,7 @@ reg := xInit.Register()
 
 // 访问初始化后的组件
 engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
-config := reg.Config     // *xModels.xConfig - 应用配置
+config := reg.Config     // *xModels.Config - 应用配置
 logger := reg.Logger     // *zap.Logger - 日志记录器
 
 // 启动服务器

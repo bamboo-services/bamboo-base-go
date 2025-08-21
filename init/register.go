@@ -8,9 +8,9 @@ import (
 
 // Reg 是一个类型别名，用于表示注册操作的整数类型。
 type Reg struct {
-	Serve  *gin.Engine      // Gin 引擎实例
-	Config *xModels.xConfig // 应用配置实例
-	Logger *zap.Logger      // 日志记录器实例
+	Serve  *gin.Engine     // Gin 引擎实例
+	Config *xModels.Config // 应用配置实例
+	Logger *zap.Logger     // 日志记录器实例
 }
 
 // New 创建并返回一个未初始化的 `Reg` 实例。

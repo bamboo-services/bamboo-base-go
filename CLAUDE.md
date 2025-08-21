@@ -28,9 +28,12 @@
   - `xConfig` 结构支持数据库、NoSQL (Redis) 和调试设置
   - 以嵌套 YAML 配置形式组织
 
-- **工具库** (`utility/`): 通用辅助函数和上下文工具
+- **工具库** (`utility/`): 丰富的通用辅助函数和上下文工具
   - `ctxutil/` 提供与数据库、日志和通用操作相关的上下文工具
-  - 通用工具函数如 `Ptr()` 用于指针处理
+  - 基础工具：`Ptr()`、`Val()`、`Contains()`、`ToBool()` 等指针和类型转换
+  - 字符串处理：命名转换、数据脱敏、格式验证等字符串操作工具
+  - 时间处理：格式化、解析、计算等时间操作工具
+  - 数据验证：手机号、身份证、URL、密码强度等验证工具
 
 ### 核心依赖
 
@@ -125,10 +128,13 @@ bamboo-base/
   - `result.go`: 提供 Success、SuccessHasData、Error 三种响应方法 (xResult:79)
 
 - **utility/**: 工具库模块
-  - `common.go`: 通用工具函数
-  - `generate.go`: 生成工具函数
+  - `common.go`: 基础工具函数 (`Ptr()`、`Val()`、`Contains()`、`ToBool()`)
+  - `string.go`: 字符串处理工具 (命名转换、脱敏、验证等)
+  - `time.go`: 时间处理工具 (格式化、解析、计算等)
+  - `validate.go`: 数据验证工具 (手机号、身份证、URL 等验证)
+  - `generate.go`: 生成工具函数 (`GenerateSecurityKey()`)
   - `ctxutil/`: 上下文工具子模块
-    - `common.go`: 通用上下文工具 (调试模式判断、时间计算)
+    - `common.go`: 上下文通用工具 (调试模式、配置获取、请求信息等)
     - `database.go`: 数据库上下文工具
     - `logger.go`: 日志器上下文工具
 
@@ -150,7 +156,7 @@ engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
 config := reg.Config     // *xModels.xConfig - 应用配置
 logger := reg.Logger     // *zap.Logger - 日志记录器
 
-// 启动服���器
+// 启动服务器
 engine.Run(":8080")
 ```
 
@@ -214,9 +220,47 @@ if xCtxUtil.IsDebugMode(ctx) {
 // 计算请求处理时间
 overhead := xCtxUtil.CalcOverheadTime(ctx)
 
-// 获取日志器
+// 获取系统组件
 logger := xCtxUtil.GetLogger(ctx)
 sugarLogger := xCtxUtil.GetSugarLogger(ctx)
+config := xCtxUtil.GetConfig(ctx)
+db := xCtxUtil.GetDB(ctx)
+
+// 获取请求信息
+requestKey := xCtxUtil.GetRequestKey(ctx)
+errorCode := xCtxUtil.GetErrorCode(ctx)
+```
+
+### 工具函数使用
+```go
+// 基础工具
+userPtr := xUtil.Ptr(user)              // 获取指针
+userName := xUtil.Val(userPtr)          // 安全解引用
+hasRole := xUtil.Contains(roles, "admin") // 切片包含检查
+enabled := xUtil.ToBool("yes", false)   // 智能布尔转换
+
+// 字符串处理
+masked := xUtil.MaskString("13812345678", 3, 4, "*")  // 138****5678
+snake := xUtil.CamelToSnake("UserName")               // user_name
+camel := xUtil.SnakeToCamel("user_name")             // userName
+hash := xUtil.MD5Hash("password123")                  // MD5哈希
+clean := xUtil.DefaultIfBlank(input, "默认值")       // 空白处理
+
+// 时间处理
+now := xUtil.Now()                                    // 当前时间
+unix := xUtil.NowUnix()                              // Unix时间戳
+formatted := xUtil.FormatNow("2006-01-02 15:04:05") // 格式化
+age := xUtil.Age(birthday)                           // 计算年龄
+isToday := xUtil.IsToday(someTime)                   // 是否今天
+
+// 数据验证
+validPhone := xUtil.IsValidPhone("13812345678")      // 手机号验证
+validEmail := xUtil.IsValidEmail("user@example.com") // 邮箱验证
+strongPwd := xUtil.IsStrongPassword("MyP@ssw0rd!")   // 强密码验证
+validURL := xUtil.IsValidURL("https://example.com")  // URL验证
+
+// 生成工具
+securityKey := xUtil.GenerateSecurityKey()           // 生成安全密钥
 ```
 
 ## 测试

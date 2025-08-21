@@ -13,14 +13,14 @@ type CustomEncoder struct {
 	pool   buffer.Pool
 }
 
-// NewAwakenConsoleEncoder 创建一个自定义的控制台编码器。
+// NewXlfnConsoleEncoder 创建一个自定义的控制台编码器。
 //
 // 该函数返回一个 `zapcore.Encoder` 实例，使用了自定义的控制台输出格式。
 // 编码器可以为日志增加格式化能力，包括时间、日志级别和字段渲染逻辑等。
 //
 // 返回值:
 //   - `zapcore.Encoder`: 一个自定义实现的控制台编码器实例。
-func NewAwakenConsoleEncoder() zapcore.Encoder {
+func NewXlfnConsoleEncoder() zapcore.Encoder {
 	config := zap.NewProductionEncoderConfig()
 	return &CustomEncoder{
 		Encoder: zapcore.NewConsoleEncoder(config),

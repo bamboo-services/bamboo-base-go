@@ -1,4 +1,4 @@
-package awakenBase
+package xBase
 
 // BaseResponse 表示通用的响应结构体，用于封装 API 的返回结果。
 //

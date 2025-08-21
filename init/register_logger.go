@@ -1,7 +1,7 @@
 package xInit
 
 import (
-	awakenConfig "github.com/bamboo-services/bamboo-base-go/config"
+	xConfig "github.com/bamboo-services/bamboo-base-go/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
@@ -39,8 +39,8 @@ func (r *Reg) LoggerInit() {
 	// --- 2. 控制台日志核心 (自定义彩色格式) ---
 
 	// 创建控制台日志核心，记录 Debug 及以上级别的日志
-	consoleCore := awakenConfig.NewAwakenCore(
-		awakenConfig.NewAwakenConsoleEncoder(),
+	consoleCore := xConfig.NewXlfCore(
+		xConfig.NewXlfnConsoleEncoder(),
 		zapcore.AddSync(os.Stdout),
 		zapcore.DebugLevel,
 	)

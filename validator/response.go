@@ -2,7 +2,7 @@ package xVaild
 
 import (
 	"errors"
-	awakenErr "github.com/bamboo-services/bamboo-base-go/error"
+	xError "github.com/bamboo-services/bamboo-base-go/error"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
@@ -46,9 +46,9 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 	}
 
 	// 创建错误响应
-	_ = ctx.Error(awakenErr.NewErrorHasData(
+	_ = ctx.Error(xError.NewErrorHasData(
 		ctx,
-		awakenErr.BodyInvalid,
+		xError.BodyInvalid,
 		firstErrorMessage,
 		bindErr,
 		false,

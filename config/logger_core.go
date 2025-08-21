@@ -11,7 +11,7 @@ type CustomCore struct {
 	fields  []zapcore.Field // 存储 With 添加的字段
 }
 
-// NewAwakenCore 创建一个自定义的 `zapcore.Core` 实例，用于日志记录。
+// NewXlfCore 创建一个自定义的 `zapcore.Core` 实例，用于日志记录。
 //
 // 该函数通过组合传入的 `zapcore.Encoder`、`zapcore.WriteSyncer` 和 `zapcore.LevelEnabler` 创建
 // 基于 `zapcore.NewCore` 的核心，并将其包装为 `CustomCore`，以支持扩展功能。
@@ -23,7 +23,7 @@ type CustomCore struct {
 //
 // 返回值:
 //   - 返回一个实现了 `zapcore.Core` 的自定义核心实例，支持额外的字段管理功能。
-func NewAwakenCore(encoder zapcore.Encoder, syncer zapcore.WriteSyncer, level zapcore.LevelEnabler) zapcore.Core {
+func NewXlfCore(encoder zapcore.Encoder, syncer zapcore.WriteSyncer, level zapcore.LevelEnabler) zapcore.Core {
 	return &CustomCore{
 		Core:    zapcore.NewCore(encoder, syncer, level),
 		encoder: encoder,

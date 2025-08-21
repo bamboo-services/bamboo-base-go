@@ -10,7 +10,7 @@ import (
 
 // IsDebugMode 判断当前请求是否处于调试模式。
 //
-// 该函数通过从上下文中获取 `AwakenConfig` 实例，检查其 `Debug` 字段来确定调试模式状态。
+// 该函数通过从上下文中获取 `xConfig` 实例，检查其 `Debug` 字段来确定调试模式状态。
 //
 // 返回值:
 //   - 返回 `true` 表示处于调试模式。
@@ -18,8 +18,8 @@ import (
 func IsDebugMode(c *gin.Context) bool {
 	value, exists := c.Get(xConsts.ContextConfig)
 	if exists {
-		config := value.(xModels.AwakenConfig)
-		return config.Awaken.Debug
+		config := value.(xModels.xConfig)
+		return config.Xlf.Debug
 	} else {
 		return false
 	}

@@ -31,7 +31,7 @@ func (r *Reg) ConfigInit() {
 		panic("[CONF] 配置文件读取失败: " + err.Error())
 	}
 
-	var config *xModels.AwakenConfig
+	var config *xModels.Config
 	if err := yaml.Unmarshal(configData, &config); err != nil {
 		panic("[CONF] 配置文件解析失败: " + err.Error())
 	}

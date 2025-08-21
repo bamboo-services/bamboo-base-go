@@ -2,7 +2,7 @@ package xError
 
 import (
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	awakenCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,7 +27,7 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage string, getErr erro
 		ErrorMessage: errorMessage,
 	}
 	if throw {
-		awakenCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		xCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
 	}
 	return newErr
 }
@@ -56,7 +56,7 @@ func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage string, getE
 		newErr.Data = data
 	}
 	if throw {
-		awakenCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		xCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
 	}
 	return newErr
 }

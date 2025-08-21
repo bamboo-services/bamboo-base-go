@@ -3,9 +3,9 @@ package xMiddle
 import (
 	"errors"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	awakenErr "github.com/bamboo-services/bamboo-base-go/error"
-	awakenResult "github.com/bamboo-services/bamboo-base-go/result"
-	awakenCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
+	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xResult "github.com/bamboo-services/bamboo-base-go/result"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,14 +17,14 @@ import (
 // 详细描述:
 // - 当 `ctx.Writer.Written()` 返回 true，表示响应已写入，函数直接返回。
 // - 如果 `ctx.Errors` 存在错误列表，将解析最后一个错误。
-// - 优先检查是否为 `awakenErr.Error` 类型的错误，从中提取错误码、消息和数据进行格式化输出。
-// - 若非上述类型错误则返回通用的服务器内部错误 (`awakenErr.ServerInternalError`)。
+// - 优先检查是否为 `xError.Error` 类型的错误，从中提取错误码、消息和数据进行格式化输出。
+// - 若非上述类型错误则返回通用的服务器内部错误 (`xError.ServerInternalError`)。
 //
 // 注意:
 // - 确保所有错误信息通过 `ctx.Errors` 提供适当的上下文。
 // - 避免在链式中间件或控制器中重复写入响应。
 func ResponseMiddleware(ctx *gin.Context) {
-	log := awakenCtxUtil.GetSugarLogger(ctx)
+	log := xCtxUtil.GetSugarLogger(ctx)
 	// 继续执行下一个中间件或处理函数
 	ctx.Next()
 
@@ -35,30 +35,30 @@ func ResponseMiddleware(ctx *gin.Context) {
 
 	// 如果存在错误输出错误内容
 	if ctx.Errors != nil && len(ctx.Errors) > 0 {
-		var getErr *awakenErr.Error
+		var getErr *xError.Error
 		if errors.As(ctx.Errors.Last(), &getErr) {
-			awakenResult.Error(
+			xResult.Error(
 				ctx, getErr.ErrorCode,
 				getErr.ErrorMessage,
 				getErr.Data,
 			)
 		} else {
-			awakenResult.Error(
-				ctx, awakenErr.ServerInternalError,
+			xResult.Error(
+				ctx, xError.ServerInternalError,
 				ctx.GetString(xConsts.ContextErrorMessage),
 				ctx.Errors.Last(),
 			)
 		}
 	} else {
-		awakenResult.Error(
-			ctx, awakenErr.NotExist,
+		xResult.Error(
+			ctx, xError.NotExist,
 			"没有正常输出信息以及报错信息，请检查代码逻辑「开发者错误」",
 			nil,
 		)
 	}
 
 	// 记录接口响应时间
-	if awakenCtxUtil.IsDebugMode(ctx) {
-		log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dms", *awakenCtxUtil.CalcOverheadTime(ctx))
+	if xCtxUtil.IsDebugMode(ctx) {
+		log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dms", *xCtxUtil.CalcOverheadTime(ctx))
 	}
 }

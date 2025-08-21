@@ -1,18 +1,18 @@
 package xModels
 
-// AwakenConfig 表示应用程序的完整配置结构。
+// Config 表示应用程序的完整配置结构。
 //
 // 该类型包含了应用程序运行所需的所有配置项，包括调试模式、数据库连接和 NoSQL 连接配置。
 //
 // 注意: 使用该类型时，如启用调试模式，可能会输出额外的日志信息。
-type AwakenConfig struct {
-	Awaken   awaken   `yaml:"awaken"`   // 唤醒功能开关
+type Config struct {
+	Xlf      xlf      `yaml:"xlf"`      // 唤醒功能开关
 	Database database `yaml:"database"` // 数据库配置
 	Nosql    nosql    `yaml:"nosql"`    // NoSQL 配置
 }
 
-// awaken 表示唤醒功能的配置项。
-type awaken struct {
+// xlf 表示唤醒功能的配置项。
+type xlf struct {
 	Debug bool `yaml:"debug"`
 }
 

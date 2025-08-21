@@ -1,10 +1,10 @@
 package xHelper
 
 import (
-	awakenBase "github.com/bamboo-services/bamboo-base-go"
+	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	awakenErr "github.com/bamboo-services/bamboo-base-go/error"
-	awakenCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
+	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 	"io"
 	"runtime/debug"
@@ -26,14 +26,14 @@ import (
 // 注意: 确保该中间件在输出任何响应前优先被调用，以正确捕获和处理异常。
 func PanicRecovery() gin.HandlerFunc {
 	return gin.RecoveryWithWriter(io.Discard, func(c *gin.Context, recovered interface{}) {
-		log := awakenCtxUtil.GetLogger(c)
+		log := xCtxUtil.GetLogger(c)
 
 		// 捕获 Panic 信息
 		value, exists := c.Get(xConsts.ContextErrorCode)
 		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage)
-		errorCode := awakenErr.ServerInternalError
+		errorCode := xError.ServerInternalError
 		if exists {
-			errorCode = value.(*awakenErr.ErrorCode)
+			errorCode = value.(*xError.ErrorCode)
 		}
 		if !msgExist {
 			getErrMessage = "未知错误，请稍后再试"
@@ -41,7 +41,7 @@ func PanicRecovery() gin.HandlerFunc {
 
 		// 处理报错信息
 		log.Named(xConsts.LogRECO).Sugar().Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), getErrMessage, string(debug.Stack()))
-		c.JSON(int(errorCode.Code/100), awakenBase.BaseResponse{
+		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 			Context:      c.GetString(xConsts.ContextRequestKey),
 			Output:       errorCode.Output,
 			Code:         errorCode.Code,

@@ -1,10 +1,10 @@
 package xResult
 
 import (
-	awakenBase "github.com/bamboo-services/bamboo-base-go"
+	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	awakenErr "github.com/bamboo-services/bamboo-base-go/error"
-	awakenCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
+	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,14 +16,14 @@ import (
 // - 日志记录器会记录响应状态，日志级别为 `Info`。
 // - 确保业务上下文中正确设置日志记录器，否则可能影响日志记录。
 func Success(ctx *gin.Context, message string) {
-	log := awakenCtxUtil.GetLogger(ctx)
+	log := xCtxUtil.GetLogger(ctx)
 	log.Named(xConsts.LogRESU).Info("<200>Success | 成功(数据: <nil>)")
-	ctx.JSON(200, awakenBase.BaseResponse{
+	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
-		Overhead: awakenCtxUtil.CalcOverheadTime(ctx),
+		Overhead: xCtxUtil.CalcOverheadTime(ctx),
 	})
 }
 
@@ -39,14 +39,14 @@ func Success(ctx *gin.Context, message string) {
 //
 // 注意: 确保调用此函数前，业务上下文中正确设置必要的数据，例如日志记录器。
 func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
-	log := awakenCtxUtil.GetLogger(ctx)
+	log := xCtxUtil.GetLogger(ctx)
 	log.Named(xConsts.LogRESU).Sugar().Infof("<200>Success | 成功(数据: %v)", data)
-	ctx.JSON(200, awakenBase.BaseResponse{
+	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
-		Overhead: awakenCtxUtil.CalcOverheadTime(ctx),
+		Overhead: xCtxUtil.CalcOverheadTime(ctx),
 		Data:     data,
 	})
 }
@@ -62,16 +62,16 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //   - data: 任意类型的数据，用于返回附加的上下文或调试信息。
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
-func Error(ctx *gin.Context, errorCode *awakenErr.ErrorCode, errorMessage string, data interface{}) {
-	log := awakenCtxUtil.GetSugarLogger(ctx)
+func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage string, data interface{}) {
+	log := xCtxUtil.GetSugarLogger(ctx)
 	log.Named(xConsts.LogRESU).Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
 	ctx.Set(xConsts.ContextErrorCode, errorCode)
-	ctx.JSON(int(errorCode.Code/100), awakenBase.BaseResponse{
+	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 		Context:      ctx.GetString(xConsts.ContextRequestKey),
 		Output:       errorCode.Output,
 		Code:         errorCode.Code,
 		Message:      errorCode.Message,
-		Overhead:     awakenCtxUtil.CalcOverheadTime(ctx),
+		Overhead:     xCtxUtil.CalcOverheadTime(ctx),
 		ErrorMessage: errorMessage,
 		Data:         data,
 	})

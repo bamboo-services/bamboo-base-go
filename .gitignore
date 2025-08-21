@@ -1,0 +1,22 @@
+### IDE ###
+.vscode
+.idea
+*.sublime-workspace
+*.sublime-project
+
+### Golang ###
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+*.coverprofile
+*.test.out
+*.test.coverprofile
+*.test.prof
+*.test.binary
+*.test.binary.gz
+*.test.binary.gz.*

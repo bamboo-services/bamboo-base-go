@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 本文件为 Claude Code (claude.ai/code) 提供在此代码库中工作的指导说明。
 
 ## 项目概述
@@ -132,6 +134,7 @@ bamboo-base/
   - `string.go`: 字符串处理工具 (命名转换、脱敏、验证等)
   - `time.go`: 时间处理工具 (格式化、解析、计算等)
   - `validate.go`: 数据验证工具 (手机号、身份证、URL 等验证)
+  - `password.go`: 密码加密工具 (bcrypt 加密、验证等)
   - `generate.go`: 生成工具函数 (`GenerateSecurityKey()`)
   - `ctxutil/`: 上下文工具子模块
     - `common.go`: 上下文通用工具 (调试模式、配置获取、请求信息等)
@@ -258,6 +261,12 @@ validPhone := xUtil.IsValidPhone("13812345678")      // 手机号验证
 validEmail := xUtil.IsValidEmail("user@example.com") // 邮箱验证
 strongPwd := xUtil.IsStrongPassword("MyP@ssw0rd!")   // 强密码验证
 validURL := xUtil.IsValidURL("https://example.com")  // URL验证
+
+// 密码处理
+hashBytes, err := xUtil.EncryptPassword("mypassword") // 加密密码(字节)
+hashStr, err := xUtil.EncryptPasswordString("mypass") // 加密密码(字符串)
+err = xUtil.VerifyPassword("input", hashStr)          // 验证密码
+isValid := xUtil.IsPasswordValid("input", hashStr)    // 密码是否有效
 
 // 生成工具
 securityKey := xUtil.GenerateSecurityKey()           // 生成安全密钥

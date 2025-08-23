@@ -62,7 +62,7 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //   - data: 任意类型的数据，用于返回附加的上下文或调试信息。
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
-func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage string, data interface{}) {
+func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
 	log := xCtxUtil.GetSugarLogger(ctx)
 	log.Named(xConsts.LogRESU).Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
 	ctx.Set(xConsts.ContextErrorCode, errorCode)

@@ -9,7 +9,7 @@ package xError
 type ErrorInterface interface {
 	Error() string
 	GetErrorCode() *ErrorCode
-	GetErrorMessage() string
+	GetErrorMessage() ErrMessage
 	GetData() interface{}
 }
 
@@ -20,14 +20,14 @@ type ErrorInterface interface {
 //
 // 字段说明:
 //   - ErrorCode: 嵌入的错误代码结构，包含预定义的错误信息
-//   - ErrorMessage: 自定义错误消息，用于补充具体的错误描述
+//   - errMessage: 自定义错误消息，用于补充具体的错误描述
 //   - Data: 任意类型的错误相关数据，用于传递额外的上下文信息
 //
 // 注意: 该结构体可用于构造复合错误信息，便于错误追踪和调试。
 type Error struct {
 	*ErrorCode
 	error        error
-	ErrorMessage string
+	ErrorMessage ErrMessage
 	Data         interface{}
 }
 
@@ -56,7 +56,7 @@ func (e *Error) GetErrorCode() *ErrorCode {
 // 该消息通常用于补充预定义错误信息，提供更详细的错误上下文。
 //
 // @return string 自定义错误消息字符串
-func (e *Error) GetErrorMessage() string {
+func (e *Error) GetErrorMessage() ErrMessage {
 	return e.ErrorMessage
 }
 

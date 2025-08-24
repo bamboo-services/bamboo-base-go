@@ -61,7 +61,7 @@ func (e *CustomEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field)
 	buf := e.pool.Get()
 
 	// 定义时间格式
-	buf.AppendString(entry.Time.Format("2006-01-02 15:04:05.000"))
+	buf.AppendString("\u001B[90m" + entry.Time.Format("2006-01-02 15:04:05.000") + "\u001B[0m")
 
 	// 定义唯一键
 	if len(fields) > 0 {

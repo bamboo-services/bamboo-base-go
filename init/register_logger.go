@@ -1,10 +1,11 @@
 package xInit
 
 import (
+	"os"
+
 	xConfig "github.com/bamboo-services/bamboo-base-go/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"os"
 )
 
 // LoggerInit 初始化日志记录器。

@@ -13,6 +13,6 @@ type BaseResponse struct {
 	Code         uint              `json:"code"`
 	Message      string            `json:"message"`
 	ErrorMessage xError.ErrMessage `json:"error_message,omitempty"`
-	Overhead     *int64            `json:"overhead,omitempty"`
+	Overhead     int64             `json:"overhead,omitempty"`
 	Data         interface{}       `json:"data,omitempty"`
 }

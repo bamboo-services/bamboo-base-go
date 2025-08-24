@@ -46,7 +46,7 @@ func PanicRecovery() gin.HandlerFunc {
 			Output:       errorCode.Output,
 			Code:         errorCode.Code,
 			Message:      errorCode.Message,
-			ErrorMessage: getErrMessage.(string),
+			ErrorMessage: xError.ErrMessage(getErrMessage.(string)),
 		})
 		c.Abort()
 	})

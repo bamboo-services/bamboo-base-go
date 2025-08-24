@@ -1,11 +1,11 @@
 package xCtxUtil
 
 import (
+	"time"
+
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xModels "github.com/bamboo-services/bamboo-base-go/models"
-	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 // IsDebugMode 判断当前请求是否处于调试模式。
@@ -25,23 +25,20 @@ func IsDebugMode(c *gin.Context) bool {
 	}
 }
 
-// CalcOverheadTime 计算当前请求的开销时间（以毫秒为单位）。
+// CalcOverheadTime 计算当前请求的耗时（微秒级）。
 //
-// 该函数通过上下文中的用户起始时间和当前时间的差值计算请求的处理开销，仅在调试模式下生效。
+// 该函数检查请求是否处于调试模式，如果是，则计算从 `ContextUserStartTime` 到当前时间的耗时。
+// 非调试模式下，始终返回 0。
 //
-// 参数说明:
-//   - c: 包含请求上下文的 `*gin.Context` 对象。
+// 参数 c 表示当前的 `gin.Context`，用于访问请求上下文数据。
 //
-// 返回值:
-//   - 整型指针，表示开销时间（以毫秒为单位）。如果当前不在调试模式，则返回 `nil`。
-//
-// 注意: 确保 `ContextUserStartTime` 在上下文中已正确设置，否则可能导致异常行为。
-func CalcOverheadTime(c *gin.Context) *int64 {
+// 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
+func CalcOverheadTime(c *gin.Context) int64 {
 	if IsDebugMode(c) {
 		startTime := c.GetTime(xConsts.ContextUserStartTime)
-		return xUtil.Ptr(time.Now().Sub(startTime).Milliseconds())
+		return time.Now().Sub(startTime).Microseconds()
 	}
-	return nil
+	return 0
 }
 
 // GetConfig 从上下文中获取应用配置。

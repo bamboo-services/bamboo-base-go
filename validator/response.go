@@ -49,9 +49,9 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 	_ = ctx.Error(xError.NewErrorHasData(
 		ctx,
 		xError.BodyInvalid,
-		firstErrorMessage,
-		bindErr,
+		xError.ErrMessage(firstErrorMessage),
 		false,
+		bindErr,
 		errorDetails,
 	))
 }

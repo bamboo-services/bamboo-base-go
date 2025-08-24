@@ -2,6 +2,7 @@ package xMiddle
 
 import (
 	"errors"
+
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xResult "github.com/bamboo-services/bamboo-base-go/result"
@@ -29,36 +30,38 @@ func ResponseMiddleware(ctx *gin.Context) {
 	ctx.Next()
 
 	// 获取检查是否存在 buffer
-	if ctx.Writer.Written() {
-		return
-	}
-
-	// 如果存在错误输出错误内容
-	if ctx.Errors != nil && len(ctx.Errors) > 0 {
-		var getErr *xError.Error
-		if errors.As(ctx.Errors.Last(), &getErr) {
-			xResult.Error(
-				ctx, getErr.ErrorCode,
-				getErr.ErrorMessage,
-				getErr.Data,
-			)
+	if !ctx.Writer.Written() {
+		// 如果存在错误输出错误内容
+		if ctx.Errors != nil && len(ctx.Errors) > 0 {
+			var getErr *xError.Error
+			if errors.As(ctx.Errors.Last(), &getErr) {
+				xResult.Error(
+					ctx, getErr.ErrorCode,
+					getErr.ErrorMessage,
+					getErr.Data,
+				)
+			} else {
+				xResult.Error(
+					ctx, xError.ServerInternalError,
+					xError.ErrMessage(ctx.GetString(xConsts.ContextErrorMessage)),
+					ctx.Errors.Last(),
+				)
+			}
 		} else {
 			xResult.Error(
-				ctx, xError.ServerInternalError,
-				ctx.GetString(xConsts.ContextErrorMessage),
-				ctx.Errors.Last(),
+				ctx, xError.NotExist,
+				"没有正常输出信息以及报错信息，请检查代码逻辑「开发者错误」",
+				nil,
 			)
 		}
-	} else {
-		xResult.Error(
-			ctx, xError.NotExist,
-			"没有正常输出信息以及报错信息，请检查代码逻辑「开发者错误」",
-			nil,
-		)
 	}
 
 	// 记录接口响应时间
 	if xCtxUtil.IsDebugMode(ctx) {
-		log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dms", *xCtxUtil.CalcOverheadTime(ctx))
+		if xCtxUtil.CalcOverheadTime(ctx) > 1000 {
+			log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dms", xCtxUtil.CalcOverheadTime(ctx)/1000)
+		} else {
+			log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dµs", xCtxUtil.CalcOverheadTime(ctx))
+		}
 	}
 }

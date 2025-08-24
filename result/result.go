@@ -23,7 +23,7 @@ func Success(ctx *gin.Context, message string) {
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
-		Overhead: xCtxUtil.CalcOverheadTime(ctx),
+		Overhead: xCtxUtil.CalcOverheadTime(ctx) / 1000,
 	})
 }
 
@@ -46,7 +46,7 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
-		Overhead: xCtxUtil.CalcOverheadTime(ctx),
+		Overhead: xCtxUtil.CalcOverheadTime(ctx) / 1000,
 		Data:     data,
 	})
 }
@@ -71,7 +71,7 @@ func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.Er
 		Output:       errorCode.Output,
 		Code:         errorCode.Code,
 		Message:      errorCode.Message,
-		Overhead:     xCtxUtil.CalcOverheadTime(ctx),
+		Overhead:     xCtxUtil.CalcOverheadTime(ctx) / 1000,
 		ErrorMessage: errorMessage,
 		Data:         data,
 	})

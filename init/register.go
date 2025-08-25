@@ -1,16 +1,18 @@
 package xInit
 
 import (
-	xModels "github.com/bamboo-services/bamboo-base-go/models"
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 // Reg 是一个类型别名，用于表示注册操作的整数类型。
 type Reg struct {
-	Serve  *gin.Engine     // Gin 引擎实例
-	Config *xModels.Config // 应用配置实例
-	Logger *zap.Logger     // 日志记录器实例
+	Context context.Context         // 上下文，用于控制取消和超时
+	Serve   *gin.Engine             // Gin 引擎实例
+	Config  *map[string]interface{} // 应用配置实例
+	Logger  *zap.Logger             // 日志记录器实例
 }
 
 // New 创建并返回一个未初始化的 `Reg` 实例。
@@ -21,7 +23,9 @@ type Reg struct {
 // 返回值:
 //   - `*Reg`: 返回一个新的 `Reg` 实例。
 func newReg() *Reg {
-	return &Reg{}
+	return &Reg{
+		Context: context.Background(),
+	}
 }
 
 // Register 注册并初始化应用的核心组件，包括配置、日志、Gin 引擎及系统上下文。

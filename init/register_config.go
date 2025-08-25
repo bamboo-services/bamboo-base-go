@@ -1,10 +1,9 @@
 package xInit
 
 import (
-	"fmt"
-	xModels "github.com/bamboo-services/bamboo-base-go/models"
-	"gopkg.in/yaml.v3"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ConfigInit 初始化配置文件的加载和解析。
@@ -31,12 +30,10 @@ func (r *Reg) ConfigInit() {
 		panic("[CONF] 配置文件读取失败: " + err.Error())
 	}
 
-	var config *xModels.Config
+	var config map[string]interface{}
 	if err := yaml.Unmarshal(configData, &config); err != nil {
 		panic("[CONF] 配置文件解析失败: " + err.Error())
 	}
 
-	fmt.Println(config)
-
-	r.Config = config
+	r.Config = &config
 }

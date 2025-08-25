@@ -502,6 +502,14 @@ var (
 	// 该错误码为 CONFIGURATION_ERROR；该错误码为 50007； 该错误信息为 配置错误。
 	ConfigurationError = NewErrorCode("ConfigurationError", 50007, "配置错误")
 
+	// NetworkError 网络错误
+	//
+	// 网络错误, 用于定义网络错误信息；
+	// 该错误码为 50009，用于定义网络错误信息；用于返回网络错误信息。
+	//
+	// 该错误码为 NETWORK_ERROR；该错误码为 50009； 该错误信息为 网络错误。
+	NetworkError = NewErrorCode("NetworkError", 50009, "网络错误")
+
 	// ResourceExhausted 资源耗尽
 	//
 	// 资源耗尽, 用于定义资源耗尽信息；

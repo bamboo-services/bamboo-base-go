@@ -3,6 +3,7 @@ package xConsts
 const (
 	ContextRequestKey    = "context_request_key"     // 上下文请求键
 	ContextConfig        = "context_config"          // 上下文配置键
+	ContextCustomConfig  = "context_custom_config"   // 上下文自定义配置键
 	ContextLogger        = "context_logger"          // 上下文日志
 	ContextErrorCode     = "context_error_code"      // 上下文请求错误码
 	ContextErrorMessage  = "context_error_message"   // 上下文请求错误描述

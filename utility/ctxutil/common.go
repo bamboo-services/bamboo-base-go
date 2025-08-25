@@ -6,6 +6,7 @@ import (
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xModels "github.com/bamboo-services/bamboo-base-go/models"
 	"github.com/gin-gonic/gin"
+	"github.com/mitchellh/mapstructure"
 )
 
 // IsDebugMode 判断当前请求是否处于调试模式。
@@ -18,8 +19,13 @@ import (
 func IsDebugMode(c *gin.Context) bool {
 	value, exists := c.Get(xConsts.ContextConfig)
 	if exists {
-		config := value.(xModels.Config)
-		return config.Xlf.Debug
+		config := value.(*map[string]interface{})
+		var getConfig xModels.Config
+		err := mapstructure.Decode(config, &getConfig)
+		if err != nil {
+			return false
+		}
+		return getConfig.Xlf.Debug
 	} else {
 		return false
 	}
@@ -55,7 +61,13 @@ func CalcOverheadTime(c *gin.Context) int64 {
 func GetConfig(c *gin.Context) *xModels.Config {
 	value, exists := c.Get(xConsts.ContextConfig)
 	if exists {
-		return value.(*xModels.Config)
+		config := value.(*map[string]interface{})
+		var getConfig xModels.Config
+		err := mapstructure.Decode(config, &getConfig)
+		if err != nil {
+			return nil
+		}
+		return &getConfig
 	}
 	return nil
 }

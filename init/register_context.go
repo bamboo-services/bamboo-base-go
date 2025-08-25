@@ -1,12 +1,13 @@
 package xInit
 
 import (
+	"time"
+
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"time"
 )
 
 type handler struct {
@@ -49,7 +50,7 @@ func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 
 	c.Set(xConsts.ContextRequestKey, requestID)                                      // 上下文请求记录
 	c.Set(xConsts.ContextLogger, h.Data.Logger.With(zap.String("trace", requestID))) // 日志记录器上下文
-	c.Set(xConsts.ContextConfig, *h.Data.Config)                                     // 配置上下文请求记录
+	c.Set(xConsts.ContextConfig, h.Data.Config)                                      // 配置上下文请求记录
 	c.Set(xConsts.ContextUserStartTime, time.Now())                                  // 配置上下文请求记录
 
 	// 放行内容

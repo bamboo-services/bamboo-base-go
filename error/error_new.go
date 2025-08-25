@@ -2,6 +2,7 @@ package xError
 
 import (
 	"errors"
+
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"

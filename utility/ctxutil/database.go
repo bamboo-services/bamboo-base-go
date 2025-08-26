@@ -14,7 +14,7 @@ import (
 // 注意: 在使用此函数之前，请确保数据库连接已正确注入到上下文中，
 // 通常通过中间件或其他初始化逻辑完成。
 func GetDB(c *gin.Context) *gorm.DB {
-	value, exists := c.Get(xConsts.ContextDatabase)
+	value, exists := c.Get(xConsts.ContextDatabase.String())
 	if exists {
 		return value.(*gorm.DB)
 	}

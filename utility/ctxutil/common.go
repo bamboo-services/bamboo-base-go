@@ -17,7 +17,7 @@ import (
 //   - 返回 `true` 表示处于调试模式。
 //   - 返回 `false` 表示不在调试模式，或者上下文中未找到对应配置。
 func IsDebugMode(c *gin.Context) bool {
-	value, exists := c.Get(xConsts.ContextConfig)
+	value, exists := c.Get(xConsts.ContextConfig.String())
 	if exists {
 		config := value.(*map[string]interface{})
 		var getConfig xModels.Config
@@ -41,7 +41,7 @@ func IsDebugMode(c *gin.Context) bool {
 // 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
 func CalcOverheadTime(c *gin.Context) int64 {
 	if IsDebugMode(c) {
-		startTime := c.GetTime(xConsts.ContextUserStartTime)
+		startTime := c.GetTime(xConsts.ContextUserStartTime.String())
 		return time.Now().Sub(startTime).Microseconds()
 	}
 	return 0
@@ -59,7 +59,7 @@ func CalcOverheadTime(c *gin.Context) int64 {
 //
 // 注意: 确保配置已正确注入到上下文中
 func GetConfig(c *gin.Context) *xModels.Config {
-	value, exists := c.Get(xConsts.ContextConfig)
+	value, exists := c.Get(xConsts.ContextConfig.String())
 	if exists {
 		config := value.(*map[string]interface{})
 		var getConfig xModels.Config
@@ -82,7 +82,7 @@ func GetConfig(c *gin.Context) *xModels.Config {
 // 返回值:
 //   - 请求唯一标识字符串
 func GetRequestKey(c *gin.Context) string {
-	return c.GetString(xConsts.ContextRequestKey)
+	return c.GetString(xConsts.ContextRequestKey.String())
 }
 
 // GetErrorMessage 从上下文中获取错误消息。
@@ -95,5 +95,5 @@ func GetRequestKey(c *gin.Context) string {
 // 返回值:
 //   - 错误消息字符串
 func GetErrorMessage(c *gin.Context) string {
-	return c.GetString(xConsts.ContextErrorMessage)
+	return c.GetString(xConsts.ContextErrorMessage.String())
 }

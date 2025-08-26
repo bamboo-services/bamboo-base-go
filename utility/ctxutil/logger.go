@@ -20,13 +20,13 @@ import (
 //
 // 注意: 确保上下文中已正确设置 `ContextLogger`，否则可能会引发 panic。
 func GetLogger(c *gin.Context) *zap.Logger {
-	value, exists := c.Get(xConsts.ContextLogger)
+	value, exists := c.Get(xConsts.ContextLogger.String())
 	if exists {
 		if logger, ok := value.(*zap.Logger); ok {
 			return logger
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger).(*zap.Logger)
+	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger)
 }
 
 // GetSugarLogger 从 `gin.Context` 中获取业务日志记录器的 Sugar 版本。
@@ -42,11 +42,11 @@ func GetLogger(c *gin.Context) *zap.Logger {
 // 返回值:
 //   - 返回一个类型为 `*zap.SugaredLogger` 的日志记录器实例，确保始终返回非空的日志对象。
 func GetSugarLogger(c *gin.Context) *zap.SugaredLogger {
-	value, exists := c.Get(xConsts.ContextLogger)
+	value, exists := c.Get(xConsts.ContextLogger.String())
 	if exists {
 		if logger, ok := value.(*zap.Logger); ok {
 			return logger.Sugar()
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger).(*zap.Logger).Sugar()
+	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Sugar()
 }

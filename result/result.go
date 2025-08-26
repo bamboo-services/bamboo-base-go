@@ -19,7 +19,7 @@ func Success(ctx *gin.Context, message string) {
 	log := xCtxUtil.GetLogger(ctx)
 	log.Named(xConsts.LogRESU).Info("<200>Success | 成功(数据: <nil>)")
 	ctx.JSON(200, xBase.BaseResponse{
-		Context:  ctx.GetString(xConsts.ContextRequestKey),
+		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
@@ -42,7 +42,7 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 	log := xCtxUtil.GetLogger(ctx)
 	log.Named(xConsts.LogRESU).Sugar().Infof("<200>Success | 成功(数据: %v)", data)
 	ctx.JSON(200, xBase.BaseResponse{
-		Context:  ctx.GetString(xConsts.ContextRequestKey),
+		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
@@ -65,9 +65,9 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
 	log := xCtxUtil.GetSugarLogger(ctx)
 	log.Named(xConsts.LogRESU).Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
-	ctx.Set(xConsts.ContextErrorCode, errorCode)
+	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
-		Context:      ctx.GetString(xConsts.ContextRequestKey),
+		Context:      ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:       errorCode.Output,
 		Code:         errorCode.Code,
 		Message:      errorCode.Message,

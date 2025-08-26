@@ -29,8 +29,8 @@ func PanicRecovery() gin.HandlerFunc {
 		log := xCtxUtil.GetLogger(c)
 
 		// 捕获 Panic 信息
-		value, exists := c.Get(xConsts.ContextErrorCode)
-		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage)
+		value, exists := c.Get(xConsts.ContextErrorCode.String())
+		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage.String())
 		errorCode := xError.ServerInternalError
 		if exists {
 			errorCode = value.(*xError.ErrorCode)
@@ -42,7 +42,7 @@ func PanicRecovery() gin.HandlerFunc {
 		// 处理报错信息
 		log.Named(xConsts.LogRECO).Sugar().Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), getErrMessage, string(debug.Stack()))
 		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{
-			Context:      c.GetString(xConsts.ContextRequestKey),
+			Context:      c.GetString(xConsts.ContextRequestKey.String()),
 			Output:       errorCode.Output,
 			Code:         errorCode.Code,
 			Message:      errorCode.Message,

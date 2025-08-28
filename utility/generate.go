@@ -1,8 +1,9 @@
 package xUtil
 
 import (
-	"github.com/google/uuid"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // GenerateSecurityKey 生成一个唯一的安全密钥字符串。

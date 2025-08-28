@@ -3,7 +3,7 @@ package xInit
 import (
 	"os"
 
-	xConfig "github.com/bamboo-services/bamboo-base-go/config"
+	"github.com/bamboo-services/bamboo-base-go/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -28,7 +28,7 @@ func (r *Reg) LoggerInit() {
 	if err != nil && !os.IsExist(err) {
 		panic("[INIT] 日志目录创建失败: " + err.Error())
 	}
-	file, err := os.OpenFile("logs/logger.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile("logs/log.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic("[INIT] 日志文件打开失败: " + err.Error())
 	}
@@ -40,8 +40,8 @@ func (r *Reg) LoggerInit() {
 	// --- 2. 控制台日志核心 (自定义彩色格式) ---
 
 	// 创建控制台日志核心，记录 Debug 及以上级别的日志
-	consoleCore := xConfig.NewXlfCore(
-		xConfig.NewXlfnConsoleEncoder(),
+	consoleCore := xLog.NewXlfCore(
+		xLog.NewXlfConsoleEncoder(),
 		zapcore.AddSync(os.Stdout),
 		zapcore.DebugLevel,
 	)

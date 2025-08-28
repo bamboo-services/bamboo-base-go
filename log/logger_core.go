@@ -1,8 +1,9 @@
-package xConfig
+package xLog
 
 import (
-	"go.uber.org/zap/zapcore"
 	"runtime/debug"
+
+	"go.uber.org/zap/zapcore"
 )
 
 type CustomCore struct {

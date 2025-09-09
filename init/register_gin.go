@@ -17,6 +17,9 @@ import (
 //   - `*gin.Engine`: 成功初始化的默认 Gin 引擎实例。
 func (r *Reg) EngineInit() {
 	r.Logger.Named(xConsts.LogINIT).Info("初始化 GIN 引擎")
+	if !(((*r.Config)["xlf"]).(map[string]interface{})["debug"].(bool)) {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r.Serve = gin.Default()
 
 	// 注册自定义验证器

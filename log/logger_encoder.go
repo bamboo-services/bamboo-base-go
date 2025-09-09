@@ -63,6 +63,10 @@ func (e *LogEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*
 	// 定义时间格式
 	buf.AppendString("\u001B[90m" + entry.Time.Format("2006-01-02 15:04:05.000") + "\u001B[0m")
 
+	// 添加日志等级和名称
+	ConsoleLevelEncoder(entry.Level, buf)
+	buf.AppendString(" \u001B[94m[CORE]\u001B[0m")
+
 	// 定义唯一键
 	if len(fields) > 0 {
 		for _, field := range fields {
@@ -73,8 +77,6 @@ func (e *LogEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*
 		}
 	}
 
-	// 添加日志等级和名称
-	ConsoleLevelEncoder(entry.Level, buf)
 	ConsoleNameEncoder(entry.LoggerName, buf)
 	buf.AppendString(entry.Message)
 

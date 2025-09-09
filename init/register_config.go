@@ -35,5 +35,11 @@ func (r *Reg) ConfigInit() {
 		panic("[CONF] 配置文件解析失败: " + err.Error())
 	}
 
+	if (config["xlf"]).(map[string]interface{})["debug"] == nil {
+		config["xlf"] = map[string]interface{}{
+			"debug": false,
+		}
+	}
+
 	r.Config = &config
 }

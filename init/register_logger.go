@@ -40,10 +40,14 @@ func (r *Reg) LoggerInit() {
 	// --- 2. 控制台日志核心 (自定义彩色格式) ---
 
 	// 创建控制台日志核心，记录 Debug 及以上级别的日志
+	logLevel := zapcore.InfoLevel
+	if ((*r.Config)["xlf"]).(map[string]interface{})["debug"].(bool) {
+		logLevel = zapcore.DebugLevel
+	}
 	consoleCore := xLog.NewXlfCore(
 		xLog.NewXlfConsoleEncoder(),
 		zapcore.AddSync(os.Stdout),
-		zapcore.DebugLevel,
+		logLevel,
 	)
 
 	// --- 3. 合并核心并创建 Logger ---

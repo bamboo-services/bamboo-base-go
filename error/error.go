@@ -1,12 +1,12 @@
 package xError
 
-// ErrorInterface 错误接口定义
+// IError 错误接口定义
 //
 // 定义了系统中错误处理的标准接口，用于统一错误处理方式。
 // 该接口继承了标准 error 接口，并扩展了错误代码、错误信息和数据获取功能。
 //
 // 注意: 实现该接口的类型需要提供完整的错误信息，包括错误代码、错误消息和相关数据。
-type ErrorInterface interface {
+type IError interface {
 	Error() string
 	GetErrorCode() *ErrorCode
 	GetErrorMessage() ErrMessage
@@ -16,7 +16,7 @@ type ErrorInterface interface {
 // Error 系统错误结构体
 //
 // 用于表示系统中的错误信息，包含错误代码、自定义错误消息和相关数据。
-// 该结构体实现了 ErrorInterface 接口，提供了统一的错误处理机制。
+// 该结构体实现了 IError 接口，提供了统一的错误处理机制。
 //
 // 字段说明:
 //   - ErrorCode: 嵌入的错误代码结构，包含预定义的错误信息

@@ -30,7 +30,7 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 		newErr.error = errors.New(errorMessage.String())
 	}
 	if throw {
-		xCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
 	}
 	return newErr
 }
@@ -55,7 +55,7 @@ func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, 
 		newErr.Data = data
 	}
 	if throw {
-		xCtxUtil.GetSugarLogger(ctx).Named(xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
 	}
 	return newErr
 }

@@ -16,8 +16,8 @@ import (
 // - 日志记录器会记录响应状态，日志级别为 `Info`。
 // - 确保业务上下文中正确设置日志记录器，否则可能影响日志记录。
 func Success(ctx *gin.Context, message string) {
-	log := xCtxUtil.GetLogger(ctx)
-	log.Named(xConsts.LogRESU).Info("<200>Success | 成功(数据: <nil>)")
+	log := xCtxUtil.GetLogger(ctx, xConsts.LogRESU)
+	log.Info("<200>Success | 成功(数据: <nil>)")
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
@@ -39,8 +39,8 @@ func Success(ctx *gin.Context, message string) {
 //
 // 注意: 确保调用此函数前，业务上下文中正确设置必要的数据，例如日志记录器。
 func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
-	log := xCtxUtil.GetLogger(ctx)
-	log.Named(xConsts.LogRESU).Sugar().Infof("<200>Success | 成功(数据: %v)", data)
+	log := xCtxUtil.GetLogger(ctx, xConsts.LogRESU)
+	log.Sugar().Infof("<200>Success | 成功(数据: %v)", data)
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
@@ -63,8 +63,8 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
 func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
-	log := xCtxUtil.GetSugarLogger(ctx)
-	log.Named(xConsts.LogRESU).Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
+	log := xCtxUtil.GetSugarLogger(ctx, xConsts.LogRESU)
+	log.Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
 	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 		Context:      ctx.GetString(xConsts.ContextRequestKey.String()),

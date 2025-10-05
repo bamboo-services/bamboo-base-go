@@ -46,7 +46,7 @@ func (r *Reg) SystemContextInit() {
 func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 	// 生成请求唯一 ID 「用于溯源」
 	requestID := uuid.NewString()
-	c.Writer.Header().Set(xConsts.HeaderRequestUUID, requestID)
+	c.Writer.Header().Set(xConsts.HeaderRequestUUID.String(), requestID)
 
 	c.Set(xConsts.ContextRequestKey.String(), requestID)                                      // 上下文请求记录
 	c.Set(xConsts.ContextLogger.String(), h.Data.Logger.With(zap.String("trace", requestID))) // 日志记录器上下文

@@ -42,9 +42,6 @@ func ConsoleNameEncoder(name string, enc *buffer.Buffer) {
 	// 路由网络类 - 黄色
 	case xConsts.LogROUT, xConsts.LogHTTP, xConsts.LogGRPC, xConsts.LogSOCK, xConsts.LogCONN, xConsts.LogLINK:
 		enc.AppendString(" \u001B[33m[" + name + "]\u001B[0m ")
-	// 数据存储类 - 青色
-	case xConsts.LogDATA, xConsts.LogDBMS, xConsts.LogNOSQ, xConsts.LogCACH, xConsts.LogSTOR, xConsts.LogFILE:
-		enc.AppendString(" \u001B[36m[" + name + "]\u001B[0m ")
 	// 安全认证类 - 红色
 	case xConsts.LogAUTH, xConsts.LogUSER, xConsts.LogPERM, xConsts.LogROLE, xConsts.LogTOKN, xConsts.LogSIGN:
 		enc.AppendString(" \u001B[31m[" + name + "]\u001B[0m ")

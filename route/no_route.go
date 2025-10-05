@@ -17,14 +17,18 @@ import (
 // 参数说明:
 //   - ctx: `*gin.Context` 上下文对象，包含请求和响应的信息。
 //
-// 注意: 此方法用于全局未匹配路由的处理，需通过 `route.NoRoute` 绑定使用。
+// 注意: 此方法用于全局未匹配路由的处理，需通过 `router.NoRoute` 绑定使用。
 func NoRoute(ctx *gin.Context) {
-	getLogger := xCtxUtil.GetLogger(ctx)
+	getLogger := xCtxUtil.GetLogger(ctx, xConsts.LogROUT)
 
-	getLogger.Named(xConsts.LogROUT).Warn("未找到路由")
+	getLogger.Warn("未找到路由")
 	xResult.Error(
 		ctx, xError.PageNotFound,
-		xError.ErrMessage(fmt.Sprintf("页面 [%s] 不存在，请检查 <路由> 或 <静态资源> 是否正确配置", ctx.Request.URL.Path)),
+		xError.ErrMessage(fmt.Sprintf(
+			"页面「 [%s]%s 」不存在，请检查 <路由> 或 <静态资源> 是否正确配置",
+			ctx.Request.Method,
+			ctx.Request.URL.Path,
+		)),
 		nil,
 	)
 }

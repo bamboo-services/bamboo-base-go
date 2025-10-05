@@ -26,7 +26,7 @@ import (
 // 注意: 确保该中间件在输出任何响应前优先被调用，以正确捕获和处理异常。
 func PanicRecovery() gin.HandlerFunc {
 	return gin.RecoveryWithWriter(io.Discard, func(c *gin.Context, recovered interface{}) {
-		log := xCtxUtil.GetLogger(c)
+		log := xCtxUtil.GetLogger(c, xConsts.LogRECO)
 
 		// 捕获 Panic 信息
 		value, exists := c.Get(xConsts.ContextErrorCode.String())
@@ -40,7 +40,7 @@ func PanicRecovery() gin.HandlerFunc {
 		}
 
 		// 处理报错信息
-		log.Named(xConsts.LogRECO).Sugar().Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), getErrMessage, string(debug.Stack()))
+		log.Sugar().Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), getErrMessage, string(debug.Stack()))
 		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 			Context:      c.GetString(xConsts.ContextRequestKey.String()),
 			Output:       errorCode.Output,

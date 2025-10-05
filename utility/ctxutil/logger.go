@@ -14,19 +14,20 @@ import (
 //
 // 参数说明:
 //   - c: `gin.Context` 上下文对象，用于存储和获取请求范围内的数据。
+//   - name: 日志记录器的名称。
 //
 // 返回值:
 //   - 返回一个类型为 `*zap.Logger` 的日志记录器实例，确保始终返回非空的日志对象。
 //
 // 注意: 确保上下文中已正确设置 `ContextLogger`，否则可能会引发 panic。
-func GetLogger(c *gin.Context) *zap.Logger {
+func GetLogger(c *gin.Context, name string) *zap.Logger {
 	value, exists := c.Get(xConsts.ContextLogger.String())
 	if exists {
 		if logger, ok := value.(*zap.Logger); ok {
-			return logger
+			return logger.Named(name)
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger)
+	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Named(name)
 }
 
 // GetSugarLogger 从 `gin.Context` 中获取业务日志记录器的 Sugar 版本。
@@ -38,15 +39,16 @@ func GetLogger(c *gin.Context) *zap.Logger {
 //
 // 参数说明:
 //   - c: `gin.Context` 上下文对象，用于存储和获取 请求范围内的数据。
+//   - name: 日志记录器的名称。
 //
 // 返回值:
 //   - 返回一个类型为 `*zap.SugaredLogger` 的日志记录器实例，确保始终返回非空的日志对象。
-func GetSugarLogger(c *gin.Context) *zap.SugaredLogger {
+func GetSugarLogger(c *gin.Context, name string) *zap.SugaredLogger {
 	value, exists := c.Get(xConsts.ContextLogger.String())
 	if exists {
 		if logger, ok := value.(*zap.Logger); ok {
-			return logger.Sugar()
+			return logger.Sugar().Named(name)
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Sugar()
+	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Sugar().Named(name)
 }

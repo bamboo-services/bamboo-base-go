@@ -25,9 +25,10 @@ import (
 // - 确保所有错误信息通过 `ctx.Errors` 提供适当的上下文。
 // - 避免在链式中间件或控制器中重复写入响应。
 func ResponseMiddleware(ctx *gin.Context) {
-	log := xCtxUtil.GetSugarLogger(ctx)
-	// 继续执行下一个中间件或处理函数
 	ctx.Next()
+
+	// 继续执行下一个中间件或处理函数
+	log := xCtxUtil.GetSugarLogger(ctx, xConsts.LogMIDE)
 
 	// 获取检查是否存在 buffer
 	if !ctx.Writer.Written() {
@@ -49,7 +50,7 @@ func ResponseMiddleware(ctx *gin.Context) {
 			}
 		} else {
 			xResult.Error(
-				ctx, xError.NotExist,
+				ctx, xError.DeveloperOperateError,
 				"没有正常输出信息以及报错信息，请检查代码逻辑「开发者错误」",
 				nil,
 			)
@@ -59,9 +60,9 @@ func ResponseMiddleware(ctx *gin.Context) {
 	// 记录接口响应时间
 	if xCtxUtil.IsDebugMode(ctx) {
 		if xCtxUtil.CalcOverheadTime(ctx) > 1000 {
-			log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dms", xCtxUtil.CalcOverheadTime(ctx)/1000)
+			log.Debugf("接口耗时: %dms", xCtxUtil.CalcOverheadTime(ctx)/1000)
 		} else {
-			log.Named(xConsts.LogMIDE).Debugf("接口耗时: %dµs", xCtxUtil.CalcOverheadTime(ctx))
+			log.Debugf("接口耗时: %dµs", xCtxUtil.CalcOverheadTime(ctx))
 		}
 	}
 }

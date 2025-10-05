@@ -2,6 +2,7 @@ package xUtil
 
 import (
 	"encoding/base64"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -22,6 +23,23 @@ func EncryptPassword(pass string) ([]byte, error) {
 
 	// 然后使用 bcrypt 进行哈希
 	return bcrypt.GenerateFromPassword(encoded, bcrypt.DefaultCost)
+}
+
+// MustEncryptPassword 加密密码并返回加密后的字节切片。
+//
+// 这是 EncryptPassword 的便捷版本，直接返回加密后的字节切片。
+//
+// 参数说明:
+//   - pass: 需要加密的明文密码
+//
+// 返回值:
+//   - []byte: bcrypt 哈希后的密码
+func MustEncryptPassword(pass string) []byte {
+	hash, err := EncryptPassword(pass)
+	if err != nil {
+		panic(err)
+	}
+	return hash
 }
 
 // VerifyPassword 验证用户输入的密码是否与加密后的密码匹配。
@@ -57,6 +75,23 @@ func EncryptPasswordString(pass string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
+}
+
+// MustEncryptPasswordString 加密密码并返回加密后的字符串。
+//
+// 这是 EncryptPassword 的便捷版本，直接返回字符串形式的哈希值。
+//
+// 参数说明:
+//   - pass: 需要加密的明文密码
+//
+// 返回值:
+//   - string: 加密后的密码字符串
+func MustEncryptPasswordString(pass string) string {
+	hash, err := EncryptPassword(pass)
+	if err != nil {
+		panic(err)
+	}
+	return string(hash)
 }
 
 // IsPasswordValid 检查密码是否匹配，返回布尔值。

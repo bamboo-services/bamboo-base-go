@@ -18,6 +18,6 @@ func GetDB(c *gin.Context) *gorm.DB {
 	if exists {
 		return value.(*gorm.DB)
 	}
-	GetLogger(c).Named(xConsts.LogUTIL).Panic("在上下文中找不到数据库，真的注入成功了吗？")
+	GetLogger(c, xConsts.LogUTIL).Panic("在上下文中找不到数据库，真的注入成功了吗？")
 	return nil
 }

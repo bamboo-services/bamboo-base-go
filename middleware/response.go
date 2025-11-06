@@ -51,7 +51,7 @@ func ResponseMiddleware(ctx *gin.Context) {
 		} else {
 			xResult.Error(
 				ctx, xError.DeveloperOperateError,
-				"没有正常输出信息以及报错信息，请检查代码逻辑「开发者错误」",
+				"没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」",
 				nil,
 			)
 		}

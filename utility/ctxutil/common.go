@@ -1,34 +1,24 @@
 package xCtxUtil
 
 import (
+	"os"
+	"strings"
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	xModels "github.com/bamboo-services/bamboo-base-go/models"
 	"github.com/gin-gonic/gin"
-	"github.com/mitchellh/mapstructure"
 )
 
-// IsDebugMode 判断当前请求是否处于调试模式。
+// IsDebugMode 判断当前是否处于调试模式。
 //
-// 该函数通过从上下文中获取 `xConfig` 实例，检查其 `Debug` 字段来确定调试模式状态。
+// 该函数通过读取环境变量 `XLF_DEBUG` 来确定调试模式状态。
 //
 // 返回值:
 //   - 返回 `true` 表示处于调试模式。
-//   - 返回 `false` 表示不在调试模式，或者上下文中未找到对应配置。
+//   - 返回 `false` 表示不在调试模式。
 func IsDebugMode(c *gin.Context) bool {
-	value, exists := c.Get(xConsts.ContextConfig.String())
-	if exists {
-		config := value.(*map[string]interface{})
-		var getConfig xModels.Config
-		err := mapstructure.Decode(config, &getConfig)
-		if err != nil {
-			return false
-		}
-		return getConfig.Xlf.Debug
-	} else {
-		return false
-	}
+	debug := strings.ToLower(os.Getenv("XLF_DEBUG"))
+	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }
 
 // CalcOverheadTime 计算当前请求的耗时（微秒级）。
@@ -45,31 +35,6 @@ func CalcOverheadTime(c *gin.Context) int64 {
 		return time.Now().Sub(startTime).Microseconds()
 	}
 	return 0
-}
-
-// GetConfig 从上下文中获取应用配置。
-//
-// 该函数从 Gin 上下文中提取应用配置实例，如果配置不存在则记录错误并触发 panic。
-//
-// 参数说明:
-//   - c: `*gin.Context` 上下文对象
-//
-// 返回值:
-//   - `*xModels.Config` 应用配置实例
-//
-// 注意: 确保配置已正确注入到上下文中
-func GetConfig(c *gin.Context) *xModels.Config {
-	value, exists := c.Get(xConsts.ContextConfig.String())
-	if exists {
-		config := value.(*map[string]interface{})
-		var getConfig xModels.Config
-		err := mapstructure.Decode(config, &getConfig)
-		if err != nil {
-			return nil
-		}
-		return &getConfig
-	}
-	return nil
 }
 
 // GetRequestKey 从上下文中获取请求唯一标识键。

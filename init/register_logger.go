@@ -2,6 +2,7 @@ package xInit
 
 import (
 	"os"
+	"strings"
 
 	"github.com/bamboo-services/bamboo-base-go/log"
 	"go.uber.org/zap"
@@ -10,7 +11,7 @@ import (
 
 // LoggerInit 初始化日志记录器。
 //
-// 该方法为当前 `Reg` 实例配置并初始化日志记录器。
+// 该方法配置并初始化全局日志记录器，通过 zap.L() 访问。
 // 它将 JSON 格式的日志输出到文件，同时将自定义格式的彩色日志输出到控制台。
 //
 // 日志格式:
@@ -41,7 +42,7 @@ func (r *Reg) LoggerInit() {
 
 	// 创建控制台日志核心，记录 Debug 及以上级别的日志
 	logLevel := zapcore.InfoLevel
-	if ((*r.Config)["xlf"]).(map[string]interface{})["debug"].(bool) {
+	if isDebugMode() {
 		logLevel = zapcore.DebugLevel
 	}
 	consoleCore := xLog.NewXlfCore(
@@ -57,7 +58,15 @@ func (r *Reg) LoggerInit() {
 		consoleCore,
 	)
 
-	// 创建最终的日志记录器，AddCaller() 用于记录调用位置（在JSON日志中依然有用）
+	// 创建最终的日志记录器，AddCaller() 用于记录调用位置
 	logger := zap.New(core, zap.AddCaller())
-	r.Logger = logger
+
+	// 注册为全局 logger，通过 zap.L() 访问
+	zap.ReplaceGlobals(logger)
+}
+
+// isDebugMode 判断是否处于调试模式。
+func isDebugMode() bool {
+	debug := strings.ToLower(os.Getenv("XLF_DEBUG"))
+	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }

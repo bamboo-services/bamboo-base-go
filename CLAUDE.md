@@ -26,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `result/` 包处理响应格式化
   - `middleware/response.go` 提供统一响应中间件
 
-- **配置管理** (`models/config.go`): 基于 YAML 的配置系统
-  - `xConfig` 结构支持数据库、NoSQL (Redis) 和调试设置
-  - 以嵌套 YAML 配置形式组织
+- **配置管理**: 基于环境变量的配置系统
+  - 使用 `godotenv` 加载 `.env` 文件
+  - 配置直接通过 `os.Getenv()` 获取
 
 - **工具库** (`utility/`): 丰富的通用辅助函数和上下文工具
   - `ctxutil/` 提供与数据库、日志和通用操作相关的上下文工具
@@ -186,26 +186,32 @@ xResult.Error(ctx, xError.NotFound, "用户不存在", nil)
 ```
 
 ### 配置管理
-应用程序期望的 YAML 配置结构:
-```yaml
-xlf:
-  debug: true
 
-database:
-  host: "localhost"
-  port: 3306
-  user: "root"
-  pass: "password"
-  name: "bamboo_db"
+应用程序通过环境变量配置，支持 `.env` 文件加载。直接使用 `os.Getenv()` 获取配置：
 
-nosql:
-  host: "localhost"
-  port: 6379
-  user: ""
-  pass: ""
-  database: 0
-  prefix: "bamboo:"
+```go
+import "os"
+
+// 获取配置
+debug := os.Getenv("XLF_DEBUG")
+dbHost := os.Getenv("DATABASE_HOST")
 ```
+
+**常用环境变量：**
+| 环境变量 | 说明 |
+|----------|------|
+| `XLF_DEBUG` | 调试模式 (true/false) |
+| `XLF_HOST` | 监听地址 |
+| `XLF_PORT` | 监听端口 |
+| `DATABASE_HOST` | 数据库主机 |
+| `DATABASE_PORT` | 数据库端口 |
+| `DATABASE_USER` | 数据库用户名 |
+| `DATABASE_PASS` | 数据库密码 |
+| `DATABASE_NAME` | 数据库名称 |
+
+**使用方式：**
+1. 复制 `.env.example` 为 `.env`
+2. 根据需要修改配置项
 
 ### 中间件使用
 ```go
@@ -306,9 +312,9 @@ go test -cover ./...
 3. **自动时间计算**: 在调试模式下自动计算并返回请求处理时间
 
 ### 配置管理
-1. **环境分离**: 为不同环境准备独立的配置文件
-2. **敏感信息**: 使用环境变量或密钥管理系统保护敏感配置
-3. **配置验证**: 在应用启动时验证必需的配置项
+1. **环境分离**: 为不同环境准备独立的 `.env` 文件（如 `.env.development`、`.env.production`）
+2. **敏感信息**: 使用环境变量保护敏感配置，不要将 `.env` 文件提交到版本控制
+3. **配置验证**: 必填配置项缺失时应用会自动 panic，确保启动前所有必填项已设置
 
 ### 代码组织
 1. **包导入约定**: 使用项目统一的包别名 (`xInit`、`xError`、`xResult` 等)
@@ -340,13 +346,13 @@ go test -cover ./...
 ## 故障排查
 
 ### 常见问题
-1. **配置文件未找到**: 确认 YAML 配置文件路径和格式正确
+1. **配置未生效**: 确认 `.env` 文件在项目根目录，或环境变量已正确设置
 2. **依赖包版本冲突**: 运行 `go mod tidy` 清理依赖
 3. **上下文键不存在**: 检查是否正确初始化了系统上下文
 4. **响应中间件未生效**: 确认中间件已正确注册到 Gin 引擎
 
 ### 调试建议
-1. **启用调试模式**: 在配置中设置 `xlf.debug: true`
+1. **启用调试模式**: 设置环境变量 `XLF_DEBUG=true`
 2. **查看详细日志**: 调试模式下会输出详细的日志信息
 3. **检查响应时间**: 利用自动计算的 `overhead` 字段分析性能
 4. **验证错误码**: 确保自定义错误码不与预定义码冲突

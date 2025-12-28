@@ -10,7 +10,7 @@ import (
 
 // Success 向客户端返回 200 状态码的成功响应。
 //
-// 该函数构造并发送一个标准化的成功响应，包含上下文信息、输出描述、状态码和自定义消息。
+// 该函数构造并发送一个标准化的成功响应，包含上下文信息、状态码和自定义消息。
 //
 // 注意:
 // - 日志记录器会记录响应状态，日志级别为 `Info`。
@@ -57,18 +57,18 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //
 // 参数说明:
 //   - ctx: `gin.Context` 对象，用于管理请求的上下文。
-//   - errorCode: 定义错误的代码、输出和信息的结构化数据类型，标识错误的具体内容。
+//   - errorCode: 定义错误的代码和信息的结构化数据类型，标识错误的具体内容。
 //   - errorMessage: 自定义错误信息的字符串，用于补充或覆盖 `ErrorCode` 中的默认错误描述。
 //   - data: 任意类型的数据，用于返回附加的上下文或调试信息。
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
 func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
 	log := xCtxUtil.GetSugarLogger(ctx, xConsts.LogRESU)
-	log.Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.Output, errorCode.GetMessage(), errorMessage, data)
+	log.Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.GetOutput(), errorCode.GetMessage(), errorMessage, data)
 	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 		Context:      ctx.GetString(xConsts.ContextRequestKey.String()),
-		Output:       errorCode.Output,
+		Output:       errorCode.GetOutput(),
 		Code:         errorCode.Code,
 		Message:      errorCode.Message,
 		Overhead:     xCtxUtil.CalcOverheadTime(ctx) / 1000,

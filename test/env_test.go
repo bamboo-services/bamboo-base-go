@@ -7,32 +7,11 @@ import (
 	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
 )
 
-// Test_YamlPathToEnvKey 测试 YAML 路径到环境变量键名的转换。
-func Test_YamlPathToEnvKey(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"xlf.debug", "XLF_DEBUG"},
-		{"database.host", "DATABASE_HOST"},
-		{"nosql.database", "NOSQL_DATABASE"},
-		{"xlf.port", "XLF_PORT"},
-		{"database.prefix", "DATABASE_PREFIX"},
-	}
-
-	for _, tc := range tests {
-		result := xUtil.YamlPathToEnvKey(tc.input)
-		if result != tc.expected {
-			t.Errorf("YamlPathToEnvKey(%s) = %s; want %s", tc.input, result, tc.expected)
-		}
-	}
-}
-
 // Test_GetEnv 测试环境变量获取功能。
 func Test_GetEnv(t *testing.T) {
 	// 设置测试环境变量
-	os.Setenv("BAMBOO_TEST_KEY", "test_value")
-	defer os.Unsetenv("BAMBOO_TEST_KEY")
+	os.Setenv("TEST_KEY", "test_value")
+	defer os.Unsetenv("TEST_KEY")
 
 	// 测试存在的环境变量
 	value, exists := xUtil.GetEnv("TEST_KEY")
@@ -53,8 +32,8 @@ func Test_GetEnv(t *testing.T) {
 // Test_GetEnvOrDefault 测试获取环境变量或默认值。
 func Test_GetEnvOrDefault(t *testing.T) {
 	// 设置测试环境变量
-	os.Setenv("BAMBOO_EXISTING_KEY", "existing_value")
-	defer os.Unsetenv("BAMBOO_EXISTING_KEY")
+	os.Setenv("EXISTING_KEY", "existing_value")
+	defer os.Unsetenv("EXISTING_KEY")
 
 	// 测试存在的环境变量
 	value := xUtil.GetEnvOrDefault("EXISTING_KEY", "default")
@@ -69,61 +48,35 @@ func Test_GetEnvOrDefault(t *testing.T) {
 	}
 }
 
-// Test_ApplyEnvOverrides 测试环境变量覆盖配置功能。
-func Test_ApplyEnvOverrides(t *testing.T) {
-	// 设置测试环境变量
-	os.Setenv("BAMBOO_XLF_DEBUG", "true")
-	os.Setenv("BAMBOO_DATABASE_PORT", "3307")
-	os.Setenv("BAMBOO_DATABASE_HOST", "") // 测试空字符串覆盖
-	defer func() {
-		os.Unsetenv("BAMBOO_XLF_DEBUG")
-		os.Unsetenv("BAMBOO_DATABASE_PORT")
-		os.Unsetenv("BAMBOO_DATABASE_HOST")
-	}()
+// Test_GetEnvInt 测试整数环境变量获取。
+func Test_GetEnvInt(t *testing.T) {
+	// 测试有效整数
+	os.Setenv("INT_VALUE", "42")
+	defer os.Unsetenv("INT_VALUE")
 
-	config := map[string]interface{}{
-		"xlf": map[string]interface{}{
-			"debug": false,
-			"host":  "0.0.0.0",
-		},
-		"database": map[string]interface{}{
-			"host": "localhost",
-			"port": 3306,
-		},
+	value := xUtil.GetEnvInt("INT_VALUE", 0)
+	if value != 42 {
+		t.Errorf("GetEnvInt = %d; want 42", value)
 	}
 
-	result := xUtil.ApplyEnvOverrides(config, "")
+	// 测试无效整数（应返回默认值）
+	os.Setenv("INVALID_INT", "not_a_number")
+	defer os.Unsetenv("INVALID_INT")
 
-	// 验证 xlf.debug 被覆盖为 true
-	xlfConfig := result["xlf"].(map[string]interface{})
-	if xlfConfig["debug"] != true {
-		t.Errorf("xlf.debug 应该被覆盖为 true，实际值: %v", xlfConfig["debug"])
+	value = xUtil.GetEnvInt("INVALID_INT", 100)
+	if value != 100 {
+		t.Errorf("GetEnvInt 对于无效输入应返回默认值 100, got %d", value)
 	}
 
-	// 验证 xlf.host 保持不变（未设置环境变量）
-	if xlfConfig["host"] != "0.0.0.0" {
-		t.Errorf("xlf.host 应该保持 0.0.0.0，实际值: %v", xlfConfig["host"])
-	}
-
-	// 验证 database.port 被覆盖
-	dbConfig := result["database"].(map[string]interface{})
-	// 注意：原始值是 int，环境变量覆盖后应该也是 int
-	if port, ok := dbConfig["port"].(int); ok {
-		if port != 3307 {
-			t.Errorf("database.port 应该被覆盖为 3307，实际值: %d", port)
-		}
-	} else {
-		t.Errorf("database.port 类型应该是 int，实际类型: %T", dbConfig["port"])
-	}
-
-	// 验证 database.host 被空字符串覆盖
-	if dbConfig["host"] != "" {
-		t.Errorf("database.host 应该被覆盖为空字符串，实际值: %v", dbConfig["host"])
+	// 测试不存在的环境变量
+	value = xUtil.GetEnvInt("NOT_EXISTS_INT", 999)
+	if value != 999 {
+		t.Errorf("GetEnvInt = %d; want 999", value)
 	}
 }
 
-// Test_ApplyEnvOverrides_BoolConversion 测试布尔值转换。
-func Test_ApplyEnvOverrides_BoolConversion(t *testing.T) {
+// Test_GetEnvBool 测试布尔环境变量获取。
+func Test_GetEnvBool(t *testing.T) {
 	tests := []struct {
 		envValue string
 		expected bool
@@ -136,69 +89,65 @@ func Test_ApplyEnvOverrides_BoolConversion(t *testing.T) {
 		{"no", false},
 		{"on", true},
 		{"off", false},
+		{"TRUE", true},
+		{"FALSE", false},
+		{"Yes", true},
+		{"No", false},
 	}
 
 	for _, tc := range tests {
-		os.Setenv("BAMBOO_TEST_BOOL", tc.envValue)
-
-		config := map[string]interface{}{
-			"test": map[string]interface{}{
-				"bool": false,
-			},
+		os.Setenv("TEST_BOOL", tc.envValue)
+		result := xUtil.GetEnvBool("TEST_BOOL", !tc.expected)
+		if result != tc.expected {
+			t.Errorf("GetEnvBool(%s) = %v; want %v", tc.envValue, result, tc.expected)
 		}
+		os.Unsetenv("TEST_BOOL")
+	}
 
-		result := xUtil.ApplyEnvOverrides(config, "")
-		testConfig := result["test"].(map[string]interface{})
+	// 测试不存在的环境变量返回默认值
+	result := xUtil.GetEnvBool("NOT_EXISTS_BOOL", true)
+	if result != true {
+		t.Error("GetEnvBool 应该对不存在的键返回默认值 true")
+	}
 
-		if testConfig["bool"] != tc.expected {
-			t.Errorf("布尔值转换失败: %s -> %v; want %v", tc.envValue, testConfig["bool"], tc.expected)
-		}
-
-		os.Unsetenv("BAMBOO_TEST_BOOL")
+	result = xUtil.GetEnvBool("NOT_EXISTS_BOOL", false)
+	if result != false {
+		t.Error("GetEnvBool 应该对不存在的键返回默认值 false")
 	}
 }
 
-// Test_ApplyEnvOverrides_FloatConversion 测试浮点数转换（YAML 默认解析数字为 float64）。
-func Test_ApplyEnvOverrides_FloatConversion(t *testing.T) {
-	os.Setenv("BAMBOO_CONFIG_VALUE", "3.14")
-	defer os.Unsetenv("BAMBOO_CONFIG_VALUE")
+// Test_GetEnvFloat 测试浮点数环境变量获取。
+func Test_GetEnvFloat(t *testing.T) {
+	// 测试有效浮点数
+	os.Setenv("FLOAT_VALUE", "3.14")
+	defer os.Unsetenv("FLOAT_VALUE")
 
-	config := map[string]interface{}{
-		"config": map[string]interface{}{
-			"value": float64(1.0),
-		},
+	value := xUtil.GetEnvFloat("FLOAT_VALUE", 0.0)
+	if value != 3.14 {
+		t.Errorf("GetEnvFloat = %f; want 3.14", value)
 	}
 
-	result := xUtil.ApplyEnvOverrides(config, "")
-	configMap := result["config"].(map[string]interface{})
+	// 测试整数值（应能解析为浮点数）
+	os.Setenv("INT_AS_FLOAT", "42")
+	defer os.Unsetenv("INT_AS_FLOAT")
 
-	if val, ok := configMap["value"].(float64); ok {
-		if val != 3.14 {
-			t.Errorf("浮点数转换失败: want 3.14, got %v", val)
-		}
-	} else {
-		t.Errorf("浮点数类型转换失败，实际类型: %T", configMap["value"])
-	}
-}
-
-// Test_ApplyEnvOverrides_NestedConfig 测试嵌套配置覆盖。
-func Test_ApplyEnvOverrides_NestedConfig(t *testing.T) {
-	os.Setenv("BAMBOO_LEVEL1_LEVEL2_VALUE", "nested_value")
-	defer os.Unsetenv("BAMBOO_LEVEL1_LEVEL2_VALUE")
-
-	config := map[string]interface{}{
-		"level1": map[string]interface{}{
-			"level2": map[string]interface{}{
-				"value": "original",
-			},
-		},
+	value = xUtil.GetEnvFloat("INT_AS_FLOAT", 0.0)
+	if value != 42.0 {
+		t.Errorf("GetEnvFloat = %f; want 42.0", value)
 	}
 
-	result := xUtil.ApplyEnvOverrides(config, "")
-	level1 := result["level1"].(map[string]interface{})
-	level2 := level1["level2"].(map[string]interface{})
+	// 测试无效浮点数
+	os.Setenv("INVALID_FLOAT", "not_a_float")
+	defer os.Unsetenv("INVALID_FLOAT")
 
-	if level2["value"] != "nested_value" {
-		t.Errorf("嵌套配置覆盖失败: want nested_value, got %v", level2["value"])
+	value = xUtil.GetEnvFloat("INVALID_FLOAT", 1.5)
+	if value != 1.5 {
+		t.Errorf("GetEnvFloat 对于无效输入应返回默认值 1.5, got %f", value)
+	}
+
+	// 测试不存在的环境变量
+	value = xUtil.GetEnvFloat("NOT_EXISTS_FLOAT", 9.99)
+	if value != 9.99 {
+		t.Errorf("GetEnvFloat = %f; want 9.99", value)
 	}
 }

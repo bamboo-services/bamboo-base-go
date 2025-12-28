@@ -21,7 +21,7 @@ type handler struct {
 //
 // 注意: 确保在 Gin 引擎初始化后调用此方法，以正确注册中间件。
 func (r *Reg) SystemContextInit() {
-	r.Logger.Named(xConsts.LogINIT).Info("初始化系统上下文")
+	zap.L().Named(xConsts.LogINIT).Info("初始化系统上下文")
 
 	// 创建处理器实例
 	handler := &handler{
@@ -48,10 +48,9 @@ func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 	requestID := uuid.NewString()
 	c.Writer.Header().Set(xConsts.HeaderRequestUUID.String(), requestID)
 
-	c.Set(xConsts.ContextRequestKey.String(), requestID)                                      // 上下文请求记录
-	c.Set(xConsts.ContextLogger.String(), h.Data.Logger.With(zap.String("trace", requestID))) // 日志记录器上下文
-	c.Set(xConsts.ContextConfig.String(), h.Data.Config)                                      // 配置上下文请求记录
-	c.Set(xConsts.ContextUserStartTime.String(), time.Now())                                  // 配置上下文请求记录
+	c.Set(xConsts.ContextRequestKey.String(), requestID)                                // 上下文请求记录
+	c.Set(xConsts.ContextLogger.String(), zap.L().With(zap.String("trace", requestID))) // 日志记录器上下文
+	c.Set(xConsts.ContextUserStartTime.String(), time.Now())                            // 请求开始时间记录
 
 	// 放行内容
 	c.Next()

@@ -16,7 +16,7 @@ import (
 func NewInternalServerError(ctx *gin.Context, errMessage ErrMessage, err error) *Error {
 	newErr := &Error{
 		error:        err,
-		ErrorCode:    ServerInternalError,
+		ErrorCode:    ServerError,
 		ErrorMessage: errMessage,
 	}
 	xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", newErr.Code, newErr.ErrorMessage, newErr.error.Error())

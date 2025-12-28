@@ -4,15 +4,12 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-// Reg 是一个类型别名，用于表示注册操作的整数类型。
+// Reg 表示应用程序的核心注册结构，包含所有初始化后的组件实例。
 type Reg struct {
-	Context context.Context         // 上下文，用于控制取消和超时
-	Serve   *gin.Engine             // Gin 引擎实例
-	Config  *map[string]interface{} // 应用配置实例
-	Logger  *zap.Logger             // 日志记录器实例
+	Context context.Context // 上下文，用于控制取消和超时
+	Serve   *gin.Engine     // Gin 引擎实例
 }
 
 // New 创建并返回一个未初始化的 `Reg` 实例。

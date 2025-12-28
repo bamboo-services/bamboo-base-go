@@ -39,9 +39,10 @@ func newReg() *Reg {
 func Register() *Reg {
 	reg := newReg()
 
-	reg.ConfigInit() // 初始化配置
-	reg.LoggerInit() // 初始化日志记录器
-	reg.EngineInit() // 启动 Gin 引擎
+	reg.ConfigInit()    // 初始化配置
+	reg.LoggerInit()    // 初始化日志记录器
+	reg.SnowflakeInit() // 初始化雪花算法节点
+	reg.EngineInit()    // 启动 Gin 引擎
 
 	// 初始化系统上下文
 	reg.SystemContextInit()

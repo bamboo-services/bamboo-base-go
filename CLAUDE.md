@@ -93,8 +93,9 @@ bamboo-base/
 ├── helper/                  # 辅助工具 (恐慌恢复等)
 ├── init/                    # 初始化和注册系统
 ├── middleware/              # Gin 中间件 (响应处理)
-├── models/                  # 数据模型 (配置结构体)
+├── models/                  # 数据模型 (实体基类)
 ├── result/                  # 响应结果格式化
+├── snowflake/               # 雪花算法 (标准雪花、基因雪花)
 ├── test/                    # 测试文件
 ├── utility/                 # 通用工具和上下文辅助工具
 └── validator/               # 自定义验证逻辑和消息
@@ -122,6 +123,16 @@ bamboo-base/
   - `register_context.go`: 上下文初始化
   - `register_gin.go`: Gin 引擎初始化
   - `register_logger.go`: 日志器初始化
+  - `register_snowflake.go`: 雪花算法初始化
+
+- **models/**: 数据模型模块
+  - `base_entity.go`: GORM 实体基类 (BaseEntity、GeneBaseEntity)
+
+- **snowflake/**: 雪花算法模块
+  - `snowflake.go`: 标准雪花 ID (41位时间戳 + 5位数据中心 + 5位节点 + 12位序列)
+  - `gene.go`: 基因类型定义 (64种业务类型)
+  - `gene_snowflake.go`: 基因雪花 ID (41位时间戳 + 6位基因 + 3位数据中心 + 3位节点 + 10位序列)
+  - `global.go`: 全局节点管理 (默认节点初始化)
 
 - **middleware/**: 中间件模块
   - `response.go`: 统一响应中间件，处理错误和成功响应 (xMiddle:64)
@@ -137,9 +148,10 @@ bamboo-base/
   - `password.go`: 密码加密工具 (bcrypt 加密、验证等)
   - `generate.go`: 生成工具函数 (`GenerateSecurityKey()`)
   - `ctxutil/`: 上下文工具子模块
-    - `common.go`: 上下文通用工具 (调试模式、配置获取、请求信息等)
+    - `common.go`: 上下文通用工具 (调试模式、请求信息等)
     - `database.go`: 数据库上下文工具
-    - `logger.go`: 日志器上下文工具
+    - `logger.go`: 日志器工具 (全局日志 + 请求追踪)
+    - `snowflake.go`: 雪花算法上下文工具
 
 - **validator/**: 验证模块
   - `custom.go`: 自定义验证规则
@@ -156,7 +168,6 @@ reg := xInit.Register()
 
 // 访问初始化后的组件
 engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
-config := reg.Config     // *xModels.Config - 应用配置
 logger := reg.Logger     // *zap.Logger - 日志记录器
 
 // 启动服务器
@@ -208,6 +219,8 @@ dbHost := os.Getenv("DATABASE_HOST")
 | `DATABASE_USER` | 数据库用户名 |
 | `DATABASE_PASS` | 数据库密码 |
 | `DATABASE_NAME` | 数据库名称 |
+| `SNOWFLAKE_DATACENTER_ID` | 雪花算法数据中心 ID (0-31) |
+| `SNOWFLAKE_NODE_ID` | 雪花算法节点 ID (0-31) |
 
 **使用方式：**
 1. 复制 `.env.example` 为 `.env`
@@ -229,15 +242,68 @@ if xCtxUtil.IsDebugMode(ctx) {
 // 计算请求处理时间
 overhead := xCtxUtil.CalcOverheadTime(ctx)
 
-// 获取系统组件
-logger := xCtxUtil.GetLogger(ctx)
-sugarLogger := xCtxUtil.GetSugarLogger(ctx)
-config := xCtxUtil.GetConfig(ctx)
+// 获取系统组件（日志器使用全局日志 + 请求追踪）
+logger := xCtxUtil.GetLogger(ctx, "业务模块")        // 带 trace 的日志器
+sugarLogger := xCtxUtil.GetSugarLogger(ctx, "业务模块") // 带 trace 的 Sugar 日志器
 db := xCtxUtil.GetDB(ctx)
 
 // 获取请求信息
 requestKey := xCtxUtil.GetRequestKey(ctx)
 errorCode := xCtxUtil.GetErrorCode(ctx)
+
+// 获取雪花算法节点
+snowflakeNode := xCtxUtil.GetSnowflakeNode(ctx)
+geneNode := xCtxUtil.GetGeneSnowflakeNode(ctx)
+```
+
+### 雪花算法使用
+```go
+// 全局函数生成 ID
+id := xSnowflake.GenerateID()                           // 标准雪花 ID
+geneID := xSnowflake.MustGenerateGeneID(xSnowflake.GeneUser) // 基因雪花 ID
+
+// 使用节点生成
+node, _ := xSnowflake.NewNode(1, 1)                     // 数据中心 1, 节点 1
+id := node.Generate()
+
+// 使用上下文生成
+id := xCtxUtil.GenerateSnowflakeID(ctx)
+geneID, _ := xCtxUtil.GenerateGeneSnowflakeID(ctx, xSnowflake.GeneOrder)
+
+// ID 组件提取
+timestamp := id.Timestamp()     // 时间戳
+datacenter := id.DatacenterID() // 数据中心 ID
+nodeID := id.NodeID()           // 节点 ID
+sequence := id.Sequence()       // 序列号
+
+// 基因提取
+gene := geneID.Gene()           // 业务类型基因
+```
+
+### GORM 实体使用
+```go
+// 使用标准雪花 ID 的实体
+type User struct {
+    xModels.BaseEntity
+    Username string `gorm:"type:varchar(64);uniqueIndex"`
+    Email    string `gorm:"type:varchar(128)"`
+}
+
+// 使用基因雪花 ID 的实体
+type Order struct {
+    xModels.GeneBaseEntity
+    OrderNo     string  `gorm:"type:varchar(64);uniqueIndex"`
+    TotalAmount float64 `gorm:"type:decimal(10,2)"`
+}
+
+// 实现 GeneProvider 接口指定基因类型
+func (o *Order) GetGene() xSnowflake.Gene {
+    return xSnowflake.GeneOrder
+}
+
+// 创建记录时自动生成 ID
+user := &User{Username: "test"}
+db.Create(user) // user.ID 自动生成
 ```
 
 ### 工具函数使用

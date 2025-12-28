@@ -5,6 +5,7 @@ import (
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
+	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -48,9 +49,12 @@ func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 	requestID := uuid.NewString()
 	c.Writer.Header().Set(xConsts.HeaderRequestUUID.String(), requestID)
 
-	c.Set(xConsts.ContextRequestKey.String(), requestID)                                // 上下文请求记录
-	c.Set(xConsts.ContextLogger.String(), zap.L().With(zap.String("trace", requestID))) // 日志记录器上下文
-	c.Set(xConsts.ContextUserStartTime.String(), time.Now())                            // 请求开始时间记录
+	c.Set(xConsts.ContextRequestKey.String(), requestID)     // 上下文请求记录
+	c.Set(xConsts.ContextUserStartTime.String(), time.Now()) // 请求开始时间记录
+
+	// 注入雪花算法节点
+	c.Set(xConsts.ContextSnowflakeNode.String(), xSnowflake.GetDefaultNode())         // 标准雪花节点
+	c.Set(xConsts.ContextGeneSnowflakeNode.String(), xSnowflake.GetDefaultGeneNode()) // 基因雪花节点
 
 	// 放行内容
 	c.Next()

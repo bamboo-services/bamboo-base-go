@@ -6,49 +6,46 @@ import (
 	"go.uber.org/zap"
 )
 
-// GetLogger 从 `gin.Context` 中获取业务日志记录器。
+// GetLogger 获取带有请求追踪信息的日志记录器。
 //
-// 该函数优先尝试从上下文中获取 `ContextLoggerBusiness` 对应的日志记录器，
-// 如果存在且类型匹配，则返回该日志记录器。
-// 如果上下文中未找到 `ContextLoggerBusiness` 或其类型不匹配，则返回默认的 `ContextLogger` 日志记录器。
+// 该函数使用全局日志记录器 zap.L()，并从上下文中获取请求 ID 作为 trace 字段，
+// 用于在分布式系统中追踪请求链路。
 //
 // 参数说明:
-//   - c: `gin.Context` 上下文对象，用于存储和获取请求范围内的数据。
-//   - name: 日志记录器的名称。
+//   - c: gin.Context 上下文对象，用于获取请求追踪信息
+//   - name: 日志记录器的命名空间
 //
 // 返回值:
-//   - 返回一个类型为 `*zap.Logger` 的日志记录器实例，确保始终返回非空的日志对象。
-//
-// 注意: 确保上下文中已正确设置 `ContextLogger`，否则可能会引发 panic。
+//   - *zap.Logger: 带有 trace 字段的日志记录器实例
 func GetLogger(c *gin.Context, name string) *zap.Logger {
-	value, exists := c.Get(xConsts.ContextLogger.String())
-	if exists {
-		if logger, ok := value.(*zap.Logger); ok {
-			return logger.Named(name)
+	logger := zap.L().Named(name)
+	// 从上下文获取请求 ID 作为 trace
+	if requestID, exists := c.Get(xConsts.ContextRequestKey.String()); exists {
+		if trace, ok := requestID.(string); ok {
+			return logger.With(zap.String("trace", trace))
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Named(name)
+	return logger
 }
 
-// GetSugarLogger 从 `gin.Context` 中获取业务日志记录器的 Sugar 版本。
+// GetSugarLogger 获取带有请求追踪信息的 Sugar 日志记录器。
 //
-// 该函数首先尝试从上下文中获取 `ContextLoggerBusiness` 对应的日志记录器，
-// 如果存在且类型匹配，则返回该日志记录器的 Sugar 版本。
-// 如果上下文中未找到 `ContextLoggerBusiness` 或其类型不匹配，则
-// 返回默认的 `ContextLogger` 日志记录器的 Sugar 版本。
+// 该函数使用全局日志记录器 zap.L()，并从上下文中获取请求 ID 作为 trace 字段，
+// 提供更便捷的日志记录 API。
 //
 // 参数说明:
-//   - c: `gin.Context` 上下文对象，用于存储和获取 请求范围内的数据。
-//   - name: 日志记录器的名称。
+//   - c: gin.Context 上下文对象，用于获取请求追踪信息
+//   - name: 日志记录器的命名空间
 //
 // 返回值:
-//   - 返回一个类型为 `*zap.SugaredLogger` 的日志记录器实例，确保始终返回非空的日志对象。
+//   - *zap.SugaredLogger: 带有 trace 字段的 Sugar 日志记录器实例
 func GetSugarLogger(c *gin.Context, name string) *zap.SugaredLogger {
-	value, exists := c.Get(xConsts.ContextLogger.String())
-	if exists {
-		if logger, ok := value.(*zap.Logger); ok {
-			return logger.Sugar().Named(name)
+	logger := zap.L().Named(name)
+	// 从上下文获取请求 ID 作为 trace
+	if requestID, exists := c.Get(xConsts.ContextRequestKey.String()); exists {
+		if trace, ok := requestID.(string); ok {
+			return logger.With(zap.String("trace", trace)).Sugar()
 		}
 	}
-	return c.MustGet(xConsts.ContextLogger.String()).(*zap.Logger).Sugar().Named(name)
+	return logger.Sugar()
 }

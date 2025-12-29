@@ -2,11 +2,10 @@ package xRoute
 
 import (
 	"fmt"
+	"log/slog"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xResult "github.com/bamboo-services/bamboo-base-go/result"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,9 +18,10 @@ import (
 //
 // 注意: 此方法用于全局未匹配路由的处理，需通过 `router.NoRoute` 绑定使用。
 func NoRoute(ctx *gin.Context) {
-	getLogger := xCtxUtil.GetLogger(ctx, xConsts.LogROUT)
-
-	getLogger.Warn("未找到路由")
+	slog.WarnContext(ctx.Request.Context(), "未找到路由",
+		"method", ctx.Request.Method,
+		"path", ctx.Request.URL.Path,
+	)
 	xResult.Error(
 		ctx, xError.PageNotFound,
 		xError.ErrMessage(fmt.Sprintf(

@@ -1,9 +1,9 @@
 package xInit
 
 import (
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	"log/slog"
+
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
-	"go.uber.org/zap"
 )
 
 // SnowflakeInit 初始化雪花算法节点
@@ -19,10 +19,11 @@ import (
 //   - 该方法应在 LoggerInit 之后调用，以确保日志记录器可用。
 //   - 初始化失败会触发 Fatal 级别日志并终止程序。
 func (r *Reg) SnowflakeInit() {
-	zap.L().Named(xConsts.LogINIT).Info("初始化雪花算法节点")
+	slog.Info("初始化雪花算法节点")
 
 	if err := xSnowflake.InitDefaultNode(); err != nil {
-		zap.L().Named(xConsts.LogINIT).Fatal("雪花算法节点初始化失败", zap.Error(err))
+		slog.Error("雪花算法节点初始化失败", "error", err)
+		panic("雪花算法节点初始化失败: " + err.Error())
 	}
 
 	// 获取节点信息并记录日志
@@ -33,12 +34,12 @@ func (r *Reg) SnowflakeInit() {
 	testID := node.Generate()
 	testGeneID := geneNode.MustGenerate(xSnowflake.GeneSystem)
 
-	zap.L().Named(xConsts.LogINIT).Info("雪花算法节点初始化成功",
-		zap.Int64("datacenter_id", node.DatacenterID()),
-		zap.Int64("node_id", node.NodeID()),
-		zap.String("test_id", testID.String()),
-		zap.Int64("gene_datacenter_id", geneNode.DatacenterID()),
-		zap.Int64("gene_node_id", geneNode.NodeID()),
-		zap.String("test_gene_id", testGeneID.String()),
+	slog.Info("雪花算法节点初始化成功",
+		"datacenter_id", node.DatacenterID(),
+		"node_id", node.NodeID(),
+		"test_id", testID.String(),
+		"gene_datacenter_id", geneNode.DatacenterID(),
+		"gene_node_id", geneNode.NodeID(),
+		"test_gene_id", testGeneID.String(),
 	)
 }

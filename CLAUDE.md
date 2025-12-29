@@ -40,7 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 核心依赖
 
 - **Gin 框架**: 用于 HTTP 路由和中间件的 Web 框架
-- **Zap 日志器**: 支持多种输出格式的结构化日志记录
+- **slog (Go 标准库)**: Go 1.21+ 标准库结构化日志，支持彩色控制台输出和 JSON 文件记录，自动从 context 提取 trace ID
 - **GORM**: 数据库操作的 ORM 工具
 - **Validator**: 使用 go-playground/validator 进行请求验证
 - **UUID**: Google UUID 用于唯一标识符生成
@@ -85,7 +85,7 @@ go mod download
 ```
 bamboo-base/
 ├── base_response.go          # 标准 API 响应结构
-├── config/                   # 日志配置 (核心配置、编码器配置)
+├── log/                      # slog 自定义 Handler (彩色控制台 + JSON 文件)
 ├── constants/               # 应用常量 (上下文键、请求头、日志器名称)
 ├── error/                   # 错误处理系统 (接口、错误码、构造函数)
 ├── go.mod                   # 模块定义和依赖管理
@@ -103,9 +103,8 @@ bamboo-base/
 
 ### 详细模块说明
 
-- **config/**: 日志配置模块
-  - `logger_core.go`: 日志核心配置
-  - `logger_encoder.go`: 日志编码器配置
+- **log/**: slog 自定义 Handler 模块
+  - `handler.go`: 自定义 slog.Handler 实现，支持彩色控制台输出和 JSON 文件记录，自动从 context 提取 trace ID
 
 - **constants/**: 系统常量定义
   - `context.go`: 上下文键常量 (xConsts:124)
@@ -150,7 +149,7 @@ bamboo-base/
   - `ctxutil/`: 上下文工具子模块
     - `common.go`: 上下文通用工具 (调试模式、请求信息等)
     - `database.go`: 数据库上下文工具
-    - `logger.go`: 日志器工具 (全局日志 + 请求追踪)
+    - `nosql.go`: Redis 上下文工具
     - `snowflake.go`: 雪花算法上下文工具
 
 - **validator/**: 验证模块
@@ -168,7 +167,6 @@ reg := xInit.Register()
 
 // 访问初始化后的组件
 engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
-logger := reg.Logger     // *zap.Logger - 日志记录器
 
 // 启动服务器
 engine.Run(":8080")
@@ -242,10 +240,9 @@ if xCtxUtil.IsDebugMode(ctx) {
 // 计算请求处理时间
 overhead := xCtxUtil.CalcOverheadTime(ctx)
 
-// 获取系统组件（日志器使用全局日志 + 请求追踪）
-logger := xCtxUtil.GetLogger(ctx, "业务模块")        // 带 trace 的日志器
-sugarLogger := xCtxUtil.GetSugarLogger(ctx, "业务模块") // 带 trace 的 Sugar 日志器
-db := xCtxUtil.GetDB(ctx)
+// 获取系统组件
+db := xCtxUtil.GetDB(ctx)       // 数据库连接
+rdb := xCtxUtil.GetRDB(ctx)     // Redis 客户端
 
 // 获取请求信息
 requestKey := xCtxUtil.GetRequestKey(ctx)
@@ -254,6 +251,33 @@ errorCode := xCtxUtil.GetErrorCode(ctx)
 // 获取雪花算法节点
 snowflakeNode := xCtxUtil.GetSnowflakeNode(ctx)
 geneNode := xCtxUtil.GetGeneSnowflakeNode(ctx)
+```
+
+### 日志记录 (slog)
+```go
+import "log/slog"
+
+// 直接使用 slog，trace ID 会自动从 context 提取
+slog.InfoContext(ctx.Request.Context(), "用户登录成功",
+    "user_id", userID,
+    "ip", ctx.ClientIP(),
+)
+
+slog.WarnContext(ctx.Request.Context(), "请求参数异常",
+    "param", paramName,
+    "error", err,
+)
+
+slog.ErrorContext(ctx.Request.Context(), "数据库操作失败",
+    "table", "users",
+    "error", err,
+)
+
+// 控制台输出格式 (彩色):
+// 2024-01-15 10:30:45 [INFO] [CORE] [abc123] 用户登录成功 user_id=1001 ip=192.168.1.1
+
+// 文件输出格式 (JSON):
+// {"time":"2024-01-15T10:30:45","level":"INFO","trace":"abc123","msg":"用户登录成功","user_id":1001,"ip":"192.168.1.1"}
 ```
 
 ### 雪花算法使用
@@ -368,9 +392,10 @@ go test -cover ./...
 3. **中间件自动处理**: 依赖响应中间件自动格式化错误响应，避免手动处理
 
 ### 日志记录
-1. **使用上下文日志器**: 通过 `xCtxUtil.GetLogger(ctx)` 获取与请求绑定的日志器
-2. **结构化日志**: 利用 Zap 的结构化日志功能，避免字符串拼接
-3. **调试模式**: 在调试模式下记录详细信息，生产环境保持简洁
+1. **使用 slog 标准库**: 直接使用 `slog.InfoContext(ctx, ...)` 进行日志记录
+2. **自动 trace 注入**: 自定义 Handler 会自动从 gin.Context 提取 trace ID
+3. **结构化日志**: 使用 key-value 对传递日志属性，避免字符串拼接
+4. **调试模式**: DEBUG 级别日志仅在调试模式下输出
 
 ### 响应格式
 1. **统一响应结构**: 所有 API 响应均使用 `BaseResponse` 结构

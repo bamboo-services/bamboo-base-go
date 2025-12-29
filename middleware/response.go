@@ -2,6 +2,7 @@ package xMiddle
 
 import (
 	"errors"
+	"log/slog"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
@@ -26,9 +27,6 @@ import (
 // - 避免在链式中间件或控制器中重复写入响应。
 func ResponseMiddleware(ctx *gin.Context) {
 	ctx.Next()
-
-	// 继续执行下一个中间件或处理函数
-	log := xCtxUtil.GetSugarLogger(ctx, xConsts.LogMIDE)
 
 	// 获取检查是否存在 buffer
 	if !ctx.Writer.Written() {
@@ -59,10 +57,11 @@ func ResponseMiddleware(ctx *gin.Context) {
 
 	// 记录接口响应时间
 	if xCtxUtil.IsDebugMode(ctx) {
-		if xCtxUtil.CalcOverheadTime(ctx) > 1000 {
-			log.Debugf("接口耗时: %dms", xCtxUtil.CalcOverheadTime(ctx)/1000)
+		overhead := xCtxUtil.CalcOverheadTime(ctx)
+		if overhead > 1000 {
+			slog.DebugContext(ctx.Request.Context(), "接口耗时", "ms", overhead/1000)
 		} else {
-			log.Debugf("接口耗时: %dµs", xCtxUtil.CalcOverheadTime(ctx))
+			slog.DebugContext(ctx.Request.Context(), "接口耗时", "µs", overhead)
 		}
 	}
 }

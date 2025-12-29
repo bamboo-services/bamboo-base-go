@@ -1,6 +1,8 @@
 package xResult
 
 import (
+	"log/slog"
+
 	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
@@ -16,8 +18,10 @@ import (
 // - 日志记录器会记录响应状态，日志级别为 `Info`。
 // - 确保业务上下文中正确设置日志记录器，否则可能影响日志记录。
 func Success(ctx *gin.Context, message string) {
-	log := xCtxUtil.GetLogger(ctx, xConsts.LogRESU)
-	log.Info("<200>Success | 成功(数据: <nil>)")
+	slog.InfoContext(ctx.Request.Context(), "Success",
+		"code", 200,
+		"message", message,
+	)
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
@@ -39,8 +43,11 @@ func Success(ctx *gin.Context, message string) {
 //
 // 注意: 确保调用此函数前，业务上下文中正确设置必要的数据，例如日志记录器。
 func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
-	log := xCtxUtil.GetLogger(ctx, xConsts.LogRESU)
-	log.Sugar().Infof("<200>Success | 成功(数据: %v)", data)
+	slog.InfoContext(ctx.Request.Context(), "Success",
+		"code", 200,
+		"message", message,
+		"data", data,
+	)
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
@@ -63,8 +70,13 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
 func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
-	log := xCtxUtil.GetSugarLogger(ctx, xConsts.LogRESU)
-	log.Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.GetOutput(), errorCode.GetMessage(), errorMessage, data)
+	slog.WarnContext(ctx.Request.Context(), "Error",
+		"code", errorCode.Code,
+		"output", errorCode.GetOutput(),
+		"message", errorCode.GetMessage(),
+		"errorMessage", errorMessage,
+		"data", data,
+	)
 	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 		Context:      ctx.GetString(xConsts.ContextRequestKey.String()),

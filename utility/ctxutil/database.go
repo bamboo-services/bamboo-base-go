@@ -1,6 +1,8 @@
 package xCtxUtil
 
 import (
+	"log/slog"
+
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -18,6 +20,6 @@ func GetDB(c *gin.Context) *gorm.DB {
 	if exists {
 		return value.(*gorm.DB)
 	}
-	GetLogger(c, xConsts.LogUTIL).Panic("在上下文中找不到数据库，真的注入成功了吗？")
-	return nil
+	slog.ErrorContext(c.Request.Context(), "在上下文中找不到数据库，真的注入成功了吗？")
+	panic("在上下文中找不到数据库，真的注入成功了吗？")
 }

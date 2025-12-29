@@ -2,9 +2,8 @@ package xError
 
 import (
 	"errors"
+	"log/slog"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,7 +29,11 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 		newErr.error = errors.New(errorMessage.String())
 	}
 	if throw {
-		xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		slog.ErrorContext(ctx.Request.Context(), "业务错误",
+			"code", err.Code,
+			"message", newErr.ErrorMessage,
+			"error", newErr.error.Error(),
+		)
 	}
 	return newErr
 }
@@ -55,7 +58,11 @@ func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, 
 		newErr.Data = data
 	}
 	if throw {
-		xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", err.Code, newErr.ErrorMessage, newErr.error.Error())
+		slog.ErrorContext(ctx.Request.Context(), "业务错误",
+			"code", err.Code,
+			"message", newErr.ErrorMessage,
+			"error", newErr.error.Error(),
+		)
 	}
 	return newErr
 }

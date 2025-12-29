@@ -1,8 +1,8 @@
 package xError
 
 import (
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,6 +19,10 @@ func NewInternalServerError(ctx *gin.Context, errMessage ErrMessage, err error) 
 		ErrorCode:    ServerError,
 		ErrorMessage: errMessage,
 	}
-	xCtxUtil.GetSugarLogger(ctx, xConsts.LogTHOW).Errorf("[%d]%s | 错误(%s)", newErr.Code, newErr.ErrorMessage, newErr.error.Error())
+	slog.ErrorContext(ctx.Request.Context(), "服务器内部错误",
+		"code", newErr.Code,
+		"message", newErr.ErrorMessage,
+		"error", newErr.error.Error(),
+	)
 	return newErr
 }

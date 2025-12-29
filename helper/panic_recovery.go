@@ -1,13 +1,14 @@
 package xHelper
 
 import (
+	"io"
+	"log/slog"
+	"runtime/debug"
+
 	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
-	"io"
-	"runtime/debug"
 )
 
 // PanicRecovery 提供全局的 Panic 恢复机制。
@@ -26,8 +27,6 @@ import (
 // 注意: 确保该中间件在输出任何响应前优先被调用，以正确捕获和处理异常。
 func PanicRecovery() gin.HandlerFunc {
 	return gin.RecoveryWithWriter(io.Discard, func(c *gin.Context, recovered interface{}) {
-		log := xCtxUtil.GetLogger(c, xConsts.LogRECO)
-
 		// 捕获 Panic 信息
 		value, exists := c.Get(xConsts.ContextErrorCode.String())
 		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage.String())
@@ -39,8 +38,15 @@ func PanicRecovery() gin.HandlerFunc {
 			getErrMessage = "未知错误，请稍后再试"
 		}
 
-		// 处理报错信息
-		log.Sugar().Warnf("<%d>%s | %s【%s】(数据: %v)", errorCode.Code, errorCode.GetOutput(), errorCode.GetMessage(), getErrMessage, string(debug.Stack()))
+		// 使用 slog 记录日志
+		slog.WarnContext(c.Request.Context(), "Panic 恢复",
+			"code", errorCode.Code,
+			"output", errorCode.GetOutput(),
+			"message", errorCode.GetMessage(),
+			"errorMessage", getErrMessage,
+			"stack", string(debug.Stack()),
+		)
+
 		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{
 			Context:      c.GetString(xConsts.ContextRequestKey.String()),
 			Output:       errorCode.GetOutput(),

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,7 +18,7 @@ import (
 //   - 返回 `true` 表示处于调试模式。
 //   - 返回 `false` 表示不在调试模式。
 func IsDebugMode(c *gin.Context) bool {
-	debug := strings.ToLower(os.Getenv("XLF_DEBUG"))
+	debug := strings.ToLower(os.Getenv(xConstEnv.Debug.String()))
 	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }
 

@@ -16,8 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// XlfHandler 自定义 slog Handler，支持彩色控制台输出和 JSON 文件输出
-type XlfHandler struct {
+// LogHandler 自定义 slog Handler，支持彩色控制台输出和 JSON 文件输出
+type LogHandler struct {
 	opts        slog.HandlerOptions
 	mu          *sync.Mutex
 	console     io.Writer
@@ -36,20 +36,20 @@ type HandlerConfig struct {
 	AddSource   bool       // 是否添加调用位置
 }
 
-// NewXlfHandler 创建自定义 slog Handler
+// NewLogHandler 创建自定义 slog Handler
 //
 // 参数说明:
 //   - config: Handler 配置选项
 //
 // 返回值:
 //   - slog.Handler: 自定义 Handler 实例
-func NewXlfHandler(config HandlerConfig) slog.Handler {
+func NewLogHandler(config HandlerConfig) slog.Handler {
 	console := config.Console
 	if console == nil {
 		console = os.Stdout
 	}
 
-	return &XlfHandler{
+	return &LogHandler{
 		opts: slog.HandlerOptions{
 			Level:     config.Level,
 			AddSource: config.AddSource,
@@ -63,7 +63,7 @@ func NewXlfHandler(config HandlerConfig) slog.Handler {
 }
 
 // Enabled 判断指定级别是否启用
-func (h *XlfHandler) Enabled(_ context.Context, level slog.Level) bool {
+func (h *LogHandler) Enabled(_ context.Context, level slog.Level) bool {
 	minLevel := slog.LevelInfo
 	if h.opts.Level != nil {
 		minLevel = h.opts.Level.Level()
@@ -72,7 +72,7 @@ func (h *XlfHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 // Handle 处理日志记录
-func (h *XlfHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -99,12 +99,12 @@ func (h *XlfHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 // WithAttrs 添加属性
-func (h *XlfHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (h *LogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := make([]slog.Attr, len(h.attrs)+len(attrs))
 	copy(newAttrs, h.attrs)
 	copy(newAttrs[len(h.attrs):], attrs)
 
-	return &XlfHandler{
+	return &LogHandler{
 		opts:        h.opts,
 		mu:          h.mu,
 		console:     h.console,
@@ -116,8 +116,8 @@ func (h *XlfHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // WithGroup 设置日志组名称（用作 logger name）
-func (h *XlfHandler) WithGroup(name string) slog.Handler {
-	return &XlfHandler{
+func (h *LogHandler) WithGroup(name string) slog.Handler {
+	return &LogHandler{
 		opts:        h.opts,
 		mu:          h.mu,
 		console:     h.console,
@@ -129,7 +129,7 @@ func (h *XlfHandler) WithGroup(name string) slog.Handler {
 }
 
 // extractTrace 从 context 中提取 trace ID
-func (h *XlfHandler) extractTrace(ctx context.Context) string {
+func (h *LogHandler) extractTrace(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
@@ -161,7 +161,7 @@ func (h *XlfHandler) extractTrace(ctx context.Context) string {
 }
 
 // getCaller 获取调用位置
-func (h *XlfHandler) getCaller(r slog.Record) string {
+func (h *LogHandler) getCaller(r slog.Record) string {
 	fs := runtime.CallersFrames([]uintptr{r.PC})
 	f, _ := fs.Next()
 	if f.File != "" {
@@ -177,7 +177,7 @@ func (h *XlfHandler) getCaller(r slog.Record) string {
 
 // writeConsole 写入控制台（彩色格式）
 // 格式: 时间 [LEVEL] [CORE] [trace] [NAME] 消息
-func (h *XlfHandler) writeConsole(r slog.Record, trace, caller string) {
+func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 	var buf strings.Builder
 
 	// 时间戳（灰色）
@@ -243,7 +243,7 @@ func (h *XlfHandler) writeConsole(r slog.Record, trace, caller string) {
 }
 
 // writeFile 写入文件（JSON 格式）
-func (h *XlfHandler) writeFile(r slog.Record, trace, caller string) {
+func (h *LogHandler) writeFile(r slog.Record, trace, caller string) {
 	entry := map[string]interface{}{
 		"time":    r.Time.Format(time.RFC3339Nano),
 		"level":   r.Level.String(),
@@ -279,7 +279,7 @@ func (h *XlfHandler) writeFile(r slog.Record, trace, caller string) {
 }
 
 // colorLevel 返回带颜色的日志级别
-func (h *XlfHandler) colorLevel(level slog.Level) string {
+func (h *LogHandler) colorLevel(level slog.Level) string {
 	switch level {
 	case slog.LevelDebug:
 		return " \033[36m[DEBU]\033[0m" // 青色
@@ -295,29 +295,26 @@ func (h *XlfHandler) colorLevel(level slog.Level) string {
 }
 
 // colorName 返回带颜色的 logger 名称
-func (h *XlfHandler) colorName(name string) string {
+func (h *LogHandler) colorName(name string) string {
 	if len(name) != 4 {
 		return fmt.Sprintf(" \033[96m[%s]\033[0m", name) // 亮青色
 	}
 
 	switch name {
 	// 核心服务类 - 蓝色
-	case xConsts.LogCONT, xConsts.LogSERV, xConsts.LogREPO, xConsts.LogCORE, xConsts.LogBASE, xConsts.LogMAIN:
+	case NamedCONT, NamedSERV, NamedREPO, NamedCORE, NamedBASE, NamedMAIN:
 		return fmt.Sprintf(" \033[34m[%s]\033[0m", name)
 	// 路由网络类 - 黄色
-	case xConsts.LogROUT, xConsts.LogHTTP, xConsts.LogGRPC, xConsts.LogSOCK, xConsts.LogCONN, xConsts.LogLINK:
+	case NamedROUT, NamedHTTP, NamedGRPC, NamedSOCK, NamedCONN, NamedLINK:
 		return fmt.Sprintf(" \033[33m[%s]\033[0m", name)
 	// 安全认证类 - 红色
-	case xConsts.LogAUTH, xConsts.LogUSER, xConsts.LogPERM, xConsts.LogROLE, xConsts.LogTOKN, xConsts.LogSIGN:
+	case NamedAUTH, NamedUSER, NamedPERM, NamedROLE, NamedTOKN, NamedSIGN:
 		return fmt.Sprintf(" \033[31m[%s]\033[0m", name)
-	// 系统监控类 - 绿色
-	case xConsts.LogLOGS, xConsts.LogMETR, xConsts.LogMONI, xConsts.LogPERF, xConsts.LogSTAT, xConsts.LogHEAL:
-		return fmt.Sprintf(" \033[32m[%s]\033[0m", name)
 	// 业务逻辑类 - 白色
-	case xConsts.LogBUSI, xConsts.LogLOGC, xConsts.LogPROC, xConsts.LogFLOW, xConsts.LogTASK, xConsts.LogJOBS:
+	case NamedBUSI, NamedLOGC, NamedPROC, NamedFLOW, NamedTASK, NamedJOBS:
 		return fmt.Sprintf(" \033[37m[%s]\033[0m", name)
 	// 其他已定义的常量 - 橙色
-	case xConsts.LogRECO, xConsts.LogUTIL, xConsts.LogFILT, xConsts.LogMIDE, xConsts.LogINIT, xConsts.LogTHOW, xConsts.LogRESU:
+	case NamedRECO, NamedUTIL, NamedFILT, NamedMIDE, NamedINIT, NamedTHOW, NamedRESU:
 		return fmt.Sprintf(" \033[93m[%s]\033[0m", name)
 	default:
 		return fmt.Sprintf(" \033[35m[%s]\033[0m", name) // 紫色
@@ -325,7 +322,7 @@ func (h *XlfHandler) colorName(name string) string {
 }
 
 // getStack 获取堆栈信息
-func (h *XlfHandler) getStack() string {
+func (h *LogHandler) getStack() string {
 	buf := make([]byte, 4096)
 	n := runtime.Stack(buf, false)
 	return "\033[31m" + string(buf[:n]) + "\033[0m"

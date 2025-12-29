@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+
+	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
 )
 
 var (
@@ -14,12 +16,6 @@ var (
 	defaultGeneNode *GeneNode
 	nodeOnce        sync.Once
 	initErr         error
-)
-
-// 环境变量常量
-const (
-	EnvDatacenterID = "SNOWFLAKE_DATACENTER_ID" // 数据中心 ID 环境变量
-	EnvNodeID       = "SNOWFLAKE_NODE_ID"       // 节点 ID 环境变量
 )
 
 // InitDefaultNode 初始化默认的雪花算法节点
@@ -56,8 +52,8 @@ func InitDefaultNode() error {
 //   - datacenterID: 数据中心 ID
 //   - nodeID: 节点 ID
 func getIDsFromEnv() (datacenterID, nodeID int64) {
-	datacenterID = getEnvInt64(EnvDatacenterID, -1)
-	nodeID = getEnvInt64(EnvNodeID, -1)
+	datacenterID = getEnvInt64(xConstEnv.SnowflakeDatacenterID.String(), -1)
+	nodeID = getEnvInt64(xConstEnv.SnowflakeNodeID.String(), -1)
 
 	// 如果环境变量未配置，自动生成
 	if datacenterID < 0 || datacenterID > maxDatacenterID ||

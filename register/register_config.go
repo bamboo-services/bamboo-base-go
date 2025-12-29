@@ -1,4 +1,4 @@
-package xInit
+package xReg
 
 import "github.com/joho/godotenv"
 

@@ -1,8 +1,7 @@
 package xReg
 
 import (
-	"log/slog"
-
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 )
 
@@ -19,10 +18,11 @@ import (
 //   - 该方法应在 LoggerInit 之后调用，以确保日志记录器可用。
 //   - 初始化失败会触发 Fatal 级别日志并终止程序。
 func (r *Reg) SnowflakeInit() {
-	slog.Info("初始化雪花算法节点")
+	log := xLog.WithName(xLog.NamedINIT)
+	log.Info(r.Context, "初始化雪花算法节点")
 
 	if err := xSnowflake.InitDefaultNode(); err != nil {
-		slog.Error("雪花算法节点初始化失败", "error", err)
+		log.SugarError(r.Context, "雪花算法节点初始化失败", "error", err)
 		panic("雪花算法节点初始化失败: " + err.Error())
 	}
 
@@ -34,7 +34,7 @@ func (r *Reg) SnowflakeInit() {
 	testID := node.Generate()
 	testGeneID := geneNode.MustGenerate(xSnowflake.GeneSystem)
 
-	slog.Info("雪花算法节点初始化成功",
+	log.SugarInfo(r.Context, "雪花算法节点初始化成功",
 		"datacenter_id", node.DatacenterID(),
 		"node_id", node.NodeID(),
 		"test_id", testID.String(),

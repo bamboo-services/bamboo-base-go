@@ -1,11 +1,11 @@
 package xReg
 
 import (
-	"log/slog"
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ type handler struct {
 //
 // 注意: 确保在 Gin 引擎初始化后调用此方法，以正确注册中间件。
 func (r *Reg) SystemContextInit() {
-	slog.Info("初始化系统上下文")
+	xLog.WithName(xLog.NamedINIT).Info(r.Context, "初始化系统上下文")
 
 	// 创建处理器实例
 	handler := &handler{

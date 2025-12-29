@@ -176,7 +176,9 @@ func (h *LogHandler) getCaller(r slog.Record) string {
 }
 
 // writeConsole 写入控制台（彩色格式）
-// 格式: 时间 [LEVEL] [CORE] [trace] [NAME] 消息
+// 格式: 时间 [LEVEL] [trace] [NAME] 文件:行号 消息
+//
+//	变量（换行棕色显示）
 func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 	var buf strings.Builder
 
@@ -187,9 +189,6 @@ func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 
 	// 日志级别
 	buf.WriteString(h.colorLevel(r.Level))
-
-	// CORE 标识
-	buf.WriteString(" \033[94m[CORE]\033[0m")
 
 	// Trace ID（如果有）
 	if trace != "" {
@@ -203,9 +202,9 @@ func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 		buf.WriteString(h.colorName(h.group))
 	}
 
-	// 调用位置（如果启用）
+	// 调用位置（淡蓝色）
 	if caller != "" {
-		buf.WriteString(" \033[90m")
+		buf.WriteString(" \033[94m")
 		buf.WriteString(caller)
 		buf.WriteString("\033[0m")
 	}
@@ -214,21 +213,32 @@ func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 	buf.WriteString(" ")
 	buf.WriteString(r.Message)
 
-	// 额外属性
+	// 收集所有属性
+	var hasAttrs bool
+
+	// 额外属性（棕色，换行显示）
 	r.Attrs(func(a slog.Attr) bool {
-		buf.WriteString(" ")
+		if !hasAttrs {
+			hasAttrs = true
+		}
+		buf.WriteString("\n    \033[38;5;130m")
 		buf.WriteString(a.Key)
-		buf.WriteString("=")
+		buf.WriteString("\033[0m=\033[38;5;180m")
 		buf.WriteString(fmt.Sprintf("%v", a.Value.Any()))
+		buf.WriteString("\033[0m")
 		return true
 	})
 
-	// 预设属性
+	// 预设属性（棕色，换行显示）
 	for _, a := range h.attrs {
-		buf.WriteString(" ")
+		if !hasAttrs {
+			hasAttrs = true
+		}
+		buf.WriteString("\n    \033[38;5;130m")
 		buf.WriteString(a.Key)
-		buf.WriteString("=")
+		buf.WriteString("\033[0m=\033[38;5;180m")
 		buf.WriteString(fmt.Sprintf("%v", a.Value.Any()))
+		buf.WriteString("\033[0m")
 	}
 
 	buf.WriteString("\n")

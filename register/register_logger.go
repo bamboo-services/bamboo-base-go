@@ -16,7 +16,7 @@ import (
 //
 // 日志格式:
 //   - 文件: JSON 格式，Info 级别及以上。
-//   - 控制台: <时间戳> [<日志等级>] [CORE] [<trace>] [<日志类型>] <输出内容>，带颜色。
+//   - 控制台: <时间戳> [<日志等级>] [<trace>] [<日志类型>] <输出内容>，带颜色。
 func (r *Reg) LoggerInit() {
 	// 创建日志目录
 	err := os.Mkdir(".logs", os.ModePerm)

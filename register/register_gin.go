@@ -1,6 +1,7 @@
 package xReg
 
 import (
+	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xVaild "github.com/bamboo-services/bamboo-base-go/validator"
 	"github.com/gin-gonic/gin"
@@ -18,15 +19,18 @@ import (
 func (r *Reg) EngineInit() {
 	log := xLog.WithName(xLog.NamedINIT)
 
-	log.Info(r.Context, "初始化 GIN 引擎")
+	log.Debug(r.Context, "初始化 GIN 引擎")
 	if !isDebugMode() {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	r.Serve = gin.Default()
+	r.Serve = gin.New(func(engine *gin.Engine) {
+		engine.Use(xHelper.PanicRecovery())
+		engine.Use(gin.Logger())
+	})
 
 	// 注册自定义验证器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		xVaild.RegisterCustomValidators(v)
-		log.Info(r.Context, "预制内部验证器注册成功")
+		log.Debug(r.Context, "预制内部验证器注册成功")
 	}
 }

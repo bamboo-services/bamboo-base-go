@@ -19,16 +19,14 @@ const (
 // ============================== 数据库配置 ==============================
 
 const (
-	DatabaseHost        EnvKey = "DATABASE_HOST"         // 数据库主机地址
-	DatabasePort        EnvKey = "DATABASE_PORT"         // 数据库端口
-	DatabaseUser        EnvKey = "DATABASE_USER"         // 数据库用户名
-	DatabasePass        EnvKey = "DATABASE_PASS"         // 数据库密码
-	DatabaseName        EnvKey = "DATABASE_NAME"         // 数据库名称
-	DatabaseCharset     EnvKey = "DATABASE_CHARSET"      // 数据库字符集
-	DatabaseTimezone    EnvKey = "DATABASE_TIMEZONE"     // 数据库时区
-	DatabaseMaxIdle     EnvKey = "DATABASE_MAX_IDLE"     // 最大空闲连接数
-	DatabaseMaxOpen     EnvKey = "DATABASE_MAX_OPEN"     // 最大打开连接数
-	DatabaseMaxLifetime EnvKey = "DATABASE_MAX_LIFETIME" // 连接最大生命周期（秒）
+	DatabaseHost     EnvKey = "DATABASE_HOST"     // 数据库主机地址
+	DatabasePort     EnvKey = "DATABASE_PORT"     // 数据库端口
+	DatabaseUser     EnvKey = "DATABASE_USER"     // 数据库用户名
+	DatabasePass     EnvKey = "DATABASE_PASS"     // 数据库密码
+	DatabaseName     EnvKey = "DATABASE_NAME"     // 数据库名称
+	DatabaseCharset  EnvKey = "DATABASE_CHARSET"  // 数据库字符集
+	DatabaseTimezone EnvKey = "DATABASE_TIMEZONE" // 数据库时区
+	DatabasePrefix   EnvKey = "DATABASE_PREFIX"   // 数据库表前缀
 )
 
 // ============================== Redis 配置 ==============================

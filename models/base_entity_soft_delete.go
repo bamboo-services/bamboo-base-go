@@ -7,9 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// BaseEntity 通用实体基类（不带软删除）
+// BaseEntityWithSoftDelete 通用实体基类（带软删除）
 //
-// 提供标准的主键和时间戳字段。
+// 提供标准的主键、时间戳和软删除字段。
 // ID 使用雪花算法自动生成，无需手动设置。
 //
 // 支持基因功能：如果实体实现了 GeneProvider 接口，
@@ -19,24 +19,25 @@ import (
 //
 //	// 普通实体（Gene=0）
 //	type User struct {
-//	    xModels.BaseEntity
+//	    xModels.BaseEntityWithSoftDelete
 //	    Username string `gorm:"type:varchar(64);uniqueIndex"`
 //	    Email    string `gorm:"type:varchar(128)"`
 //	}
 //
 //	// 带基因的实体
 //	type Order struct {
-//	    xModels.BaseEntity
+//	    xModels.BaseEntityWithSoftDelete
 //	    OrderNo string `gorm:"type:varchar(64);uniqueIndex"`
 //	}
 //
 //	func (o *Order) GetGene() xSnowflake.Gene {
 //	    return xSnowflake.GeneOrder
 //	}
-type BaseEntity struct {
-	ID        xSnowflake.SnowflakeID `gorm:"type:bigint unsigned;primaryKey;comment:主键"`
+type BaseEntityWithSoftDelete struct {
+	ID        xSnowflake.SnowflakeID `gorm:"type:bigint;primaryKey;comment:主键"`
 	CreatedAt time.Time              `gorm:"autoCreateTime:milli;not null;comment:创建时间"`
 	UpdatedAt time.Time              `gorm:"autoUpdateTime:milli;not null;comment:更新时间"`
+	DeletedAt gorm.DeletedAt         `gorm:"type:timestamp;index;comment:删除时间"`
 }
 
 // BeforeCreate 创建前钩子，自动生成雪花 ID
@@ -50,7 +51,7 @@ type BaseEntity struct {
 //
 // 返回值:
 //   - error: 钩子错误
-func (e *BaseEntity) BeforeCreate(tx *gorm.DB) error {
+func (e *BaseEntityWithSoftDelete) BeforeCreate(tx *gorm.DB) error {
 	if e.ID.IsZero() {
 		// 尝试从实体获取基因类型
 		gene := xSnowflake.GeneDefault
@@ -72,7 +73,7 @@ func (e *BaseEntity) BeforeCreate(tx *gorm.DB) error {
 //
 // 返回值:
 //   - error: 钩子错误
-func (e *BaseEntity) BeforeUpdate(tx *gorm.DB) error {
+func (e *BaseEntityWithSoftDelete) BeforeUpdate(tx *gorm.DB) error {
 	e.UpdatedAt = time.Now()
 	return nil
 }

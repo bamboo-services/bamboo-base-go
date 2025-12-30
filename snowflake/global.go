@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	defaultNode     *Node
-	defaultGeneNode *GeneNode
-	nodeOnce        sync.Once
-	initErr         error
+	defaultNode *Node
+	nodeOnce    sync.Once
+	initErr     error
 )
 
 // InitDefaultNode 初始化默认的雪花算法节点
@@ -32,16 +31,10 @@ func InitDefaultNode() error {
 	nodeOnce.Do(func() {
 		datacenterID, nodeID := getIDsFromEnv()
 
-		// 创建标准雪花节点
-		defaultNode, initErr = NewNode(datacenterID, nodeID)
-		if initErr != nil {
-			return
-		}
-
-		// 创建基因雪花节点（ID 需要在基因节点范围内）
-		geneDatacenterID := datacenterID % (maxGeneDatacenterID + 1)
-		geneNodeID := nodeID % (maxGeneNodeID + 1)
-		defaultGeneNode, initErr = NewGeneNode(geneDatacenterID, geneNodeID)
+		// 创建雪花节点（ID 需要在有效范围内）
+		geneDatacenterID := datacenterID % (maxDatacenterID + 1)
+		geneNodeID := nodeID % (maxNodeID + 1)
+		defaultNode, initErr = NewNode(geneDatacenterID, geneNodeID)
 	})
 	return initErr
 }
@@ -90,8 +83,8 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 // 使用 FNV-1a 哈希算法生成稳定的 ID。
 //
 // 返回值:
-//   - datacenterID: 数据中心 ID (0-31)
-//   - nodeID: 节点 ID (0-31)
+//   - datacenterID: 数据中心 ID (0-7)
+//   - nodeID: 节点 ID (0-7)
 func autoGenerateIDs() (datacenterID, nodeID int64) {
 	var hashInput []byte
 
@@ -124,7 +117,7 @@ func autoGenerateIDs() (datacenterID, nodeID int64) {
 
 	// 从哈希值中提取数据中心 ID 和节点 ID
 	datacenterID = int64(hash % uint64(maxDatacenterID+1))
-	nodeID = int64((hash >> 5) % uint64(maxNodeID+1))
+	nodeID = int64((hash >> 3) % uint64(maxNodeID+1))
 
 	return
 }
@@ -142,48 +135,15 @@ func GetDefaultNode() *Node {
 	return defaultNode
 }
 
-// GetDefaultGeneNode 获取默认的基因雪花算法节点
-//
-// 如果未初始化，会自动调用 InitDefaultNode() 进行初始化。
-//
-// 返回值:
-//   - *GeneNode: 默认基因节点实例
-func GetDefaultGeneNode() *GeneNode {
-	if defaultGeneNode == nil {
-		_ = InitDefaultNode()
-	}
-	return defaultGeneNode
-}
-
 // GenerateID 使用默认节点生成雪花 ID
+//
+// 参数说明:
+//   - gene: 业务基因类型，可选，默认为 GeneDefault(0)
 //
 // 返回值:
 //   - SnowflakeID: 生成的雪花 ID
-func GenerateID() SnowflakeID {
-	return GetDefaultNode().Generate()
-}
-
-// GenerateGeneID 使用默认节点生成基因雪花 ID
-//
-// 参数说明:
-//   - gene: 业务基因类型
-//
-// 返回值:
-//   - GeneSnowflakeID: 生成的基因雪花 ID
-//   - error: 生成错误
-func GenerateGeneID(gene Gene) (GeneSnowflakeID, error) {
-	return GetDefaultGeneNode().Generate(gene)
-}
-
-// MustGenerateGeneID 使用默认节点生成基因雪花 ID，如果发生错误则 panic
-//
-// 参数说明:
-//   - gene: 业务基因类型
-//
-// 返回值:
-//   - GeneSnowflakeID: 生成的基因雪花 ID
-func MustGenerateGeneID(gene Gene) GeneSnowflakeID {
-	return GetDefaultGeneNode().MustGenerate(gene)
+func GenerateID(gene ...Gene) SnowflakeID {
+	return GetDefaultNode().MustGenerate(gene...)
 }
 
 // ParseSnowflakeID 从字符串解析雪花 ID
@@ -211,37 +171,6 @@ func ParseSnowflakeID(s string) (SnowflakeID, error) {
 //   - SnowflakeID: 解析后的雪花 ID
 func MustParseSnowflakeID(s string) SnowflakeID {
 	id, err := ParseSnowflakeID(s)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
-// ParseGeneSnowflakeID 从字符串解析基因雪花 ID
-//
-// 参数说明:
-//   - s: ID 字符串
-//
-// 返回值:
-//   - GeneSnowflakeID: 解析后的基因雪花 ID
-//   - error: 解析错误
-func ParseGeneSnowflakeID(s string) (GeneSnowflakeID, error) {
-	num, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("解析基因雪花 ID 失败: %w", err)
-	}
-	return GeneSnowflakeID(num), nil
-}
-
-// MustParseGeneSnowflakeID 从字符串解析基因雪花 ID，如果发生错误则 panic
-//
-// 参数说明:
-//   - s: ID 字符串
-//
-// 返回值:
-//   - GeneSnowflakeID: 解析后的基因雪花 ID
-func MustParseGeneSnowflakeID(s string) GeneSnowflakeID {
-	id, err := ParseGeneSnowflakeID(s)
 	if err != nil {
 		panic(err)
 	}

@@ -3,9 +3,7 @@ package xReg
 import (
 	"log/slog"
 	"os"
-	"strings"
 
-	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 )
 
@@ -15,19 +13,22 @@ import (
 // 它将 JSON 格式的日志输出到文件，同时将自定义格式的彩色日志输出到控制台。
 //
 // 日志格式:
-//   - 文件: JSON 格式，Info 级别及以上。
+//   - 文件: JSON 格式，Info 级别及以上，支持自动切割和归档。
 //   - 控制台: <时间戳> [<日志等级>] [<trace>] [<日志类型>] <输出内容>，带颜色。
+//
+// 日志切割:
+//   - 按大小切割: 单文件超过 10MB 自动切割为 log.0.log, log.1.log ...
+//   - 按时间归档: 每天 00:00:05 将前一天日志打包为 logger-yyyy-MM-dd.tar.gz
 func (r *Reg) LoggerInit() {
-	// 创建日志目录
-	err := os.Mkdir(".logs", os.ModePerm)
-	if err != nil && !os.IsExist(err) {
-		panic("[INIT] 日志目录创建失败: " + err.Error())
-	}
-
-	// 打开日志文件
-	file, err := os.OpenFile(".logs/log.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// 创建日志切割写入器
+	rotator, err := xLog.NewRotatingWriter(xLog.RotatorConfig{
+		Dir:      ".logs",
+		BaseName: "log",
+		Ext:      ".log",
+		MaxSize:  10 * 1024 * 1024, // 10MB
+	})
 	if err != nil {
-		panic("[INIT] 日志文件打开失败: " + err.Error())
+		panic("[INIT] 日志切割器创建失败: " + err.Error())
 	}
 
 	// 确定日志级别
@@ -40,20 +41,12 @@ func (r *Reg) LoggerInit() {
 	// 创建自定义 Handler
 	handler := xLog.NewLogHandler(xLog.HandlerConfig{
 		Console:     os.Stdout,
-		File:        file,
+		File:        rotator,
 		Level:       logLevel,
 		IsDebugMode: debugMode,
-		AddSource:   true,
 	})
-	handler.WithGroup("DEFU")
 
 	// 设置为全局默认 logger
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
-}
-
-// isDebugMode 判断是否处于调试模式。
-func isDebugMode() bool {
-	debug := strings.ToLower(os.Getenv(xConstEnv.Debug.String()))
-	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }

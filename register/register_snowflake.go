@@ -28,18 +28,16 @@ func (r *Reg) SnowflakeInit() {
 
 	// 获取节点信息并记录日志
 	node := xSnowflake.GetDefaultNode()
-	geneNode := xSnowflake.GetDefaultGeneNode()
 
 	// 生成测试 ID 验证节点正常工作
-	testID := node.Generate()
-	testGeneID := geneNode.MustGenerate(xSnowflake.GeneSystem)
+	testID := node.MustGenerate()                          // 普通 ID（Gene=0）
+	testGeneID := node.MustGenerate(xSnowflake.GeneSystem) // 基因 ID
 
 	log.SugarInfo(r.Context, "雪花算法节点初始化成功",
 		"datacenter_id", node.DatacenterID(),
 		"node_id", node.NodeID(),
 		"test_id", testID.String(),
-		"gene_datacenter_id", geneNode.DatacenterID(),
-		"gene_node_id", geneNode.NodeID(),
 		"test_gene_id", testGeneID.String(),
+		"test_gene_id_gene", testGeneID.Gene().String(),
 	)
 }

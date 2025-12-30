@@ -2,7 +2,10 @@ package xReg
 
 import (
 	"context"
+	"os"
+	"strings"
 
+	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
 	"github.com/gin-gonic/gin"
 )
 
@@ -48,4 +51,10 @@ func Register() *Reg {
 	reg.SystemContextInit()
 
 	return reg
+}
+
+// isDebugMode 判断是否处于调试模式。
+func isDebugMode() bool {
+	debug := strings.ToLower(os.Getenv(xConstEnv.Debug.String()))
+	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }

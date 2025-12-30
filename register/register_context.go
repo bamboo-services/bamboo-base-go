@@ -4,7 +4,6 @@ import (
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
-	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
@@ -31,7 +30,6 @@ func (r *Reg) SystemContextInit() {
 
 	// 注册系统上下文处理函数
 	r.Serve.Use(handler.systemContextHandlerFunc)
-	r.Serve.Use(xHelper.PanicRecovery())
 }
 
 // systemContextHandlerFunc 创建和管理请求的唯一上下文标识符。
@@ -53,8 +51,7 @@ func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 	c.Set(xConsts.ContextUserStartTime.String(), time.Now()) // 请求开始时间记录
 
 	// 注入雪花算法节点
-	c.Set(xConsts.ContextSnowflakeNode.String(), xSnowflake.GetDefaultNode())         // 标准雪花节点
-	c.Set(xConsts.ContextGeneSnowflakeNode.String(), xSnowflake.GetDefaultGeneNode()) // 基因雪花节点
+	c.Set(xConsts.ContextSnowflakeNode.String(), xSnowflake.GetDefaultNode())
 
 	// 放行内容
 	c.Next()

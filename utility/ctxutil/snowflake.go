@@ -27,27 +27,9 @@ func GetSnowflakeNode(c *gin.Context) *xSnowflake.Node {
 	return xSnowflake.GetDefaultNode()
 }
 
-// GetGeneSnowflakeNode 从上下文获取基因雪花算法节点
-//
-// 如果上下文中不存在节点，则返回默认节点。
-//
-// 参数说明:
-//   - c: gin.Context 上下文
-//
-// 返回值:
-//   - *xSnowflake.GeneNode: 基因雪花算法节点
-func GetGeneSnowflakeNode(c *gin.Context) *xSnowflake.GeneNode {
-	value, exists := c.Get(xConsts.ContextGeneSnowflakeNode.String())
-	if exists {
-		if node, ok := value.(*xSnowflake.GeneNode); ok {
-			return node
-		}
-	}
-	// 回退到默认节点
-	return xSnowflake.GetDefaultGeneNode()
-}
-
 // GenerateSnowflakeID 使用上下文中的节点生成雪花 ID
+//
+// 生成普通雪花 ID（Gene=0）。
 //
 // 参数说明:
 //   - c: gin.Context 上下文
@@ -55,32 +37,17 @@ func GetGeneSnowflakeNode(c *gin.Context) *xSnowflake.GeneNode {
 // 返回值:
 //   - xSnowflake.SnowflakeID: 生成的雪花 ID
 func GenerateSnowflakeID(c *gin.Context) xSnowflake.SnowflakeID {
-	return GetSnowflakeNode(c).Generate()
+	return GetSnowflakeNode(c).MustGenerate()
 }
 
-// GenerateGeneSnowflakeID 使用上下文中的节点生成基因雪花 ID
+// GenerateGeneSnowflakeID 使用上下文中的节点生成带基因的雪花 ID
 //
 // 参数说明:
 //   - c: gin.Context 上下文
 //   - gene: 业务基因类型
 //
 // 返回值:
-//   - xSnowflake.GeneSnowflakeID: 生成的基因雪花 ID
-//   - error: 生成错误（如果基因类型无效）
-func GenerateGeneSnowflakeID(c *gin.Context, gene xSnowflake.Gene) (xSnowflake.GeneSnowflakeID, error) {
-	return GetGeneSnowflakeNode(c).Generate(gene)
-}
-
-// MustGenerateGeneSnowflakeID 使用上下文中的节点生成基因雪花 ID
-//
-// 如果发生错误则 panic，适用于确定基因类型有效的场景。
-//
-// 参数说明:
-//   - c: gin.Context 上下文
-//   - gene: 业务基因类型
-//
-// 返回值:
-//   - xSnowflake.GeneSnowflakeID: 生成的基因雪花 ID
-func MustGenerateGeneSnowflakeID(c *gin.Context, gene xSnowflake.Gene) xSnowflake.GeneSnowflakeID {
-	return GetGeneSnowflakeNode(c).MustGenerate(gene)
+//   - xSnowflake.SnowflakeID: 生成的雪花 ID
+func GenerateGeneSnowflakeID(c *gin.Context, gene xSnowflake.Gene) xSnowflake.SnowflakeID {
+	return GetSnowflakeNode(c).MustGenerate(gene)
 }

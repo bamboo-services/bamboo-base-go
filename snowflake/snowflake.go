@@ -15,26 +15,31 @@ const (
 	// 从此时间开始计算时间戳，可用约 69 年
 	epoch int64 = 1704067200000
 
-	// 标准雪花算法位数分配
-	datacenterBits uint8 = 5  // 数据中心位数
-	nodeBits       uint8 = 5  // 节点位数
-	sequenceBits   uint8 = 12 // 序列号位数
+	// 位数分配
+	geneBits       uint8 = 6  // 基因位数（支持 64 种业务类型）
+	datacenterBits uint8 = 3  // 数据中心位数（支持 8 个数据中心）
+	nodeBits       uint8 = 3  // 节点位数（支持 8 个节点）
+	sequenceBits   uint8 = 10 // 序列号位数（每毫秒 1024 个）
 
 	// 最大值
-	maxDatacenterID int64 = -1 ^ (-1 << datacenterBits) // 31
-	maxNodeID       int64 = -1 ^ (-1 << nodeBits)       // 31
-	maxSequence     int64 = -1 ^ (-1 << sequenceBits)   // 4095
+	maxGene         int64 = -1 ^ (-1 << geneBits)       // 63
+	maxDatacenterID int64 = -1 ^ (-1 << datacenterBits) // 7
+	maxNodeID       int64 = -1 ^ (-1 << nodeBits)       // 7
+	maxSequence     int64 = -1 ^ (-1 << sequenceBits)   // 1023
 
 	// 位移量
-	nodeShift       = sequenceBits                             // 12
-	datacenterShift = sequenceBits + nodeBits                  // 17
-	timestampShift  = sequenceBits + nodeBits + datacenterBits // 22
+	sequenceShift   = 0
+	nodeShift       = sequenceBits                                        // 10
+	datacenterShift = sequenceBits + nodeBits                             // 13
+	geneShift       = sequenceBits + nodeBits + datacenterBits            // 16
+	timestampShift  = sequenceBits + nodeBits + datacenterBits + geneBits // 22
 )
 
 // Node 雪花算法节点
 //
 // 每个节点实例负责生成唯一的雪花 ID。
 // 节点通过数据中心 ID 和节点 ID 的组合来保证分布式环境下的唯一性。
+// ID 中可嵌入业务类型基因，便于从 ID 中直接识别数据类型。
 type Node struct {
 	mu           sync.Mutex
 	datacenterID int64
@@ -46,8 +51,8 @@ type Node struct {
 // NewNode 创建新的雪花算法节点
 //
 // 参数说明:
-//   - datacenterID: 数据中心 ID (0-31)
-//   - nodeID: 节点 ID (0-31)
+//   - datacenterID: 数据中心 ID (0-7)
+//   - nodeID: 节点 ID (0-7)
 //
 // 返回值:
 //   - *Node: 雪花算法节点实例
@@ -68,11 +73,23 @@ func NewNode(datacenterID, nodeID int64) (*Node, error) {
 // Generate 生成新的雪花 ID
 //
 // 该方法是线程安全的，可以在并发环境中使用。
-// 如果同一毫秒内序列号用尽，会等待到下一毫秒再生成。
+//
+// 参数说明:
+//   - gene: 业务基因类型 (0-63)，可选，默认为 GeneDefault(0)
 //
 // 返回值:
 //   - SnowflakeID: 生成的雪花 ID
-func (n *Node) Generate() SnowflakeID {
+//   - error: 如果基因类型超出范围则返回错误
+func (n *Node) Generate(gene ...Gene) (SnowflakeID, error) {
+	g := GeneDefault
+	if len(gene) > 0 {
+		g = gene[0]
+	}
+
+	if !g.IsValid() {
+		return 0, fmt.Errorf("基因类型必须在 0-%d 之间，当前值: %d", maxGene, g)
+	}
+
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -93,11 +110,27 @@ func (n *Node) Generate() SnowflakeID {
 	n.lastTime = now
 
 	id := ((now - epoch) << timestampShift) |
+		(int64(g) << geneShift) |
 		(n.datacenterID << datacenterShift) |
 		(n.nodeID << nodeShift) |
 		n.sequence
 
-	return SnowflakeID(id)
+	return SnowflakeID(id), nil
+}
+
+// MustGenerate 生成新的雪花 ID，如果发生错误则 panic
+//
+// 参数说明:
+//   - gene: 业务基因类型 (0-63)，可选，默认为 GeneDefault(0)
+//
+// 返回值:
+//   - SnowflakeID: 生成的雪花 ID
+func (n *Node) MustGenerate(gene ...Gene) SnowflakeID {
+	id, err := n.Generate(gene...)
+	if err != nil {
+		panic(err)
+	}
+	return id
 }
 
 // DatacenterID 返回节点的数据中心 ID
@@ -121,17 +154,16 @@ func (n *Node) NodeID() int64 {
 // 64 位结构:
 //   - 1 位符号位（不使用）
 //   - 41 位时间戳（毫秒级，约 69 年有效期）
-//   - 5 位数据中心 ID（支持 32 个数据中心）
-//   - 5 位节点 ID（支持 32 个节点）
-//   - 12 位序列号（每毫秒 4096 个 ID）
+//   - 6 位基因（支持 64 种业务类型，Gene=0 时等同于普通 ID）
+//   - 3 位数据中心 ID（支持 8 个数据中心）
+//   - 3 位节点 ID（支持 8 个节点）
+//   - 10 位序列号（每毫秒 1024 个 ID）
 //
+// 在标准雪花 ID 基础上嵌入业务类型基因，便于从 ID 识别数据类型。
 // JSON 序列化为字符串格式，避免 JavaScript 中的精度丢失问题。
-// 实现了 driver.Valuer 和 sql.Scanner 接口，支持 GORM 数据库操作。
 type SnowflakeID int64
 
 // MarshalJSON 将雪花 ID 序列化为 JSON 字符串
-//
-// 序列化为字符串格式以避免 JavaScript 的 52 位精度限制。
 //
 // 返回值:
 //   - []byte: JSON 格式的字符串（带引号）
@@ -142,7 +174,7 @@ func (s *SnowflakeID) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 从 JSON 反序列化雪花 ID
 //
-// 支持字符串格式和数字格式的反序列化，提供向后兼容性。
+// 支持字符串格式和数字格式的反序列化。
 //
 // 参数说明:
 //   - data: JSON 数据
@@ -178,8 +210,6 @@ func (s *SnowflakeID) Value() (driver.Value, error) {
 }
 
 // Scan 实现 sql.Scanner 接口，用于 GORM 从数据库读取
-//
-// 支持 int64 和 []byte 两种数据库返回类型。
 //
 // 参数说明:
 //   - value: 数据库返回的值
@@ -222,7 +252,7 @@ func (s *SnowflakeID) String() string {
 	return strconv.FormatInt(int64(*s), 10)
 }
 
-// IsZero 判断雪花 ID 是否为零值
+// IsZero 判断是否为零值
 //
 // 返回值:
 //   - bool: 如果为零值返回 true
@@ -230,7 +260,7 @@ func (s *SnowflakeID) IsZero() bool {
 	return *s == 0
 }
 
-// Timestamp 提取雪花 ID 中的时间戳
+// Timestamp 提取时间戳
 //
 // 返回值:
 //   - time.Time: ID 创建时间
@@ -239,7 +269,15 @@ func (s *SnowflakeID) Timestamp() time.Time {
 	return time.UnixMilli(ms)
 }
 
-// DatacenterID 提取雪花 ID 中的数据中心 ID
+// Gene 提取业务基因类型
+//
+// 返回值:
+//   - Gene: 业务基因类型
+func (s *SnowflakeID) Gene() Gene {
+	return Gene((int64(*s) >> geneShift) & maxGene)
+}
+
+// DatacenterID 提取数据中心 ID
 //
 // 返回值:
 //   - int64: 数据中心 ID
@@ -247,7 +285,7 @@ func (s *SnowflakeID) DatacenterID() int64 {
 	return (int64(*s) >> datacenterShift) & maxDatacenterID
 }
 
-// NodeID 提取雪花 ID 中的节点 ID
+// NodeID 提取节点 ID
 //
 // 返回值:
 //   - int64: 节点 ID
@@ -255,7 +293,7 @@ func (s *SnowflakeID) NodeID() int64 {
 	return (int64(*s) >> nodeShift) & maxNodeID
 }
 
-// Sequence 提取雪花 ID 中的序列号
+// Sequence 提取序列号
 //
 // 返回值:
 //   - int64: 序列号

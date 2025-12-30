@@ -33,7 +33,6 @@ type HandlerConfig struct {
 	File        io.Writer  // 文件输出（可选）
 	Level       slog.Level // 日志级别
 	IsDebugMode bool       // 是否调试模式
-	AddSource   bool       // 是否添加调用位置
 }
 
 // NewLogHandler 创建自定义 slog Handler
@@ -52,7 +51,7 @@ func NewLogHandler(config HandlerConfig) slog.Handler {
 	return &LogHandler{
 		opts: slog.HandlerOptions{
 			Level:     config.Level,
-			AddSource: config.AddSource,
+			AddSource: false,
 		},
 		mu:          &sync.Mutex{},
 		console:     console,
@@ -79,20 +78,14 @@ func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
 	// 提取 trace ID
 	trace := h.extractTrace(ctx)
 
-	// 获取调用位置
-	var caller string
-	if h.opts.AddSource {
-		caller = h.getCaller(r)
-	}
-
 	// 写入控制台（彩色格式）
 	if h.console != nil {
-		h.writeConsole(r, trace, caller)
+		h.writeConsole(r, trace)
 	}
 
 	// 写入文件（JSON 格式）
 	if h.file != nil {
-		h.writeFile(r, trace, caller)
+		h.writeFile(r, trace)
 	}
 
 	return nil
@@ -160,26 +153,11 @@ func (h *LogHandler) extractTrace(ctx context.Context) string {
 	return ""
 }
 
-// getCaller 获取调用位置
-func (h *LogHandler) getCaller(r slog.Record) string {
-	fs := runtime.CallersFrames([]uintptr{r.PC})
-	f, _ := fs.Next()
-	if f.File != "" {
-		// 只保留文件名和行号
-		idx := strings.LastIndex(f.File, "/")
-		if idx >= 0 {
-			return fmt.Sprintf("%s:%d", f.File[idx+1:], f.Line)
-		}
-		return fmt.Sprintf("%s:%d", f.File, f.Line)
-	}
-	return ""
-}
-
 // writeConsole 写入控制台（彩色格式）
-// 格式: 时间 [LEVEL] [trace] [NAME] 文件:行号 消息
+// 格式: 时间 [LEVEL] [trace] [NAME] 消息
 //
 //	变量（换行棕色显示）
-func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
+func (h *LogHandler) writeConsole(r slog.Record, trace string) {
 	var buf strings.Builder
 
 	// 时间戳（灰色）
@@ -200,13 +178,6 @@ func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 	// Logger 名称
 	if h.group != "" {
 		buf.WriteString(h.colorName(h.group))
-	}
-
-	// 调用位置（淡蓝色）
-	if caller != "" {
-		buf.WriteString(" \033[94m")
-		buf.WriteString(caller)
-		buf.WriteString("\033[0m")
 	}
 
 	// 消息
@@ -253,7 +224,7 @@ func (h *LogHandler) writeConsole(r slog.Record, trace, caller string) {
 }
 
 // writeFile 写入文件（JSON 格式）
-func (h *LogHandler) writeFile(r slog.Record, trace, caller string) {
+func (h *LogHandler) writeFile(r slog.Record, trace string) {
 	entry := map[string]interface{}{
 		"time":    r.Time.Format(time.RFC3339Nano),
 		"level":   r.Level.String(),
@@ -265,9 +236,6 @@ func (h *LogHandler) writeFile(r slog.Record, trace, caller string) {
 	}
 	if h.group != "" {
 		entry["logger"] = h.group
-	}
-	if caller != "" {
-		entry["caller"] = caller
 	}
 
 	// 添加额外属性

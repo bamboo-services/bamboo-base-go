@@ -90,3 +90,20 @@ func GetEnvFloat(key string, defaultValue float64) float64 {
 	}
 	return defaultValue
 }
+
+// GetEnvInt64 获取 int64 类型的环境变量值。
+//
+// 参数说明:
+//   - key: 环境变量键名
+//   - defaultValue: 环境变量不存在或解析失败时返回的默认值
+//
+// 返回值:
+//   - 环境变量的 int64 值，或默认值
+func GetEnvInt64(key string, defaultValue int64) int64 {
+	if value, exists := os.LookupEnv(key); exists {
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return intVal
+		}
+	}
+	return defaultValue
+}

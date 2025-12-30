@@ -1,8 +1,6 @@
 package xCtxUtil
 
 import (
-	"os"
-	"strings"
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
@@ -17,9 +15,8 @@ import (
 // 返回值:
 //   - 返回 `true` 表示处于调试模式。
 //   - 返回 `false` 表示不在调试模式。
-func IsDebugMode(c *gin.Context) bool {
-	debug := strings.ToLower(os.Getenv(xEnv.Debug.String()))
-	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
+func IsDebugMode() bool {
+	return xEnv.GetEnvBool(xEnv.Debug.String(), false)
 }
 
 // CalcOverheadTime 计算当前请求的耗时（微秒级）。
@@ -31,7 +28,7 @@ func IsDebugMode(c *gin.Context) bool {
 //
 // 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
 func CalcOverheadTime(c *gin.Context) int64 {
-	if IsDebugMode(c) {
+	if IsDebugMode() {
 		startTime := c.GetTime(xConsts.ContextUserStartTime.String())
 		return time.Now().Sub(startTime).Microseconds()
 	}

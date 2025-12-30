@@ -45,8 +45,8 @@ func InitDefaultNode() error {
 //   - datacenterID: 数据中心 ID
 //   - nodeID: 节点 ID
 func getIDsFromEnv() (datacenterID, nodeID int64) {
-	datacenterID = getEnvInt64(xEnv.SnowflakeDatacenterID.String(), -1)
-	nodeID = getEnvInt64(xEnv.SnowflakeNodeID.String(), -1)
+	datacenterID = xEnv.GetEnvInt64(xEnv.SnowflakeDatacenterID.String(), -1)
+	nodeID = xEnv.GetEnvInt64(xEnv.SnowflakeNodeID.String(), -1)
 
 	// 如果环境变量未配置，自动生成
 	if datacenterID < 0 || datacenterID > maxDatacenterID ||
@@ -55,26 +55,6 @@ func getIDsFromEnv() (datacenterID, nodeID int64) {
 	}
 
 	return
-}
-
-// getEnvInt64 获取整数类型的环境变量值
-//
-// 参数说明:
-//   - key: 环境变量名
-//   - defaultValue: 默认值
-//
-// 返回值:
-//   - int64: 环境变量值或默认值
-func getEnvInt64(key string, defaultValue int64) int64 {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultValue
-	}
-	num, err := strconv.ParseInt(val, 10, 64)
-	if err != nil {
-		return defaultValue
-	}
-	return num
 }
 
 // autoGenerateIDs 自动生成数据中心 ID 和节点 ID

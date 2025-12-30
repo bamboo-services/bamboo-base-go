@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **配置管理**: 基于环境变量的配置系统
   - 使用 `godotenv` 加载 `.env` 文件
-  - 配置直接通过 `os.Getenv()` 获取
+  - 配置直接通过 `xLog.GetXxx()` 获取
 
 - **工具库** (`utility/`): 丰富的通用辅助函数和上下文工具
   - `ctxutil/` 提供与数据库、日志和通用操作相关的上下文工具
@@ -196,7 +196,7 @@ xResult.Error(ctx, xError.NotFound, "用户不存在", nil)
 
 ### 配置管理
 
-应用程序通过环境变量配置，支持 `.env` 文件加载。直接使用 `os.Getenv()` 获取配置：
+应用程序通过环境变量配置，支持 `.env` 文件加载。直接使用 `xEnv.GetXxx()` 获取配置：
 
 ```go
 import "os"

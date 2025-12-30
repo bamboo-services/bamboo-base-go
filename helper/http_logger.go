@@ -60,7 +60,7 @@ func HttpLogger() gin.HandlerFunc {
 		}
 
 		// 调试模式下添加详细信息
-		if xCtxUtil.IsDebugMode(c) {
+		if xCtxUtil.IsDebugMode() {
 			// 添加查询参数
 			if c.Request.URL.RawQuery != "" {
 				args = append(args, "query", c.Request.URL.RawQuery)
@@ -154,7 +154,7 @@ func maskSensitive(value string) string {
 //   - true 表示应该记录请求体，false 表示不应该记录
 func shouldLogBody(c *gin.Context) bool {
 	// 只有调试模式才记录
-	if !xCtxUtil.IsDebugMode(c) {
+	if !xCtxUtil.IsDebugMode() {
 		return false
 	}
 

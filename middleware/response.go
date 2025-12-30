@@ -56,7 +56,7 @@ func ResponseMiddleware(ctx *gin.Context) {
 	}
 
 	// 记录接口响应时间
-	if xCtxUtil.IsDebugMode(ctx) {
+	if xCtxUtil.IsDebugMode() {
 		overhead := xCtxUtil.CalcOverheadTime(ctx)
 		if overhead > 1000 {
 			slog.DebugContext(ctx.Request.Context(), "接口耗时", "ms", overhead/1000)

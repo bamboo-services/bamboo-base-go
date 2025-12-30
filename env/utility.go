@@ -14,11 +14,11 @@ import (
 // 返回值:
 //   - value: 环境变量值
 //   - exists: 是否存在该环境变量
-func GetEnv(key string) (value string, exists bool) {
-	return os.LookupEnv(key)
+func GetEnv(key EnvKey) (value string, exists bool) {
+	return os.LookupEnv(key.String())
 }
 
-// GetEnvOrDefault 获取环境变量值，如果不存在则返回默认值。
+// GetEnvString 获取环境变量值，如果不存在则返回默认值。
 //
 // 参数说明:
 //   - key: 环境变量键名
@@ -26,8 +26,8 @@ func GetEnv(key string) (value string, exists bool) {
 //
 // 返回值:
 //   - 环境变量值，或默认值（当环境变量不存在时）
-func GetEnvOrDefault(key string, defaultValue string) string {
-	if value, exists := os.LookupEnv(key); exists {
+func GetEnvString(key EnvKey, defaultValue string) string {
+	if value, exists := os.LookupEnv(key.String()); exists {
 		return value
 	}
 	return defaultValue
@@ -41,8 +41,8 @@ func GetEnvOrDefault(key string, defaultValue string) string {
 //
 // 返回值:
 //   - 环境变量的整数值，或默认值
-func GetEnvInt(key string, defaultValue int) int {
-	if value, exists := os.LookupEnv(key); exists {
+func GetEnvInt(key EnvKey, defaultValue int) int {
+	if value, exists := os.LookupEnv(key.String()); exists {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
 		}
@@ -61,8 +61,8 @@ func GetEnvInt(key string, defaultValue int) int {
 //
 // 返回值:
 //   - 环境变量的布尔值，或默认值
-func GetEnvBool(key string, defaultValue bool) bool {
-	if value, exists := os.LookupEnv(key); exists {
+func GetEnvBool(key EnvKey, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(key.String()); exists {
 		lower := strings.ToLower(value)
 		switch lower {
 		case "true", "1", "yes", "on":
@@ -82,8 +82,8 @@ func GetEnvBool(key string, defaultValue bool) bool {
 //
 // 返回值:
 //   - 环境变量的浮点数值，或默认值
-func GetEnvFloat(key string, defaultValue float64) float64 {
-	if value, exists := os.LookupEnv(key); exists {
+func GetEnvFloat(key EnvKey, defaultValue float64) float64 {
+	if value, exists := os.LookupEnv(key.String()); exists {
 		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
 			return floatVal
 		}
@@ -99,8 +99,8 @@ func GetEnvFloat(key string, defaultValue float64) float64 {
 //
 // 返回值:
 //   - 环境变量的 int64 值，或默认值
-func GetEnvInt64(key string, defaultValue int64) int64 {
-	if value, exists := os.LookupEnv(key); exists {
+func GetEnvInt64(key EnvKey, defaultValue int64) int64 {
+	if value, exists := os.LookupEnv(key.String()); exists {
 		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return intVal
 		}

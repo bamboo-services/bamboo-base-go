@@ -33,7 +33,7 @@ func (r *Reg) SnowflakeInit() {
 	testID := node.MustGenerate()                          // 普通 ID（Gene=0）
 	testGeneID := node.MustGenerate(xSnowflake.GeneSystem) // 基因 ID
 
-	log.SugarInfo(r.Context, "雪花算法节点初始化成功",
+	log.SugarDebug(r.Context, "雪花算法节点初始化成功",
 		"datacenter_id", node.DatacenterID(),
 		"node_id", node.NodeID(),
 		"test_id", testID.String(),

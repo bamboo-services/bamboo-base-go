@@ -16,7 +16,7 @@ import (
 //   - 返回 `true` 表示处于调试模式。
 //   - 返回 `false` 表示不在调试模式。
 func IsDebugMode() bool {
-	return xEnv.GetEnvBool(xEnv.Debug.String(), false)
+	return xEnv.GetEnvBool(xEnv.Debug, false)
 }
 
 // CalcOverheadTime 计算当前请求的耗时（微秒级）。

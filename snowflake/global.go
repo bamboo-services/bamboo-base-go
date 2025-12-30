@@ -45,8 +45,8 @@ func InitDefaultNode() error {
 //   - datacenterID: 数据中心 ID
 //   - nodeID: 节点 ID
 func getIDsFromEnv() (datacenterID, nodeID int64) {
-	datacenterID = xEnv.GetEnvInt64(xEnv.SnowflakeDatacenterID.String(), -1)
-	nodeID = xEnv.GetEnvInt64(xEnv.SnowflakeNodeID.String(), -1)
+	datacenterID = xEnv.GetEnvInt64(xEnv.SnowflakeDatacenterID, -1)
+	nodeID = xEnv.GetEnvInt64(xEnv.SnowflakeNodeID, -1)
 
 	// 如果环境变量未配置，自动生成
 	if datacenterID < 0 || datacenterID > maxDatacenterID ||

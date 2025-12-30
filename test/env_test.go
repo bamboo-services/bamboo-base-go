@@ -36,15 +36,15 @@ func Test_GetEnvOrDefault(t *testing.T) {
 	defer os.Unsetenv("EXISTING_KEY")
 
 	// 测试存在的环境变量
-	value := xUtil.GetEnvOrDefault("EXISTING_KEY", "default")
+	value := xUtil.GetEnvString("EXISTING_KEY", "default")
 	if value != "existing_value" {
-		t.Errorf("GetEnvOrDefault = %s; want existing_value", value)
+		t.Errorf("GetEnvString = %s; want existing_value", value)
 	}
 
 	// 测试不存在的环境变量
-	value = xUtil.GetEnvOrDefault("NOT_EXISTS", "default_value")
+	value = xUtil.GetEnvString("NOT_EXISTS", "default_value")
 	if value != "default_value" {
-		t.Errorf("GetEnvOrDefault = %s; want default_value", value)
+		t.Errorf("GetEnvString = %s; want default_value", value)
 	}
 }
 

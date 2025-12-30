@@ -53,5 +53,5 @@ func Register() *Reg {
 
 // isDebugMode 判断是否处于调试模式。
 func isDebugMode() bool {
-	return xEnv.GetEnvBool(xEnv.Debug.String(), false)
+	return xEnv.GetEnvBool(xEnv.Debug, false)
 }

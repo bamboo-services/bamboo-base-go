@@ -18,6 +18,10 @@ import xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 //	    return xSnowflake.GeneOrder
 //	}
 type GeneProvider interface {
+
+	// GetGene 返回实体的基因类型，用于生成雪花 ID 时指定业务基因。
+	//
+	// 返回值:
+	//   - xSnowflake.Gene: 实体定义的基因类型，用于区分不同的业务逻辑。
 	GetGene() xSnowflake.Gene
-	CalcGene() xSnowflake.GeneCalc
 }

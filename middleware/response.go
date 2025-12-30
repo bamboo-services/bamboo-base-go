@@ -2,12 +2,10 @@ package xMiddle
 
 import (
 	"errors"
-	"log/slog"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xResult "github.com/bamboo-services/bamboo-base-go/result"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,16 +50,6 @@ func ResponseMiddleware(ctx *gin.Context) {
 				"没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」",
 				nil,
 			)
-		}
-	}
-
-	// 记录接口响应时间
-	if xCtxUtil.IsDebugMode() {
-		overhead := xCtxUtil.CalcOverheadTime(ctx)
-		if overhead > 1000 {
-			slog.DebugContext(ctx.Request.Context(), "接口耗时", "ms", overhead/1000)
-		} else {
-			slog.DebugContext(ctx.Request.Context(), "接口耗时", "µs", overhead)
 		}
 	}
 }

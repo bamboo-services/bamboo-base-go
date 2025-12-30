@@ -25,7 +25,7 @@ func NoRoute(ctx *gin.Context) {
 	xResult.Error(
 		ctx, xError.PageNotFound,
 		xError.ErrMessage(fmt.Sprintf(
-			"页面「 [%s]%s 」不存在，请检查 <路由> 或 <静态资源> 是否正确配置",
+			"页面 [%s]%s 不存在，请检查 <路由> 或 <静态资源> 是否正确配置",
 			ctx.Request.Method,
 			ctx.Request.URL.Path,
 		)),

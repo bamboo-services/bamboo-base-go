@@ -16,9 +16,19 @@ import "hash/fnv"
 //	}
 //
 //	func (o *Order) GetGene() xSnowflake.Gene {
-//	    return xSnowflake.GeneCalc{}.Hash(o.UserID)
+//	    return xSnowflake.CalcGene().Hash(o.UserID)
 //	}
 type GeneCalc struct{}
+
+// CalcGene 获取 GeneCalc 实例
+//
+// 基因计算基于 FNV-1a 哈希算法，支持基于 ID 或字符串的基因值动态生成。
+// 常用于分片定位和关联 ID 的基因计算场景。
+//
+// 注意：这里的计算的基因范围为 0-63，即 6 位二进制数。（不会受到原始雪花算法基因的影响）
+func CalcGene() GeneCalc {
+	return GeneCalc{}
+}
 
 // Hash 基于 SnowflakeID 计算基因（FNV-1a 哈希）
 //
@@ -29,7 +39,7 @@ type GeneCalc struct{}
 //
 // 返回值:
 //   - Gene: 计算出的基因值（0-63），如果计算失败返回 GeneDefault
-func (GeneCalc) Hash(id SnowflakeID) Gene {
+func (gc GeneCalc) Hash(id SnowflakeID) Gene {
 	if id.IsZero() {
 		return GeneDefault
 	}
@@ -50,7 +60,7 @@ func (GeneCalc) Hash(id SnowflakeID) Gene {
 //
 // 返回值:
 //   - Gene: 计算出的组合基因值（0-63），如果计算失败或 IDs 为空返回 GeneDefault
-func (GeneCalc) HashMulti(ids ...SnowflakeID) Gene {
+func (gc GeneCalc) HashMulti(ids ...SnowflakeID) Gene {
 	if len(ids) == 0 {
 		return GeneDefault
 	}
@@ -72,7 +82,7 @@ func (GeneCalc) HashMulti(ids ...SnowflakeID) Gene {
 //
 // 返回值:
 //   - Gene: 计算出的基因值（0-63），如果字符串为空或计算失败返回 GeneDefault
-func (GeneCalc) HashString(s string) Gene {
+func (gc GeneCalc) HashString(s string) Gene {
 	if s == "" {
 		return GeneDefault
 	}

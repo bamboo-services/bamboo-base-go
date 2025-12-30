@@ -1,6 +1,7 @@
 package xHelper
 
 import (
+	"context"
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
@@ -24,6 +25,10 @@ func RequestContext() gin.HandlerFunc {
 
 		c.Set(xConsts.ContextRequestKey.String(), requestID)     // 上下文请求记录
 		c.Set(xConsts.ContextUserStartTime.String(), time.Now()) // 请求开始时间记录
+
+		// 将 RequestID 注入到标准 context 中（供 slog 使用）
+		ctx := context.WithValue(c.Request.Context(), xConsts.ContextRequestKey, requestID)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

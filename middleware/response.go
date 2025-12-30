@@ -41,7 +41,7 @@ func ResponseMiddleware(ctx *gin.Context) {
 				)
 			} else {
 				xResult.Error(
-					ctx, xError.ServerError,
+					ctx, xError.ServerInternalError,
 					xError.ErrMessage(ctx.GetString(xConsts.ContextErrorMessage.String())),
 					ctx.Errors.Last(),
 				)

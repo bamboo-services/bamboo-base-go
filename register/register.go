@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
+	"github.com/bamboo-services/bamboo-base-go/env"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,6 +55,6 @@ func Register() *Reg {
 
 // isDebugMode 判断是否处于调试模式。
 func isDebugMode() bool {
-	debug := strings.ToLower(os.Getenv(xConstEnv.Debug.String()))
+	debug := strings.ToLower(os.Getenv(xEnv.Debug.String()))
 	return debug == "true" || debug == "1" || debug == "yes" || debug == "on"
 }

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	xConstEnv "github.com/bamboo-services/bamboo-base-go/constants/env"
+	"github.com/bamboo-services/bamboo-base-go/env"
 )
 
 var (
@@ -45,8 +45,8 @@ func InitDefaultNode() error {
 //   - datacenterID: 数据中心 ID
 //   - nodeID: 节点 ID
 func getIDsFromEnv() (datacenterID, nodeID int64) {
-	datacenterID = getEnvInt64(xConstEnv.SnowflakeDatacenterID.String(), -1)
-	nodeID = getEnvInt64(xConstEnv.SnowflakeNodeID.String(), -1)
+	datacenterID = getEnvInt64(xEnv.SnowflakeDatacenterID.String(), -1)
+	nodeID = getEnvInt64(xEnv.SnowflakeNodeID.String(), -1)
 
 	// 如果环境变量未配置，自动生成
 	if datacenterID < 0 || datacenterID > maxDatacenterID ||

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
+	xUtil "github.com/bamboo-services/bamboo-base-go/env"
 )
 
 // Test_GetEnv 测试环境变量获取功能。

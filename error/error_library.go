@@ -16,7 +16,7 @@ import (
 func NewInternalServerError(ctx *gin.Context, errMessage ErrMessage, err error) *Error {
 	newErr := &Error{
 		error:        err,
-		ErrorCode:    ServerError,
+		ErrorCode:    ServerInternalError,
 		ErrorMessage: errMessage,
 	}
 	slog.ErrorContext(ctx.Request.Context(), "服务器内部错误",

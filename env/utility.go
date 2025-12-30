@@ -1,4 +1,4 @@
-package xUtil
+package xEnv
 
 import (
 	"os"

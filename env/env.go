@@ -1,4 +1,4 @@
-package xConstEnv
+package xEnv
 
 // EnvKey 环境变量键类型
 type EnvKey string

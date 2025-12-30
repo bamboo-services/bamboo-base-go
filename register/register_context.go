@@ -1,13 +1,10 @@
 package xReg
 
 import (
-	"time"
-
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 type handler struct {
@@ -43,13 +40,6 @@ func (r *Reg) SystemContextInit() {
 //   - 生成的 `RequestID` 使用 `uuid.NewString()` 方法。
 //   - 响应头中添加了 `X-Request-ID` 字段以包含该 `RequestID`。
 func (h *handler) systemContextHandlerFunc(c *gin.Context) {
-	// 生成请求唯一 ID 「用于溯源」
-	requestID := uuid.NewString()
-	c.Writer.Header().Set(xConsts.HeaderRequestUUID.String(), requestID)
-
-	c.Set(xConsts.ContextRequestKey.String(), requestID)     // 上下文请求记录
-	c.Set(xConsts.ContextUserStartTime.String(), time.Now()) // 请求开始时间记录
-
 	// 注入雪花算法节点
 	c.Set(xConsts.ContextSnowflakeNode.String(), xSnowflake.GetDefaultNode())
 

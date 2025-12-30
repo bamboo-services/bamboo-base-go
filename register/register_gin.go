@@ -24,8 +24,9 @@ func (r *Reg) EngineInit() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r.Serve = gin.New(func(engine *gin.Engine) {
+		engine.Use(xHelper.RequestContext())
 		engine.Use(xHelper.PanicRecovery())
-		engine.Use(gin.Logger())
+		engine.Use(xHelper.HttpLogger())
 	})
 
 	// 注册自定义验证器

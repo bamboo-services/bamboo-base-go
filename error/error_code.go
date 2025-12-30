@@ -280,26 +280,26 @@ var (
 // ============================== 500 Internal Server Error (500xx) ==============================
 
 var (
-	ServerError    = &ErrorCode{50000, "SERVER_ERROR", "服务器内部错误"}
-	DatabaseError  = &ErrorCode{50001, "DATABASE_ERROR", "数据库错误"}
-	CacheError     = &ErrorCode{50002, "CACHE_ERROR", "缓存错误"}
-	FileError      = &ErrorCode{50003, "FILE_ERROR", "文件错误"}
-	StorageError   = &ErrorCode{50004, "STORAGE_ERROR", "存储错误"}
-	RemoteError    = &ErrorCode{50005, "REMOTE_ERROR", "远程调用错误"}
-	ConfigError    = &ErrorCode{50006, "CONFIG_ERROR", "配置错误"}
-	NetworkError   = &ErrorCode{50007, "NETWORK_ERROR", "网络错误"}
-	EncryptError   = &ErrorCode{50008, "ENCRYPT_ERROR", "加密错误"}
-	DecryptError   = &ErrorCode{50009, "DECRYPT_ERROR", "解密错误"}
-	SerializeError = &ErrorCode{50010, "SERIALIZE_ERROR", "序列化错误"}
-	DeserializeErr = &ErrorCode{50011, "DESERIALIZE_ERROR", "反序列化错误"}
-	JsonError      = &ErrorCode{50012, "JSON_ERROR", "JSON处理错误"}
-	XmlError       = &ErrorCode{50013, "XML_ERROR", "XML处理错误"}
-	IoError        = &ErrorCode{50014, "IO_ERROR", "IO错误"}
-	MemoryError    = &ErrorCode{50015, "MEMORY_ERROR", "内存错误"}
-	ThreadError    = &ErrorCode{50016, "THREAD_ERROR", "线程错误"}
-	PoolExhausted  = &ErrorCode{50017, "POOL_EXHAUSTED", "连接池耗尽"}
-	QueueFull      = &ErrorCode{50018, "QUEUE_FULL", "队列已满"}
-	UnknownError   = &ErrorCode{50099, "UNKNOWN_ERROR", "未知错误"}
+	ServerInternalError = &ErrorCode{50000, "SERVER_INTERNAL_ERROR", "服务器内部错误"}
+	DatabaseError       = &ErrorCode{50001, "DATABASE_ERROR", "数据库错误"}
+	CacheError          = &ErrorCode{50002, "CACHE_ERROR", "缓存错误"}
+	FileError           = &ErrorCode{50003, "FILE_ERROR", "文件错误"}
+	StorageError        = &ErrorCode{50004, "STORAGE_ERROR", "存储错误"}
+	RemoteError         = &ErrorCode{50005, "REMOTE_ERROR", "远程调用错误"}
+	ConfigError         = &ErrorCode{50006, "CONFIG_ERROR", "配置错误"}
+	NetworkError        = &ErrorCode{50007, "NETWORK_ERROR", "网络错误"}
+	EncryptError        = &ErrorCode{50008, "ENCRYPT_ERROR", "加密错误"}
+	DecryptError        = &ErrorCode{50009, "DECRYPT_ERROR", "解密错误"}
+	SerializeError      = &ErrorCode{50010, "SERIALIZE_ERROR", "序列化错误"}
+	DeserializeErr      = &ErrorCode{50011, "DESERIALIZE_ERROR", "反序列化错误"}
+	JsonError           = &ErrorCode{50012, "JSON_ERROR", "JSON处理错误"}
+	XmlError            = &ErrorCode{50013, "XML_ERROR", "XML处理错误"}
+	IoError             = &ErrorCode{50014, "IO_ERROR", "IO错误"}
+	MemoryError         = &ErrorCode{50015, "MEMORY_ERROR", "内存错误"}
+	ThreadError         = &ErrorCode{50016, "THREAD_ERROR", "线程错误"}
+	PoolExhausted       = &ErrorCode{50017, "POOL_EXHAUSTED", "连接池耗尽"}
+	QueueFull           = &ErrorCode{50018, "QUEUE_FULL", "队列已满"}
+	UnknownError        = &ErrorCode{50099, "UNKNOWN_ERROR", "未知错误"}
 )
 
 // ============================== 第三方服务错误 (500xx) ==============================

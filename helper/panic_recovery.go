@@ -17,7 +17,7 @@ import (
 // 并生成统一结构的 JSON 格式错误响应，便于系统监控和问题排查。
 //
 // 中间件会优先从上下文 `consts.ContextErrorCode` 提取错误码信息，
-// 若未找到，则返回 `err.ServerError` 为默认错误码。
+// 若未找到，则返回 `err.ServerInternalError` 为默认错误码。
 //
 // 参数说明: 无。
 //
@@ -30,7 +30,7 @@ func PanicRecovery() gin.HandlerFunc {
 		// 捕获 Panic 信息
 		value, exists := c.Get(xConsts.ContextErrorCode.String())
 		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage.String())
-		errorCode := xError.ServerError
+		errorCode := xError.ServerInternalError
 		if exists {
 			errorCode = value.(*xError.ErrorCode)
 		}

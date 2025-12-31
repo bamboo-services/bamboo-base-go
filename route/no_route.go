@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xResult "github.com/bamboo-services/bamboo-base-go/result"
 	"github.com/gin-gonic/gin"
 )
@@ -18,9 +19,9 @@ import (
 //
 // 注意: 此方法用于全局未匹配路由的处理，需通过 `router.NoRoute` 绑定使用。
 func NoRoute(ctx *gin.Context) {
-	slog.WarnContext(ctx.Request.Context(), "未找到路由",
-		"method", ctx.Request.Method,
-		"path", ctx.Request.URL.Path,
+	xLog.WithName(xLog.NamedROUT).Warn(ctx.Request.Context(), "未找到路由",
+		slog.String("method", ctx.Request.Method),
+		slog.String("path", ctx.Request.URL.Path),
 	)
 	xResult.Error(
 		ctx, xError.PageNotFound,

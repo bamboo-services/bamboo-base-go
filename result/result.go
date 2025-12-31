@@ -2,10 +2,13 @@ package xResult
 
 import (
 	"log/slog"
+	"strconv"
+	"strings"
 
 	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"github.com/gin-gonic/gin"
 )
@@ -18,10 +21,7 @@ import (
 // - 日志记录器会记录响应状态，日志级别为 `Info`。
 // - 确保业务上下文中正确设置日志记录器，否则可能影响日志记录。
 func Success(ctx *gin.Context, message string) {
-	slog.InfoContext(ctx.Request.Context(), "Success",
-		"code", 200,
-		"message", message,
-	)
+	xLog.WithName(xLog.NamedRESU).Info(ctx.Request.Context(), "[200]Success - "+message)
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
 		Output:   "Success",
@@ -43,10 +43,8 @@ func Success(ctx *gin.Context, message string) {
 //
 // 注意: 确保调用此函数前，业务上下文中正确设置必要的数据，例如日志记录器。
 func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
-	slog.InfoContext(ctx.Request.Context(), "Success",
-		"code", 200,
-		"message", message,
-		"data", data,
+	xLog.WithName(xLog.NamedRESU).Info(ctx.Request.Context(), "[200]Success - "+message,
+		slog.Any("data", data),
 	)
 	ctx.JSON(200, xBase.BaseResponse{
 		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
@@ -70,12 +68,19 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
 func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
-	slog.WarnContext(ctx.Request.Context(), "Error",
-		"code", errorCode.Code,
-		"output", errorCode.GetOutput(),
-		"message", errorCode.GetMessage(),
-		"errorMessage", errorMessage,
-		"data", data,
+	messageBuilder := strings.Builder{}
+	messageBuilder.WriteString("[")
+	messageBuilder.WriteString(strconv.Itoa(int(errorCode.Code)))
+	messageBuilder.WriteString("]")
+	messageBuilder.WriteString(errorCode.GetOutput())
+	messageBuilder.WriteString(" | ")
+	messageBuilder.WriteString(errorCode.Message)
+	messageBuilder.WriteString(" - ")
+	messageBuilder.WriteString(errorMessage.String())
+	xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), messageBuilder.String(),
+		slog.Uint64("code", uint64(errorCode.Code)),
+		slog.String("output", errorCode.GetOutput()),
+		slog.Any("data", data),
 	)
 	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{

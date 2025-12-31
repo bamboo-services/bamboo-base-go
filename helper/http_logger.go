@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -53,33 +54,33 @@ func HttpLogger() gin.HandlerFunc {
 
 		// ========== 请求开始日志 ==========
 		// 基础日志属性
-		args := []any{
-			"method", method,
-			"path", path,
-			"client_ip", clientIP,
+		args := []slog.Attr{
+			slog.String("method", method),
+			slog.String("path", path),
+			slog.String("client_ip", clientIP),
 		}
 
 		// 调试模式下添加详细信息
 		if xCtxUtil.IsDebugMode() {
 			// 添加查询参数
 			if c.Request.URL.RawQuery != "" {
-				args = append(args, "query", c.Request.URL.RawQuery)
+				args = append(args, slog.String("query", c.Request.URL.RawQuery))
 			}
 
 			// 添加请求头（脱敏）
-			args = append(args, "headers", sanitizeHeaders(c.Request.Header))
+			args = append(args, slog.Any("headers", sanitizeHeaders(c.Request.Header)))
 
 			// 添加请求体（脱敏，根据请求方法判断）
 			if shouldLogBody(c) {
 				body := readRequestBody(c)
 				sanitizedBody := sanitizeBody(body, c.Request.Header)
 				if sanitizedBody != "" {
-					args = append(args, "body", sanitizedBody)
+					args = append(args, slog.String("body", sanitizedBody))
 				}
 			}
 		}
 
-		log.SugarInfo(c.Request.Context(), "HTTP 请求开始", args...)
+		log.Info(c.Request.Context(), "HTTP 请求开始", args...)
 
 		// 放行请求
 		c.Next()
@@ -90,22 +91,23 @@ func HttpLogger() gin.HandlerFunc {
 		latency := time.Since(startTime)
 
 		// 基础日志属性
-		responseArgs := []any{
-			"method", method,
-			"path", path,
-			"status", statusCode,
-			"latency_ms", latency.Milliseconds(),
-			"client_ip", clientIP,
+		var responseArgs []slog.Attr
+		if xCtxUtil.IsDebugMode() {
+			responseArgs = []slog.Attr{
+				slog.Int("status", statusCode),
+				slog.Int64("latency_ms", latency.Milliseconds()),
+				slog.String("client_ip", clientIP),
+			}
 		}
 
 		// 根据状态码选择日志级别
 		switch {
 		case statusCode >= 500:
-			log.SugarError(c.Request.Context(), "HTTP 请求完成", responseArgs...)
+			log.Error(c.Request.Context(), "HTTP 请求完成", responseArgs...)
 		case statusCode >= 400:
-			log.SugarWarn(c.Request.Context(), "HTTP 请求完成", responseArgs...)
+			log.Warn(c.Request.Context(), "HTTP 请求完成", responseArgs...)
 		default:
-			log.SugarInfo(c.Request.Context(), "HTTP 请求完成", responseArgs...)
+			log.Info(c.Request.Context(), "HTTP 请求完成", responseArgs...)
 		}
 	}
 }

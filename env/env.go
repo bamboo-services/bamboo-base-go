@@ -32,11 +32,12 @@ const (
 // ============================== Redis 配置 ==============================
 
 const (
-	RedisHost     EnvKey = "REDIS_HOST"      // Redis 主机地址
-	RedisPort     EnvKey = "REDIS_PORT"      // Redis 端口
-	RedisPass     EnvKey = "REDIS_PASS"      // Redis 密码
-	RedisDB       EnvKey = "REDIS_DB"        // Redis 数据库索引
-	RedisPoolSize EnvKey = "REDIS_POOL_SIZE" // Redis 连接池大小
+	NoSqlHost     EnvKey = "NOSQL_HOST"      // NoSQL 主机地址
+	NoSqlPort     EnvKey = "NOSQL_PORT"      // NoSQL 端口
+	NoSqlPass     EnvKey = "NOSQL_PASS"      // NoSQL 密码
+	NoSqlDB       EnvKey = "NOSQL_DB"        // NoSQL 数据库索引
+	NoSqlPoolSize EnvKey = "NOSQL_POOL_SIZE" // NoSQL 连接池大小
+	NoSqlPrefix   EnvKey = "NOSQL_PREFIX"    // NoSQL 连接池大小
 )
 
 // ============================== 雪花算法配置 ==============================
@@ -55,24 +56,6 @@ const (
 	LogMaxAge     EnvKey = "LOG_MAX_AGE"     // 日志文件最大保留天数
 	LogMaxBackups EnvKey = "LOG_MAX_BACKUPS" // 日志文件最大备份数
 	LogCompress   EnvKey = "LOG_COMPRESS"    // 是否压缩日志文件
-)
-
-// ============================== JWT 配置 ==============================
-
-const (
-	JwtSecret        EnvKey = "JWT_SECRET"         // JWT 签名密钥
-	JwtExpire        EnvKey = "JWT_EXPIRE"         // JWT 过期时间（秒）
-	JwtIssuer        EnvKey = "JWT_ISSUER"         // JWT 签发者
-	JwtRefreshExpire EnvKey = "JWT_REFRESH_EXPIRE" // JWT 刷新令牌过期时间（秒）
-)
-
-// ============================== 安全配置 ==============================
-
-const (
-	SecretKey   EnvKey = "SECRET_KEY"   // 应用密钥
-	EncryptKey  EnvKey = "ENCRYPT_KEY"  // 加密密钥
-	CorsOrigins EnvKey = "CORS_ORIGINS" // CORS 允许的源
-	CorsMaxAge  EnvKey = "CORS_MAX_AGE" // CORS 预检请求缓存时间（秒）
 )
 
 // ============================== 第三方服务配置 ==============================

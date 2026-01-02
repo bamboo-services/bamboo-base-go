@@ -34,10 +34,10 @@ import (
 //	    return xSnowflake.GeneOrder
 //	}
 type BaseEntityWithSoftDelete struct {
-	ID        xSnowflake.SnowflakeID `gorm:"type:bigint;primaryKey;comment:主键"`
-	CreatedAt time.Time              `gorm:"autoCreateTime:milli;not null;comment:创建时间"`
-	UpdatedAt time.Time              `gorm:"autoUpdateTime:milli;not null;comment:更新时间"`
-	DeletedAt gorm.DeletedAt         `gorm:"type:timestamp;index;comment:删除时间"`
+	ID        xSnowflake.SnowflakeID `json:"id" gorm:"type:bigint;primaryKey;comment:主键"`
+	CreatedAt time.Time              `json:"-" gorm:"autoCreateTime:milli;not null;comment:创建时间"`
+	UpdatedAt time.Time              `json:"updated_at" gorm:"autoUpdateTime:milli;not null;comment:更新时间"`
+	DeletedAt gorm.DeletedAt         `json:"-" gorm:"type:timestamp;index;comment:删除时间"`
 }
 
 // BeforeCreate 创建前钩子，自动生成雪花 ID

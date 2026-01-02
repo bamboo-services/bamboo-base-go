@@ -109,15 +109,15 @@ func GetEnvInt64(key EnvKey, defaultValue int64) int64 {
 	return defaultValue
 }
 
-// GetEnvDuration 根据环境变量键获取时间值，返回值为 time.Duration 类型，如不存在则返回默认值。
+// GetEnvDuration 从指定的环境变量键获取时间持续时长，若未设置则返回默认值。
 //
-// 参数 key 表示要查找的环境变量键。
-// 参数 defaultValue 为默认时间值（以毫秒为单位），当环境变量未设置或解析失败时使用此值。
-// 返回以 time.Duration 表示的时间，若环境变量解析成功则使用其值，否则使用默认值。
+// 参数 key 表示环境变量的键，需满足 EnvKey 类型。
+// 参数 defaultValue 为未设置环境变量时使用的默认时长（以纳秒为单位）。
+// 返回时间持续时长，单位为 time.Duration 类型。
 func GetEnvDuration(key EnvKey, defaultValue int64) time.Duration {
 	if value, exists := os.LookupEnv(key.String()); exists {
 		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
-			return time.Duration(intVal) * time.Millisecond
+			return time.Duration(intVal)
 		}
 	}
 	return time.Duration(defaultValue)

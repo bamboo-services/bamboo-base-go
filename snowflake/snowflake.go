@@ -168,8 +168,8 @@ type SnowflakeID int64
 // 返回值:
 //   - []byte: JSON 格式的字符串（带引号）
 //   - error: 序列化错误
-func (s *SnowflakeID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(strconv.FormatInt(int64(*s), 10))
+func (s SnowflakeID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatInt(int64(s), 10))
 }
 
 // UnmarshalJSON 从 JSON 反序列化雪花 ID
@@ -200,13 +200,46 @@ func (s *SnowflakeID) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalBinary 实现 encoding.BinaryMarshaler 接口
+//
+// 将雪花 ID 序列化为字节数组，使用字符串格式存储。
+// 适用于需要二进制序列化的场景（如缓存、消息队列等）。
+//
+// 注意: 使用值接收者以确保值类型也能被序列化（Redis 等场景需要）
+//
+// 返回值:
+//   - []byte: 字节数组形式的 ID
+//   - error: 序列化错误（当前实现始终返回 nil）
+func (s SnowflakeID) MarshalBinary() ([]byte, error) {
+	return []byte(s.String()), nil
+}
+
+// UnmarshalBinary 实现 encoding.BinaryUnmarshaler 接口
+//
+// 从字节数组反序列化雪花 ID。
+// 字节数组应为十进制字符串格式。
+//
+// 参数说明:
+//   - data: 字节数组形式的 ID 数据
+//
+// 返回值:
+//   - error: 反序列化错误
+func (s *SnowflakeID) UnmarshalBinary(data []byte) error {
+	val, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return fmt.Errorf("解析雪花 ID 字节数据失败: %w", err)
+	}
+	*s = SnowflakeID(val)
+	return nil
+}
+
 // Value 实现 driver.Valuer 接口，用于 GORM 写入数据库
 //
 // 返回值:
 //   - driver.Value: 数据库驱动值（int64）
 //   - error: 始终为 nil
-func (s *SnowflakeID) Value() (driver.Value, error) {
-	return int64(*s), nil
+func (s SnowflakeID) Value() (driver.Value, error) {
+	return int64(s), nil
 }
 
 // Scan 实现 sql.Scanner 接口，用于 GORM 从数据库读取
@@ -240,32 +273,32 @@ func (s *SnowflakeID) Scan(value interface{}) error {
 //
 // 返回值:
 //   - int64: ID 的数值形式
-func (s *SnowflakeID) Int64() int64 {
-	return int64(*s)
+func (s SnowflakeID) Int64() int64 {
+	return int64(s)
 }
 
 // String 返回雪花 ID 的字符串表示
 //
 // 返回值:
 //   - string: ID 的字符串形式
-func (s *SnowflakeID) String() string {
-	return strconv.FormatInt(int64(*s), 10)
+func (s SnowflakeID) String() string {
+	return strconv.FormatInt(int64(s), 10)
 }
 
 // IsZero 判断是否为零值
 //
 // 返回值:
 //   - bool: 如果为零值返回 true
-func (s *SnowflakeID) IsZero() bool {
-	return *s == 0
+func (s SnowflakeID) IsZero() bool {
+	return s == 0
 }
 
 // Timestamp 提取时间戳
 //
 // 返回值:
 //   - time.Time: ID 创建时间
-func (s *SnowflakeID) Timestamp() time.Time {
-	ms := (int64(*s) >> timestampShift) + epoch
+func (s SnowflakeID) Timestamp() time.Time {
+	ms := (int64(s) >> timestampShift) + epoch
 	return time.UnixMilli(ms)
 }
 
@@ -273,30 +306,30 @@ func (s *SnowflakeID) Timestamp() time.Time {
 //
 // 返回值:
 //   - Gene: 业务基因类型
-func (s *SnowflakeID) Gene() Gene {
-	return Gene((int64(*s) >> geneShift) & maxGene)
+func (s SnowflakeID) Gene() Gene {
+	return Gene((int64(s) >> geneShift) & maxGene)
 }
 
 // DatacenterID 提取数据中心 ID
 //
 // 返回值:
 //   - int64: 数据中心 ID
-func (s *SnowflakeID) DatacenterID() int64 {
-	return (int64(*s) >> datacenterShift) & maxDatacenterID
+func (s SnowflakeID) DatacenterID() int64 {
+	return (int64(s) >> datacenterShift) & maxDatacenterID
 }
 
 // NodeID 提取节点 ID
 //
 // 返回值:
 //   - int64: 节点 ID
-func (s *SnowflakeID) NodeID() int64 {
-	return (int64(*s) >> nodeShift) & maxNodeID
+func (s SnowflakeID) NodeID() int64 {
+	return (int64(s) >> nodeShift) & maxNodeID
 }
 
 // Sequence 提取序列号
 //
 // 返回值:
 //   - int64: 序列号
-func (s *SnowflakeID) Sequence() int64 {
-	return int64(*s) & maxSequence
+func (s SnowflakeID) Sequence() int64 {
+	return int64(s) & maxSequence
 }

@@ -122,12 +122,17 @@ func (h *LogHandler) WithGroup(name string) slog.Handler {
 }
 
 // extractContextUUID 从 context 中提取 trace ID
+//
+// 支持的 context 类型:
+//   - gin.Context: 从 Gin 请求上下文中提取
+//   - gorm.DB context: 从 GORM 数据库操作上下文中提取
+//   - 标准 context.Context: 从任意标准 context 中提取
 func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
 
-	// 尝试从 gin.Context 指针中提取
+	// 1. 尝试从 gin.Context 指针中提取 (HTTP 请求场景)
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		// 先尝试从 gin.Context 自身的存储中获取
 		if contextUUID, exists := ginCtx.Get(string(xConsts.ContextRequestKey)); exists {
@@ -143,7 +148,9 @@ func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 		}
 	}
 
-	// 从标准 context.Context 中提取
+	// 2. 从标准 context.Context 中提取 (包括 GORM 数据库操作场景)
+	// GORM 使用标准 context，通过 db.WithContext(ctx) 传递
+	// context.Value() 会自动沿着 context 链向上查找
 	if contextUUID := ctx.Value(xConsts.ContextRequestKey); contextUUID != nil {
 		if traceStr, ok := contextUUID.(string); ok {
 			return traceStr

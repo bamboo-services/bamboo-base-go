@@ -24,13 +24,14 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 		ErrorCode:    err,
 		ErrorMessage: errorMessage,
 	}
-	if len(getErr) > 0 {
+	// 检查是否有有效的错误参数（排除 nil）
+	if len(getErr) > 0 && getErr[0] != nil {
 		newErr.error = getErr[0]
 	} else {
 		newErr.error = errors.New(errorMessage.String())
 	}
 	if throw {
-		xLog.WithName(xLog.NamedRESU).Error(ctx.Request.Context(), "业务错误",
+		xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), "业务错误",
 			slog.Int("code", int(err.Code)),
 			slog.String("message", newErr.ErrorMessage.String()),
 			slog.String("error", newErr.error.Error()),
@@ -51,15 +52,20 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 // 返回值为 *Error 类型，包含错误码、自定义消息、原始错误以及上下文数据。
 func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw bool, getErr error, data ...interface{}) *Error {
 	newErr := &Error{
-		error:        getErr,
 		ErrorCode:    err,
 		ErrorMessage: errorMessage,
+	}
+	// 检查并设置错误对象
+	if getErr != nil {
+		newErr.error = getErr
+	} else {
+		newErr.error = errors.New(errorMessage.String())
 	}
 	if data != nil && len(data) > 0 {
 		newErr.Data = data
 	}
 	if throw {
-		xLog.WithName(xLog.NamedRESU).Error(ctx.Request.Context(), "业务错误",
+		xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), "业务错误",
 			slog.Int("code", int(err.Code)),
 			slog.String("message", newErr.ErrorMessage.String()),
 			slog.String("error", newErr.error.Error()),

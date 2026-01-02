@@ -13,6 +13,7 @@ import (
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	"github.com/gin-gonic/gin"
 )
 
 // LogHandler 自定义 slog Handler，支持彩色控制台输出和 JSON 文件输出
@@ -126,7 +127,23 @@ func (h *LogHandler) extractTrace(ctx context.Context) string {
 		return ""
 	}
 
-	// 从标准 context 中提取（使用 ContextKey 类型作为 key）
+	// 尝试从 gin.Context 指针中提取
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		// 先尝试从 gin.Context 自身的存储中获取
+		if trace, exists := ginCtx.Get(string(xConsts.ContextRequestKey)); exists {
+			if traceStr, ok := trace.(string); ok {
+				return traceStr
+			}
+		}
+		// 再尝试从 Request.Context() 中获取
+		if trace := ginCtx.Request.Context().Value(xConsts.ContextRequestKey); trace != nil {
+			if traceStr, ok := trace.(string); ok {
+				return traceStr
+			}
+		}
+	}
+
+	// 从标准 context.Context 中提取
 	if trace := ctx.Value(xConsts.ContextRequestKey); trace != nil {
 		if traceStr, ok := trace.(string); ok {
 			return traceStr

@@ -3,11 +3,11 @@ package xHelper
 import (
 	"io"
 	"log/slog"
-	"runtime/debug"
 
 	xBase "github.com/bamboo-services/bamboo-base-go"
 	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -31,20 +31,21 @@ func PanicRecovery() gin.HandlerFunc {
 		value, exists := c.Get(xConsts.ContextErrorCode.String())
 		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage.String())
 		errorCode := xError.ServerInternalError
-		if exists {
-			errorCode = value.(*xError.ErrorCode)
+		if exists && value != nil {
+			if ec, ok := value.(*xError.ErrorCode); ok && ec != nil {
+				errorCode = ec
+			}
 		}
 		if !msgExist {
 			getErrMessage = "未知错误，请稍后再试"
 		}
 
 		// 使用 slog 记录日志
-		slog.WarnContext(c.Request.Context(), "Panic 恢复",
-			"code", errorCode.Code,
-			"output", errorCode.GetOutput(),
-			"message", errorCode.GetMessage(),
-			"errorMessage", getErrMessage,
-			"stack", string(debug.Stack()),
+		xLog.WithName(xLog.NamedMIDE).Error(c.Request.Context(), "Panic 恢复",
+			slog.Uint64("code", uint64(errorCode.Code)),
+			slog.String("output", errorCode.GetOutput()),
+			slog.String("message", errorCode.GetMessage()),
+			slog.String("errorMessage", getErrMessage.(string)),
 		)
 
 		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{

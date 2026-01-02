@@ -15,6 +15,7 @@ var ValidationErrorMessages = map[string]string{
 	"uuid":        "必须是有效的UUID格式",
 	"strict_url":  "必须是有效的 HTTP 或 HTTPS URL",
 	"strict_uuid": "必须是标准的 UUID 格式",
+	"oneof":       "必须是以下值之一: %s",
 }
 
 // GetValidationErrorMessage 获取验证错误的中文消息
@@ -24,7 +25,7 @@ func GetValidationErrorMessage(fe validator.FieldError) string {
 
 	if msg, exists := ValidationErrorMessages[tag]; exists {
 		switch tag {
-		case "min", "max":
+		case "min", "max", "oneof":
 			return fmt.Sprintf("%s%s", field, fmt.Sprintf(msg, fe.Param()))
 		default:
 			return fmt.Sprintf("%s %s", field, msg)

@@ -29,8 +29,16 @@ func (r *Reg) EngineInit() {
 		engine.Use(xHelper.HttpLogger())
 	})
 
-	// 注册自定义验证器
+	// 注册自定义验证器和翻译器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		// 注册翻译器（必须在自定义验证器之前）
+		if err := xVaild.RegisterTranslator(v); err != nil {
+			log.Error(r.Context, "翻译器注册失败: "+err.Error())
+		} else {
+			log.Debug(r.Context, "翻译器注册成功")
+		}
+
+		// 注册自定义验证器
 		xVaild.RegisterCustomValidators(v)
 		log.Debug(r.Context, "预制内部验证器注册成功")
 	}

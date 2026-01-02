@@ -31,7 +31,7 @@ func ResponseMiddleware(ctx *gin.Context) {
 		// 如果存在错误输出错误内容
 		if ctx.Errors != nil && len(ctx.Errors) > 0 {
 			var getErr *xError.Error
-			if errors.As(ctx.Errors.Last(), &getErr) {
+			if errors.As(ctx.Errors.Last(), &getErr) && getErr.ErrorCode != nil {
 				xResult.Error(
 					ctx, getErr.ErrorCode,
 					getErr.ErrorMessage,

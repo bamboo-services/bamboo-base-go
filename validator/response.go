@@ -2,6 +2,7 @@ package xVaild
 
 import (
 	"errors"
+
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -22,9 +23,16 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 
 	var validationErrors validator.ValidationErrors
 	if errors.As(bindErr, &validationErrors) {
+		// 使用翻译器翻译错误
+		translatedErrors := TranslateError(bindErr)
+
 		for i, fe := range validationErrors {
-			// 构建错误消息
-			errorMessage := GetValidationErrorMessage(fe)
+			// 优先使用翻译后的错误消息
+			errorMessage := translatedErrors[fe.Field()]
+			if errorMessage == "" {
+				// 如果翻译失败，使用旧的方法
+				errorMessage = GetValidationErrorMessage(fe)
+			}
 
 			// 记录第一个错误作为主要错误消息
 			if i == 0 {

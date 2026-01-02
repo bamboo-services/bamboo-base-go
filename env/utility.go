@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // GetEnv 获取环境变量值。
@@ -106,4 +107,18 @@ func GetEnvInt64(key EnvKey, defaultValue int64) int64 {
 		}
 	}
 	return defaultValue
+}
+
+// GetEnvDuration 根据环境变量键获取时间值，返回值为 time.Duration 类型，如不存在则返回默认值。
+//
+// 参数 key 表示要查找的环境变量键。
+// 参数 defaultValue 为默认时间值（以毫秒为单位），当环境变量未设置或解析失败时使用此值。
+// 返回以 time.Duration 表示的时间，若环境变量解析成功则使用其值，否则使用默认值。
+func GetEnvDuration(key EnvKey, defaultValue int64) time.Duration {
+	if value, exists := os.LookupEnv(key.String()); exists {
+		if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return time.Duration(intVal) * time.Millisecond
+		}
+	}
+	return time.Duration(defaultValue)
 }

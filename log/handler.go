@@ -75,17 +75,17 @@ func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// 提取 trace ID
-	trace := h.extractTrace(ctx)
+	// 提取 contextUUID ID
+	contextUUID := h.extractContextUUID(ctx)
 
 	// 写入控制台（彩色格式）
 	if h.console != nil {
-		h.writeConsole(r, trace)
+		h.writeConsole(r, contextUUID)
 	}
 
 	// 写入文件（JSON 格式）
 	if h.file != nil {
-		h.writeFile(r, trace)
+		h.writeFile(r, contextUUID)
 	}
 
 	return nil
@@ -121,8 +121,8 @@ func (h *LogHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-// extractTrace 从 context 中提取 trace ID
-func (h *LogHandler) extractTrace(ctx context.Context) string {
+// extractContextUUID 从 context 中提取 trace ID
+func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
@@ -130,22 +130,22 @@ func (h *LogHandler) extractTrace(ctx context.Context) string {
 	// 尝试从 gin.Context 指针中提取
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		// 先尝试从 gin.Context 自身的存储中获取
-		if trace, exists := ginCtx.Get(string(xConsts.ContextRequestKey)); exists {
-			if traceStr, ok := trace.(string); ok {
+		if contextUUID, exists := ginCtx.Get(string(xConsts.ContextRequestKey)); exists {
+			if traceStr, ok := contextUUID.(string); ok {
 				return traceStr
 			}
 		}
 		// 再尝试从 Request.Context() 中获取
-		if trace := ginCtx.Request.Context().Value(xConsts.ContextRequestKey); trace != nil {
-			if traceStr, ok := trace.(string); ok {
+		if contextUUID := ginCtx.Request.Context().Value(xConsts.ContextRequestKey); contextUUID != nil {
+			if traceStr, ok := contextUUID.(string); ok {
 				return traceStr
 			}
 		}
 	}
 
 	// 从标准 context.Context 中提取
-	if trace := ctx.Value(xConsts.ContextRequestKey); trace != nil {
-		if traceStr, ok := trace.(string); ok {
+	if contextUUID := ctx.Value(xConsts.ContextRequestKey); contextUUID != nil {
+		if traceStr, ok := contextUUID.(string); ok {
 			return traceStr
 		}
 	}
@@ -157,7 +157,7 @@ func (h *LogHandler) extractTrace(ctx context.Context) string {
 // 格式: 时间 [LEVEL] [trace] [NAME] 消息
 //
 //	变量（换行棕色显示）
-func (h *LogHandler) writeConsole(r slog.Record, trace string) {
+func (h *LogHandler) writeConsole(r slog.Record, contextUuid string) {
 	var buf strings.Builder
 
 	// 时间戳（灰色）
@@ -169,9 +169,9 @@ func (h *LogHandler) writeConsole(r slog.Record, trace string) {
 	buf.WriteString(h.colorLevel(r.Level))
 
 	// Trace ID（如果有）
-	if trace != "" {
+	if contextUuid != "" {
 		buf.WriteString(" \033[34m[")
-		buf.WriteString(trace)
+		buf.WriteString(contextUuid)
 		buf.WriteString("]\033[0m")
 	}
 

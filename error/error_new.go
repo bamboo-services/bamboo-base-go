@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,10 +30,10 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 		newErr.error = errors.New(errorMessage.String())
 	}
 	if throw {
-		slog.ErrorContext(ctx.Request.Context(), "业务错误",
-			"code", err.Code,
-			"message", newErr.ErrorMessage,
-			"error", newErr.error.Error(),
+		xLog.WithName(xLog.NamedRESU).Error(ctx.Request.Context(), "业务错误",
+			slog.Int("code", int(err.Code)),
+			slog.String("message", newErr.ErrorMessage.String()),
+			slog.String("error", newErr.error.Error()),
 		)
 	}
 	return newErr
@@ -58,10 +59,11 @@ func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, 
 		newErr.Data = data
 	}
 	if throw {
-		slog.ErrorContext(ctx.Request.Context(), "业务错误",
-			"code", err.Code,
-			"message", newErr.ErrorMessage,
-			"error", newErr.error.Error(),
+		xLog.WithName(xLog.NamedRESU).Error(ctx.Request.Context(), "业务错误",
+			slog.Int("code", int(err.Code)),
+			slog.String("message", newErr.ErrorMessage.String()),
+			slog.String("error", newErr.error.Error()),
+			slog.Any("data", newErr.Data),
 		)
 	}
 	return newErr

@@ -44,12 +44,14 @@ func ResponseMiddleware(ctx *gin.Context) {
 					ctx.Errors.Last(),
 				)
 			}
+			ctx.Abort()
 		} else {
 			xResult.Error(
 				ctx, xError.DeveloperError,
 				"没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」",
 				nil,
 			)
+			ctx.Abort()
 		}
 	}
 }

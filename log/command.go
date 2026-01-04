@@ -15,7 +15,7 @@ type LogNamedLogger struct {
 }
 
 // WithName 创建带名称的日志器
-// 推荐使用 constants.Log* 常量作为名称
+// 推荐使用 context.Log* 常量作为名称
 func WithName(name string) *LogNamedLogger {
 	return &LogNamedLogger{
 		logger: slog.New(slog.Default().Handler().WithGroup(name)),

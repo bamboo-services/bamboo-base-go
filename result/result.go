@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	xBase "github.com/bamboo-services/bamboo-base-go"
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
@@ -23,7 +23,7 @@ import (
 func Success(ctx *gin.Context, message string) {
 	xLog.WithName(xLog.NamedRESU).Info(ctx.Request.Context(), "[200]Success - "+message)
 	ctx.JSON(200, xBase.BaseResponse{
-		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
+		Context:  ctx.GetString(xConsts.RequestKey.String()),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
@@ -47,7 +47,7 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 		slog.Any("data", data),
 	)
 	ctx.JSON(200, xBase.BaseResponse{
-		Context:  ctx.GetString(xConsts.ContextRequestKey.String()),
+		Context:  ctx.GetString(xConsts.RequestKey.String()),
 		Output:   "Success",
 		Code:     200,
 		Message:  message,
@@ -63,7 +63,7 @@ func SuccessHasData(ctx *gin.Context, message string, data interface{}) {
 // 参数说明:
 //   - ctx: `gin.Context` 对象，用于管理请求的上下文。
 //   - errorCode: 定义错误的代码和信息的结构化数据类型，标识错误的具体内容。
-//   - errorMessage: 自定义错误信息的字符串，用于补充或覆盖 `ErrorCode` 中的默认错误描述。
+//   - errorMessage: 自定义错误信息的字符串，用于补充或覆盖 `ErrorCodeKey` 中的默认错误描述。
 //   - data: 任意类型的数据，用于返回附加的上下文或调试信息。
 //
 // 注意: 确保上下文中存在有效的日志记录器，否则可能影响日志记录功能。
@@ -82,9 +82,47 @@ func Error(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.Er
 		slog.String("output", errorCode.GetOutput()),
 		slog.Any("data", data),
 	)
-	ctx.Set(xConsts.ContextErrorCode.String(), errorCode)
+	ctx.Set(xConsts.ErrorCodeKey.String(), errorCode)
 	ctx.JSON(int(errorCode.Code/100), xBase.BaseResponse{
-		Context:      ctx.GetString(xConsts.ContextRequestKey.String()),
+		Context:      ctx.GetString(xConsts.RequestKey.String()),
+		Output:       errorCode.GetOutput(),
+		Code:         errorCode.Code,
+		Message:      errorCode.Message,
+		Overhead:     xCtxUtil.CalcOverheadTime(ctx) / 1000,
+		ErrorMessage: errorMessage,
+		Data:         data,
+	})
+}
+
+// AbortError 用于终止当前请求并返回标准化错误响应至客户端。
+//
+// 参数 ctx 表示当前的请求上下文。
+// 参数 errorCode 表示错误码及相关信息，需为非空值。
+// 参数 errorMessage 提供额外的错误描述信息，便于调试和日志记录。
+// 参数 data 表示与错误相关的附加数据，若无数据可传入 nil。
+//
+// 此函数会记录 WARN 等级日志，包括错误码、输出标识及错误信息。
+// 请求的上下文错误码和响应数据会通过 `gin.Context` 的 Set 方法存储，
+// 并以 JSON 格式返回，状态码是通过错误码计算得出的。
+// 注意：调用该函数后，响应会立即中断，不会执行后续中间件或处理逻辑。
+func AbortError(ctx *gin.Context, errorCode *xError.ErrorCode, errorMessage xError.ErrMessage, data interface{}) {
+	messageBuilder := strings.Builder{}
+	messageBuilder.WriteString("[")
+	messageBuilder.WriteString(strconv.Itoa(int(errorCode.Code)))
+	messageBuilder.WriteString("]")
+	messageBuilder.WriteString(errorCode.GetOutput())
+	messageBuilder.WriteString(" | ")
+	messageBuilder.WriteString(errorCode.Message)
+	messageBuilder.WriteString(" - ")
+	messageBuilder.WriteString(errorMessage.String())
+	xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), messageBuilder.String(),
+		slog.Uint64("code", uint64(errorCode.Code)),
+		slog.String("output", errorCode.GetOutput()),
+		slog.Any("data", data),
+	)
+	ctx.Set(xConsts.ErrorCodeKey.String(), errorCode)
+	ctx.AbortWithStatusJSON(int(errorCode.Code/100), xBase.BaseResponse{
+		Context:      ctx.GetString(xConsts.RequestKey.String()),
 		Output:       errorCode.GetOutput(),
 		Code:         errorCode.Code,
 		Message:      errorCode.Message,

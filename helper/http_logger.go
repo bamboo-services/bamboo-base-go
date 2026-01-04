@@ -78,6 +78,11 @@ func HttpLogger() gin.HandlerFunc {
 					args = append(args, slog.String("body", sanitizedBody))
 				}
 			}
+		} else {
+			// 非调试模式下也缓存请求体（用于验证器错误提取），但不记录日志
+			if shouldCacheBody(c) {
+				cacheRequestBody(c)
+			}
 		}
 
 		log.Info(c.Request.Context(), "HTTP 请求开始", args...)
@@ -184,9 +189,53 @@ func shouldLogBody(c *gin.Context) bool {
 	return false
 }
 
+// shouldCacheBody 判断是否应该缓存请求体。
+//
+// 该函数判断是否应该缓存请求体用于验证器错误提取。
+// 非 GET/HEAD 请求且 Content-Type 为 JSON 时需要缓存。
+//
+// 参数说明:
+//   - c: Gin 上下文对象
+//
+// 返回值:
+//   - true 表示应该缓存请求体，false 表示不应该缓存
+func shouldCacheBody(c *gin.Context) bool {
+	// GET/HEAD 请求没有请求体
+	method := c.Request.Method
+	if method == "GET" || method == "HEAD" {
+		return false
+	}
+
+	// 只缓存 JSON 请求
+	contentType := c.Request.Header.Get("Content-Type")
+	return strings.Contains(contentType, "application/json")
+}
+
+// cacheRequestBody 缓存请求体内容。
+//
+// 该函数读取请求体并缓存到 context 中，同时恢复请求体供后续使用。
+// 与 readRequestBody 不同，此函数不返回字符串，仅用于缓存。
+//
+// 参数说明:
+//   - c: Gin 上下文对象
+func cacheRequestBody(c *gin.Context) {
+	// 读取请求体
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil || len(bodyBytes) == 0 {
+		return
+	}
+
+	// 恢复请求体
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// 缓存到 context
+	c.Set("cached_request_body", bodyBytes)
+}
+
 // readRequestBody 读取请求体内容。
 //
 // 该函数读取请求体内容，并在读取后恢复请求体，以便后续处理器使用。
+// 同时将请求体缓存到 context 中，供验证器等组件使用。
 //
 // 参数说明:
 //   - c: Gin 上下文对象
@@ -204,6 +253,12 @@ func readRequestBody(c *gin.Context) string {
 
 	// 恢复请求体（重要！）
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// 缓存请求体到 context 中，供验证器等组件使用
+	// 这样在验证错误时可以提取字段信息
+	if len(bodyBytes) > 0 {
+		c.Set("cached_request_body", bodyBytes)
+	}
 
 	return string(bodyBytes)
 }

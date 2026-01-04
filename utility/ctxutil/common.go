@@ -3,7 +3,7 @@ package xCtxUtil
 import (
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	"github.com/bamboo-services/bamboo-base-go/env"
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +21,7 @@ func IsDebugMode() bool {
 
 // CalcOverheadTime 计算当前请求的耗时（微秒级）。
 //
-// 该函数检查请求是否处于调试模式，如果是，则计算从 `ContextUserStartTime` 到当前时间的耗时。
+// 该函数检查请求是否处于调试模式，如果是，则计算从 `UserStartTimeKey` 到当前时间的耗时。
 // 非调试模式下，始终返回 0。
 //
 // 参数 c 表示当前的 `gin.Context`，用于访问请求上下文数据。
@@ -29,7 +29,7 @@ func IsDebugMode() bool {
 // 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
 func CalcOverheadTime(c *gin.Context) int64 {
 	if IsDebugMode() {
-		startTime := c.GetTime(xConsts.ContextUserStartTime.String())
+		startTime := c.GetTime(xConsts.UserStartTimeKey.String())
 		return time.Now().Sub(startTime).Microseconds()
 	}
 	return 0
@@ -45,7 +45,7 @@ func CalcOverheadTime(c *gin.Context) int64 {
 // 返回值:
 //   - 请求唯一标识字符串
 func GetRequestKey(c *gin.Context) string {
-	return c.GetString(xConsts.ContextRequestKey.String())
+	return c.GetString(xConsts.RequestKey.String())
 }
 
 // GetErrorMessage 从上下文中获取错误消息。
@@ -58,5 +58,5 @@ func GetRequestKey(c *gin.Context) string {
 // 返回值:
 //   - 错误消息字符串
 func GetErrorMessage(c *gin.Context) string {
-	return c.GetString(xConsts.ContextErrorMessage.String())
+	return c.GetString(xConsts.ErrorMessageKey.String())
 }

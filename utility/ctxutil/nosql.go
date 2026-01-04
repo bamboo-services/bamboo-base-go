@@ -3,7 +3,7 @@ package xCtxUtil
 import (
 	"log/slog"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -12,7 +12,7 @@ import (
 // 如果上下文中未找到 Redis 客户端，则记录错误日志并触发 panic。
 // 返回值为 *redis.Client 类型，获取成功时返回对应的 Redis 客户端。
 func GetRDB(c *gin.Context) *redis.Client {
-	value, exists := c.Get(xConsts.ContextRedisClient.String())
+	value, exists := c.Get(xConsts.RedisClientKey.String())
 	if exists {
 		return value.(*redis.Client)
 	}

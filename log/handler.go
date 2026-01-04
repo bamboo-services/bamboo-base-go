@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	"github.com/gin-gonic/gin"
 )
 
@@ -135,13 +135,13 @@ func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	// 1. 尝试从 gin.Context 指针中提取 (HTTP 请求场景)
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		// 先尝试从 gin.Context 自身的存储中获取
-		if contextUUID, exists := ginCtx.Get(string(xConsts.ContextRequestKey)); exists {
+		if contextUUID, exists := ginCtx.Get(string(xConsts.RequestKey)); exists {
 			if traceStr, ok := contextUUID.(string); ok {
 				return traceStr
 			}
 		}
 		// 再尝试从 Request.Context() 中获取
-		if contextUUID := ginCtx.Request.Context().Value(xConsts.ContextRequestKey); contextUUID != nil {
+		if contextUUID := ginCtx.Request.Context().Value(xConsts.RequestKey); contextUUID != nil {
 			if traceStr, ok := contextUUID.(string); ok {
 				return traceStr
 			}
@@ -151,7 +151,7 @@ func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	// 2. 从标准 context.Context 中提取 (包括 GORM 数据库操作场景)
 	// GORM 使用标准 context，通过 db.WithContext(ctx) 传递
 	// context.Value() 会自动沿着 context 链向上查找
-	if contextUUID := ctx.Value(xConsts.ContextRequestKey); contextUUID != nil {
+	if contextUUID := ctx.Value(xConsts.RequestKey); contextUUID != nil {
 		if traceStr, ok := contextUUID.(string); ok {
 			return traceStr
 		}
@@ -287,7 +287,7 @@ func (h *LogHandler) colorName(name string) string {
 
 	switch name {
 	// 核心服务类 - 蓝色
-	case NamedCONT, NamedSERV, NamedREPO, NamedCORE, NamedBASE, NamedMAIN:
+	case NamedCONT, NamedSERV, NamedLOGC, NamedREPO, NamedCORE, NamedBASE, NamedMAIN:
 		return fmt.Sprintf(" \033[34m[%s]\033[0m", name)
 	// 路由网络类 - 黄色
 	case NamedROUT, NamedHTTP, NamedGRPC, NamedSOCK, NamedCONN, NamedLINK:
@@ -296,10 +296,10 @@ func (h *LogHandler) colorName(name string) string {
 	case NamedAUTH, NamedUSER, NamedPERM, NamedROLE, NamedTOKN, NamedSIGN:
 		return fmt.Sprintf(" \033[31m[%s]\033[0m", name)
 	// 业务逻辑类 - 白色
-	case NamedBUSI, NamedLOGC, NamedPROC, NamedFLOW, NamedTASK, NamedJOBS:
+	case NamedBUSI, NamedPROC, NamedFLOW, NamedTASK, NamedJOBS:
 		return fmt.Sprintf(" \033[37m[%s]\033[0m", name)
 	// 其他已定义的常量 - 橙色
-	case NamedRECO, NamedUTIL, NamedFILT, NamedMIDE, NamedINIT, NamedTHOW, NamedRESU:
+	case NamedRECO, NamedUTIL, NamedFILT, NamedMIDE, NamedVALD, NamedINIT, NamedTHOW, NamedRESU:
 		return fmt.Sprintf(" \033[93m[%s]\033[0m", name)
 	default:
 		return fmt.Sprintf(" \033[35m[%s]\033[0m", name) // 紫色

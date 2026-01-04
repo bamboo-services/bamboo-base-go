@@ -1,7 +1,7 @@
 package xCtxUtil
 
 import (
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +17,7 @@ import (
 // 返回值:
 //   - *xSnowflake.Node: 雪花算法节点
 func GetSnowflakeNode(c *gin.Context) *xSnowflake.Node {
-	value, exists := c.Get(xConsts.ContextSnowflakeNode.String())
+	value, exists := c.Get(xConsts.SnowflakeNodeKey.String())
 	if exists {
 		if node, ok := value.(*xSnowflake.Node); ok {
 			return node

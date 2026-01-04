@@ -153,10 +153,17 @@ bamboo-base/
     - `snowflake.go`: 雪花算法上下文工具
 
 - **validator/**: 验证模块
-  - `custom.go`: 自定义验证规则
+  - `custom.go`: 自定义验证规则（7个验证器：strict_url、strict_uuid、alphanum_underscore、regexp、enum_int、enum_string、enum_float）
   - `messages.go`: 验证错误消息
   - `response.go`: 验证响应处理
-  - `vaildeate.go`: 验证逻辑实现
+  - `translator.go`: 中文翻译器
+  - `validator_enum_int.go`: 整数枚举验证器
+  - `validator_enum_string.go`: 字符串枚举验证器
+  - `validator_enum_float.go`: 浮点数枚举验证器
+  - `validator_url.go`: URL 验证器
+  - `validator_uuid.go`: UUID 验证器
+  - `validator_alphanum.go`: 字母数字验证器
+  - `validator_regexp.go`: 正则表达式验证器
 
 ## 使用模式
 
@@ -328,6 +335,124 @@ func (o *Order) GetGene() xSnowflake.Gene {
 // 创建记录时自动生成 ID
 user := &User{Username: "test"}
 db.Create(user) // user.ID 自动生成
+```
+
+### 枚举值验证
+
+bamboo-base 提供三种枚举验证器，支持不同的数据类型：
+
+#### 1. enum_int - 整数枚举
+
+对于自定义数值类型的枚举验证：
+
+```go
+// 定义自定义数值类型
+type UserGender int8
+
+const (
+    GenderUnknown UserGender = 0
+    GenderMale    UserGender = 1
+    GenderFemale  UserGender = 2
+)
+
+// 在结构体中使用 enum_int 验证器
+type CreateUserRequest struct {
+    Username string     `json:"username" binding:"required,min=3,max=64" label:"用户名"`
+    Gender   UserGender `json:"gender" binding:"enum_int=0 1 2" label:"性别"`
+}
+
+// 支持负数枚举
+type OrderStatus int
+
+const (
+    StatusCanceled OrderStatus = -1
+    StatusPending  OrderStatus = 0
+    StatusPaid     OrderStatus = 1
+    StatusShipped  OrderStatus = 2
+)
+
+type Order struct {
+    Status OrderStatus `json:"status" binding:"enum_int=-1 0 1 2" label:"订单状态"`
+}
+```
+
+**注意事项**:
+- `enum_int` 支持所有整数类型（int、int8、int16、int32、int64、uint 等）
+- 支持基于整数的自定义类型
+- 枚举值使用空格分隔
+- 支持负数
+- 建议配合 `label` tag 提供友好的字段名称
+
+**错误消息示例**:
+```json
+{
+  "gender": "性别必须是以下值之一: 0 1 2"
+}
+```
+
+#### 2. enum_string - 字符串枚举
+
+对于字符串类型的枚举验证：
+
+```go
+// 定义自定义字符串类型
+type UserRole string
+
+const (
+    RoleAdmin UserRole = "admin"
+    RoleUser  UserRole = "user"
+    RoleGuest UserRole = "guest"
+)
+
+type User struct {
+    Role   UserRole `json:"role" binding:"enum_string=admin user guest" label:"角色"`
+    Status string   `json:"status" binding:"enum_string=active pending inactive" label:"状态"`
+}
+```
+
+**注意事项**:
+- `enum_string` 支持字符串及自定义字符串类型
+- 验证是大小写敏感的
+- 枚举值使用空格分隔
+
+**错误消息示例**:
+```json
+{
+  "role": "角色必须是以下值之一: admin user guest"
+}
+```
+
+#### 3. enum_float - 浮点数枚举
+
+对于浮点数类型的枚举验证：
+
+```go
+// 定义自定义浮点数类型
+type Rating float64
+
+const (
+    RatingStar0_5 Rating = 0.5
+    RatingStar1_0 Rating = 1.0
+    RatingStar1_5 Rating = 1.5
+    RatingStar2_0 Rating = 2.0
+)
+
+type Product struct {
+    Rating   Rating  `json:"rating" binding:"enum_float=0.5 1.0 1.5 2.0 2.5 3.0" label:"评分"`
+    Discount float64 `json:"discount" binding:"enum_float=0.1 0.2 0.5" label:"折扣"`
+}
+```
+
+**注意事项**:
+- `enum_float` 支持 float32、float64 及自定义浮点数类型
+- 使用精度容差（epsilon）进行浮点数比较，避免精度问题
+- 枚举值使用空格分隔
+
+**错误消息示例**:
+```json
+{
+  "rating": "评分必须是以下值之一: 0.5 1.0 1.5 2.0 2.5 3.0"
+}
 ```
 
 ### 工具函数使用

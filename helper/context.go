@@ -4,7 +4,8 @@ import (
 	"context"
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
+	"github.com/bamboo-services/bamboo-base-go/http"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -21,13 +22,13 @@ func RequestContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一 ID 「用于溯源」
 		requestID := uuid.NewString()
-		c.Writer.Header().Set(xConsts.HeaderRequestUUID.String(), requestID)
+		c.Writer.Header().Set(http.HeaderRequestUUID.String(), requestID)
 
-		c.Set(xConsts.ContextRequestKey.String(), requestID)     // 上下文请求记录
-		c.Set(xConsts.ContextUserStartTime.String(), time.Now()) // 请求开始时间记录
+		c.Set(xConsts.RequestKey.String(), requestID)        // 上下文请求记录
+		c.Set(xConsts.UserStartTimeKey.String(), time.Now()) // 请求开始时间记录
 
 		// 将 RequestID 注入到标准 context 中（供 slog 使用）
-		ctx := context.WithValue(c.Request.Context(), xConsts.ContextRequestKey, requestID)
+		ctx := context.WithValue(c.Request.Context(), xConsts.RequestKey, requestID)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()

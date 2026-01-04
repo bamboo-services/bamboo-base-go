@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	xBase "github.com/bamboo-services/bamboo-base-go"
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/gin-gonic/gin"
@@ -16,7 +16,7 @@ import (
 // 该方法返回一个 Gin 中间件，用于捕获处理过程中发生的 Panic，
 // 并生成统一结构的 JSON 格式错误响应，便于系统监控和问题排查。
 //
-// 中间件会优先从上下文 `consts.ContextErrorCode` 提取错误码信息，
+// 中间件会优先从上下文 `consts.ErrorCodeKey` 提取错误码信息，
 // 若未找到，则返回 `err.ServerInternalError` 为默认错误码。
 //
 // 参数说明: 无。
@@ -28,8 +28,8 @@ import (
 func PanicRecovery() gin.HandlerFunc {
 	return gin.RecoveryWithWriter(io.Discard, func(c *gin.Context, recovered interface{}) {
 		// 捕获 Panic 信息
-		value, exists := c.Get(xConsts.ContextErrorCode.String())
-		getErrMessage, msgExist := c.Get(xConsts.ContextErrorMessage.String())
+		value, exists := c.Get(xConsts.ErrorCodeKey.String())
+		getErrMessage, msgExist := c.Get(xConsts.ErrorMessageKey.String())
 		errorCode := xError.ServerInternalError
 		if exists && value != nil {
 			if ec, ok := value.(*xError.ErrorCode); ok && ec != nil {
@@ -49,7 +49,7 @@ func PanicRecovery() gin.HandlerFunc {
 		)
 
 		c.JSON(int(errorCode.Code/100), xBase.BaseResponse{
-			Context:      c.GetString(xConsts.ContextRequestKey.String()),
+			Context:      c.GetString(xConsts.RequestKey.String()),
 			Output:       errorCode.GetOutput(),
 			Code:         errorCode.Code,
 			Message:      errorCode.Message,

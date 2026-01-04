@@ -39,6 +39,7 @@ const (
 	NamedUTIL = "UTIL" // 工具层日志
 	NamedFILT = "FILT" // 过滤器层日志
 	NamedMIDE = "MIDE" // 中间件层日志
+	NamedVALD = "VALD" // 验证器层日志
 	NamedINIT = "INIT" // 初始化日志
 	NamedTHOW = "THOW" // 抛出错误日志
 	NamedRESU = "RESU" // 响应结果日志

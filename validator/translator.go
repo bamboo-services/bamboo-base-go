@@ -93,6 +93,50 @@ func registerCustomTranslations(validate *validator.Validate) {
 			return t
 		},
 	)
+
+	// 自定义 regexp 的翻译
+	_ = validate.RegisterTranslation("regexp", trans,
+		func(ut ut.Translator) error {
+			return ut.Add("regexp", "{0}格式不正确", true)
+		},
+		func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("regexp", fe.Field())
+			return t
+		},
+	)
+
+	// 自定义 enum_int 的翻译
+	_ = validate.RegisterTranslation("enum_int", trans,
+		func(ut ut.Translator) error {
+			return ut.Add("enum_int", "{0}必须是以下值之一: {1}", true)
+		},
+		func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("enum_int", fe.Field(), fe.Param())
+			return t
+		},
+	)
+
+	// 自定义 enum_string 的翻译
+	_ = validate.RegisterTranslation("enum_string", trans,
+		func(ut ut.Translator) error {
+			return ut.Add("enum_string", "{0}必须是以下值之一: {1}", true)
+		},
+		func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("enum_string", fe.Field(), fe.Param())
+			return t
+		},
+	)
+
+	// 自定义 enum_float 的翻译
+	_ = validate.RegisterTranslation("enum_float", trans,
+		func(ut ut.Translator) error {
+			return ut.Add("enum_float", "{0}必须是以下值之一: {1}", true)
+		},
+		func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("enum_float", fe.Field(), fe.Param())
+			return t
+		},
+	)
 }
 
 // GetTranslator 获取翻译器实例

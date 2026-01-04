@@ -1,7 +1,7 @@
 package xReg
 
 import (
-	xConsts "github.com/bamboo-services/bamboo-base-go/constants"
+	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 	"github.com/gin-gonic/gin"
@@ -32,7 +32,7 @@ func (r *Reg) SystemContextInit() {
 // systemContextHandlerFunc 创建和管理请求的唯一上下文标识符。
 //
 // 该函数为每个 HTTP 请求生成一个唯一的 `RequestID`，随后将该值存储在 Gin 上下文中，
-// 通过 `consts.ContextRequestKey` 进行访问，并设置为响应头的一部分以便于请求溯源。
+// 通过 `consts.RequestKey` 进行访问，并设置为响应头的一部分以便于请求溯源。
 //
 // 在生成和设置 `RequestID` 后，函数将调用 `c.Next()` 放行请求，允许后续中间件或路由处理。
 //
@@ -41,7 +41,7 @@ func (r *Reg) SystemContextInit() {
 //   - 响应头中添加了 `X-Request-ID` 字段以包含该 `RequestID`。
 func (h *handler) systemContextHandlerFunc(c *gin.Context) {
 	// 注入雪花算法节点
-	c.Set(xConsts.ContextSnowflakeNode.String(), xSnowflake.GetDefaultNode())
+	c.Set(xConsts.SnowflakeNodeKey.String(), xSnowflake.GetDefaultNode())
 
 	// 放行内容
 	c.Next()

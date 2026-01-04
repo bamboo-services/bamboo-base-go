@@ -35,11 +35,14 @@ func (r *Reg) EngineInit() {
 		if err := xVaild.RegisterTranslator(v); err != nil {
 			log.Error(r.Context, "翻译器注册失败: "+err.Error())
 		} else {
-			log.Debug(r.Context, "翻译器注册成功")
+			log.Info(r.Context, "翻译器注册成功")
 		}
 
 		// 注册自定义验证器
-		xVaild.RegisterCustomValidators(v)
-		log.Debug(r.Context, "预制内部验证器注册成功")
+		if err := xVaild.RegisterCustomValidators(v); err != nil {
+			log.Error(r.Context, "验证器注册失败: "+err.Error())
+		} else {
+			log.Info(r.Context, "预制内部验证器注册成功")
+		}
 	}
 }

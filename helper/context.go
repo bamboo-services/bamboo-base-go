@@ -22,7 +22,7 @@ func RequestContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一 ID 「用于溯源」
 		requestID := uuid.NewString()
-		c.Writer.Header().Set(http.HeaderRequestUUID.String(), requestID)
+		c.Writer.Header().Set(xHttp.HeaderRequestUUID.String(), requestID)
 
 		c.Set(xConsts.RequestKey.String(), requestID)        // 上下文请求记录
 		c.Set(xConsts.UserStartTimeKey.String(), time.Now()) // 请求开始时间记录

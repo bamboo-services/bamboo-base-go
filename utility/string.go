@@ -1,8 +1,6 @@
 package xUtil
 
 import (
-	"crypto/md5"
-	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -125,18 +123,6 @@ func SnakeToCamel(str string) string {
 	}
 
 	return result.String()
-}
-
-// MD5Hash 计算字符串的 MD5 哈希值。
-//
-// 参数说明:
-//   - str: 要计算哈希的字符串
-//
-// 返回值:
-//   - MD5 哈希值（32位小写十六进制字符串）
-func MD5Hash(str string) string {
-	hash := md5.Sum([]byte(str))
-	return fmt.Sprintf("%x", hash)
 }
 
 // IsValidEmail 检查字符串是否为有效的邮箱地址。

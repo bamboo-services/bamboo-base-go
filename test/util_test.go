@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// Test_GenerateSecurityKet 测试 GenerateSecurityKey 函数的正确性。
+// Test_GenerateSecurityKet 测试 GenerateLongSecurityKey 函数的正确性。
 func Test_GenerateSecurityKet(t *testing.T) {
-	key := xUtil.GenerateSecurityKey()
+	key := xUtil.GenerateLongSecurityKey()
 	t.Logf("生成的安全密钥: %s", key)
 	if len(key) < 10 {
 		t.Errorf("生成的安全密钥长度不足: %d", len(key))

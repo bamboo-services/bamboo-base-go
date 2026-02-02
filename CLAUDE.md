@@ -12,26 +12,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 核心组件
 
-- **初始化系统** (`init/`): 集中式注册系统，负责引导应用程序启动
+- **注册系统** (`register/`): 集中式注册系统，负责引导应用程序启动 (包名: `xReg`)
   - `register.go` 包含主要的 `Register()` 函数，初始化所有组件
   - 处理配置加载、日志器设置、Gin 引擎初始化和系统上下文设置
 
-- **错误处理** (`error/`): 全面的错误管理系统
+- **环境变量管理** (`env/`): 类型安全的环境变量管理系统 (包名: `xEnv`)
+  - `env.go` 定义 `EnvKey` 类型和所有环境变量常量
+  - `utility.go` 提供类型安全的获取函数 (`GetEnvString`、`GetEnvInt`、`GetEnvBool` 等)
+
+- **上下文管理** (`context/`): 上下文键常量定义 (包名: `xCtx`)
+  - `context.go` 定义 `ContextKey` 类型和所有上下文键常量
+
+- **错误处理** (`error/`): 全面的错误管理系统 (包名: `xError`)
   - `ErrorInterface` 定义标准错误接口合约
   - `Error` 结构体实现包含代码、消息和数据的结构化错误
   - `ErrorCode` 提供预定义的错误常量
 
 - **响应系统**: 标准化 API 响应结构
   - `BaseResponse` 在 `base_response.go` 中定义通用响应格式
-  - `result/` 包处理响应格式化
-  - `middleware/response.go` 提供统一响应中间件
+  - `result/` 包处理响应格式化 (包名: `xResult`)
+  - `middleware/response.go` 提供统一响应中间件 (包名: `xMiddle`)
+
+- **路由处理** (`route/`): 路由相关处理器 (包名: `xRoute`)
+  - `no_route.go` 处理未定义路由的 404 响应
+  - `no_method.go` 处理不支持的 HTTP 方法的 405 响应
+
+- **HTTP 常量** (`http/`): HTTP 相关常量定义 (包名: `xHttp`)
+  - `header.go` 定义 HTTP 请求头常量 (`HeaderRequestUUID`、`HeaderAuthorization`)
 
 - **配置管理**: 基于环境变量的配置系统
   - 使用 `godotenv` 加载 `.env` 文件
-  - 配置直接通过 `xLog.GetXxx()` 获取
+  - 配置通过 `xEnv.GetEnvXxx()` 系列函数获取
 
-- **工具库** (`utility/`): 丰富的通用辅助函数和上下文工具
-  - `ctxutil/` 提供与数据库、日志和通用操作相关的上下文工具
+- **工具库** (`utility/`): 丰富的通用辅助函数和上下文工具 (包名: `xUtil`)
+  - `ctxutil/` 提供与数据库、日志和通用操作相关的上下文工具 (包名: `xCtxUtil`)
   - 基础工具：`Ptr()`、`Val()`、`Contains()`、`ToBool()` 等指针和类型转换
   - 字符串处理：命名转换、数据脱敏、格式验证等字符串操作工具
   - 时间处理：格式化、解析、计算等时间操作工具
@@ -85,74 +99,86 @@ go mod download
 ```
 bamboo-base/
 ├── base_response.go          # 标准 API 响应结构
-├── log/                      # slog 自定义 Handler (彩色控制台 + JSON 文件)
-├── constants/               # 应用常量 (上下文键、请求头、日志器名称)
-├── error/                   # 错误处理系统 (接口、错误码、构造函数)
-├── go.mod                   # 模块定义和依赖管理
-├── handler/                 # HTTP 处理器 (当前为空)
+├── context/                 # 上下文键常量定义 (xCtx)
+├── env/                     # 环境变量管理 (xEnv)
+├── error/                   # 错误处理系统 (xError)
+├── go.mod                   # 模块定义和依赖管理 (Go 1.24.6)
 ├── helper/                  # 辅助工具 (恐慌恢复等)
-├── init/                    # 初始化和注册系统
-├── middleware/              # Gin 中间件 (响应处理)
-├── models/                  # 数据模型 (实体基类)
-├── result/                  # 响应结果格式化
-├── snowflake/               # 雪花算法 (标准雪花、基因雪花)
+├── hook/                    # Redis 钩子
+├── http/                    # HTTP 常量定义 (xHttp)
+├── log/                     # slog 自定义 Handler (xLog)
+├── middleware/              # Gin 中间件 (xMiddle)
+├── models/                  # 数据模型 (xModels)
+├── register/                # 注册和初始化系统 (xReg)
+├── result/                  # 响应结果格式化 (xResult)
+├── route/                   # 路由处理 (xRoute)
+├── snowflake/               # 雪花算法 (xSnowflake)
 ├── test/                    # 测试文件
-├── utility/                 # 通用工具和上下文辅助工具
-└── validator/               # 自定义验证逻辑和消息
+├── utility/                 # 通用工具 (xUtil) 和上下文辅助工具 (xCtxUtil)
+└── validator/               # 自定义验证逻辑和消息 (xValidator)
 ```
 
 ### 详细模块说明
 
-- **log/**: slog 自定义 Handler 模块
-  - `handler.go`: 自定义 slog.Handler 实现，支持彩色控制台输出和 JSON 文件记录，自动从 context 提取 trace ID
-
-- **constants/**: 系统常量定义
-  - `context.go`: 上下文键常量 (xConsts:124)
-  - `header.go`: HTTP 请求头常量
-  - `logger.go`: 日志器名称常量
-
-- **error/**: 错误处理核心模块
-  - `error.go`: 错误接口和结构体定义 (xError:72)
-  - `error_code.go`: 预定义错误码常量 (包含 40+ 种错误类型)
-  - `error_new.go`: 错误构造函数
-
-- **init/**: 应用初始化模块
-  - `register.go`: 主注册函数，返回 Reg 结构体 (xInit:50)
-  - `register_config.go`: 配置初始化
+- **register/**: 应用注册初始化模块 (包名: `xReg`)
+  - `register.go`: 主注册函数 `Register()`，返回 `Reg` 结构体
+  - `register_config.go`: 配置初始化 (加载 .env 文件)
   - `register_context.go`: 上下文初始化
   - `register_gin.go`: Gin 引擎初始化
   - `register_logger.go`: 日志器初始化
   - `register_snowflake.go`: 雪花算法初始化
 
-- **models/**: 数据模型模块
-  - `base_entity.go`: GORM 实体基类 (BaseEntity、GeneBaseEntity)
+- **env/**: 环境变量管理模块 (包名: `xEnv`)
+  - `env.go`: 定义 `EnvKey` 类型和所有环境变量常量 (系统、数据库、Redis、雪花算法、日志、第三方服务等)
+  - `utility.go`: 类型安全的获取函数 (`GetEnv`、`GetEnvString`、`GetEnvInt`、`GetEnvBool`、`GetEnvFloat`、`GetEnvInt64`、`GetEnvDuration`)
 
-- **snowflake/**: 雪花算法模块
+- **context/**: 上下文键常量模块 (包名: `xCtx`)
+  - `context.go`: 定义 `ContextKey` 类型和上下文键常量 (`RequestKey`、`ErrorCodeKey`、`DatabaseKey`、`RedisClientKey`、`SnowflakeNodeKey` 等)
+
+- **log/**: slog 自定义 Handler 模块 (包名: `xLog`)
+  - `handler.go`: 自定义 slog.Handler 实现，支持彩色控制台输出和 JSON 文件记录，自动从 context 提取 trace ID
+
+- **http/**: HTTP 常量模块 (包名: `xHttp`)
+  - `header.go`: 定义 `HttpHeader` 类型和 HTTP 请求头常量 (`HeaderRequestUUID`、`HeaderAuthorization`)
+
+- **route/**: 路由处理模块 (包名: `xRoute`)
+  - `no_route.go`: 处理未定义路由的 404 响应
+  - `no_method.go`: 处理不支持的 HTTP 方法的 405 响应
+
+- **error/**: 错误处理核心模块 (包名: `xError`)
+  - `error.go`: 错误接口和结构体定义
+  - `error_code.go`: 预定义错误码常量 (包含 40+ 种错误类型)
+  - `error_new.go`: 错误构造函数
+
+- **models/**: 数据模型模块 (包名: `xModels`)
+  - `base_entity.go`: GORM 实体基类 (`BaseEntity`、`GeneBaseEntity`)
+
+- **snowflake/**: 雪花算法模块 (包名: `xSnowflake`)
   - `snowflake.go`: 标准雪花 ID (41位时间戳 + 5位数据中心 + 5位节点 + 12位序列)
   - `gene.go`: 基因类型定义 (64种业务类型)
   - `gene_snowflake.go`: 基因雪花 ID (41位时间戳 + 6位基因 + 3位数据中心 + 3位节点 + 10位序列)
   - `global.go`: 全局节点管理 (默认节点初始化)
 
-- **middleware/**: 中间件模块
-  - `response.go`: 统一响应中间件，处理错误和成功响应 (xMiddle:64)
+- **middleware/**: 中间件模块 (包名: `xMiddle`)
+  - `response.go`: 统一响应中间件，处理错误和成功响应
 
-- **result/**: 响应处理模块
-  - `result.go`: 提供 Success、SuccessHasData、Error 三种响应方法 (xResult:79)
+- **result/**: 响应处理模块 (包名: `xResult`)
+  - `result.go`: 提供 `Success`、`SuccessHasData`、`Error` 三种响应方法
 
-- **utility/**: 工具库模块
+- **utility/**: 工具库模块 (包名: `xUtil`)
   - `common.go`: 基础工具函数 (`Ptr()`、`Val()`、`Contains()`、`ToBool()`)
   - `string.go`: 字符串处理工具 (命名转换、脱敏、验证等)
   - `time.go`: 时间处理工具 (格式化、解析、计算等)
   - `validate.go`: 数据验证工具 (手机号、身份证、URL 等验证)
   - `password.go`: 密码加密工具 (bcrypt 加密、验证等)
   - `generate.go`: 生成工具函数 (`GenerateSecurityKey()`)
-  - `ctxutil/`: 上下文工具子模块
+  - `ctxutil/`: 上下文工具子模块 (包名: `xCtxUtil`)
     - `common.go`: 上下文通用工具 (调试模式、请求信息等)
     - `database.go`: 数据库上下文工具
     - `nosql.go`: Redis 上下文工具
     - `snowflake.go`: 雪花算法上下文工具
 
-- **validator/**: 验证模块
+- **validator/**: 验证模块 (包名: `xValidator`)
   - `custom.go`: 自定义验证规则（7个验证器：strict_url、strict_uuid、alphanum_underscore、regexp、enum_int、enum_string、enum_float）
   - `messages.go`: 验证错误消息
   - `response.go`: 验证响应处理
@@ -165,12 +191,15 @@ bamboo-base/
   - `validator_alphanum.go`: 字母数字验证器
   - `validator_regexp.go`: 正则表达式验证器
 
+- **hook/**: 钩子模块
+  - Redis 钩子相关功能
+
 ## 使用模式
 
 ### 初始化应用程序
 ```go
 // 创建注册实例并初始化所有组件
-reg := xInit.Register()
+reg := xReg.Register()
 
 // 访问初始化后的组件
 engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
@@ -203,29 +232,41 @@ xResult.Error(ctx, xError.NotFound, "用户不存在", nil)
 
 ### 配置管理
 
-应用程序通过环境变量配置，支持 `.env` 文件加载。直接使用 `xEnv.GetXxx()` 获取配置：
+应用程序通过环境变量配置，支持 `.env` 文件加载。使用 `xEnv` 包的类型安全函数获取配置：
 
 ```go
-import "os"
+import xEnv "github.com/bamboo-services/bamboo-base-go/env"
 
-// 获取配置
-debug := os.Getenv("XLF_DEBUG")
-dbHost := os.Getenv("DATABASE_HOST")
+// 获取配置 (类型安全)
+debug := xEnv.GetEnvBool(xEnv.Debug, false)           // 布尔值
+dbHost := xEnv.GetEnvString(xEnv.DatabaseHost, "localhost") // 字符串
+dbPort := xEnv.GetEnvInt(xEnv.DatabasePort, 3306)    // 整数
+timeout := xEnv.GetEnvDuration(xEnv.SomeTimeout, 30) // 时间
+
+// 检查环境变量是否存在
+if value, exists := xEnv.GetEnv(xEnv.DatabaseHost); exists {
+    // 使用 value
+}
 ```
 
-**常用环境变量：**
-| 环境变量 | 说明 |
-|----------|------|
-| `XLF_DEBUG` | 调试模式 (true/false) |
-| `XLF_HOST` | 监听地址 |
-| `XLF_PORT` | 监听端口 |
-| `DATABASE_HOST` | 数据库主机 |
-| `DATABASE_PORT` | 数据库端口 |
-| `DATABASE_USER` | 数据库用户名 |
-| `DATABASE_PASS` | 数据库密码 |
-| `DATABASE_NAME` | 数据库名称 |
-| `SNOWFLAKE_DATACENTER_ID` | 雪花算法数据中心 ID (0-31) |
-| `SNOWFLAKE_NODE_ID` | 雪花算法节点 ID (0-31) |
+**常用环境变量 (定义在 `xEnv` 包中)：**
+
+| 环境变量常量 | 环境变量名 | 说明 |
+|-------------|-----------|------|
+| `xEnv.Debug` | `XLF_DEBUG` | 调试模式 (true/false) |
+| `xEnv.Host` | `XLF_HOST` | 监听地址 |
+| `xEnv.Port` | `XLF_PORT` | 监听端口 |
+| `xEnv.DatabaseHost` | `DATABASE_HOST` | 数据库主机 |
+| `xEnv.DatabasePort` | `DATABASE_PORT` | 数据库端口 |
+| `xEnv.DatabaseUser` | `DATABASE_USER` | 数据库用户名 |
+| `xEnv.DatabasePass` | `DATABASE_PASS` | 数据库密码 |
+| `xEnv.DatabaseName` | `DATABASE_NAME` | 数据库名称 |
+| `xEnv.NoSqlHost` | `NOSQL_HOST` | Redis 主机地址 |
+| `xEnv.NoSqlPort` | `NOSQL_PORT` | Redis 端口 |
+| `xEnv.NoSqlPass` | `NOSQL_PASS` | Redis 密码 |
+| `xEnv.NoSqlDB` | `NOSQL_DB` | Redis 数据库索引 |
+| `xEnv.SnowflakeDatacenterID` | `SNOWFLAKE_DATACENTER_ID` | 雪花算法数据中心 ID (0-31) |
+| `xEnv.SnowflakeNodeID` | `SNOWFLAKE_NODE_ID` | 雪花算法节点 ID (0-31) |
 
 **使用方式：**
 1. 复制 `.env.example` 为 `.env`
@@ -533,7 +574,21 @@ go test -cover ./...
 3. **配置验证**: 必填配置项缺失时应用会自动 panic，确保启动前所有必填项已设置
 
 ### 代码组织
-1. **包导入约定**: 使用项目统一的包别名 (`xInit`、`xError`、`xResult` 等)
+1. **包导入约定**: 使用项目统一的包别名:
+   - `xReg` - register 包 (注册初始化)
+   - `xEnv` - env 包 (环境变量)
+   - `xCtx` - context 包 (上下文键)
+   - `xError` - error 包 (错误处理)
+   - `xResult` - result 包 (响应处理)
+   - `xMiddle` - middleware 包 (中间件)
+   - `xRoute` - route 包 (路由处理)
+   - `xHttp` - http 包 (HTTP 常量)
+   - `xLog` - log 包 (日志)
+   - `xModels` - models 包 (数据模型)
+   - `xSnowflake` - snowflake 包 (雪花算法)
+   - `xUtil` - utility 包 (工具函数)
+   - `xCtxUtil` - utility/ctxutil 包 (上下文工具)
+   - `xValidator` - validator 包 (验证器)
 2. **上下文传递**: 始终通过 `gin.Context` 传递请求上下文
 3. **工具函数**: 将通用逻辑封装为 `utility` 包中的工具函数
 

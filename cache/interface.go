@@ -2,7 +2,7 @@ package xCache
 
 import "github.com/gin-gonic/gin"
 
-// Cache 定义了基于字符串（String）数据结构的缓存操作接口，用于管理单一键值对数据。
+// KeyCache 定义了基于字符串（String）数据结构的缓存操作接口，用于管理单一键值对数据。
 //
 // 该接口提供了获取、设置和删除缓存项的基本能力，适用于需要快速存取单个对象或配置项的场景。
 //
@@ -14,7 +14,7 @@ import "github.com/gin-gonic/gin"
 // Set 方法将键值对存入缓存，需处理 value 为 nil 的场景。
 // Exists 方法检查指定键是否存在。
 // Delete 方法从缓存中移除指定的键。
-type Cache[K any, V any] interface {
+type KeyCache[K any, V any] interface {
 	Get(ctx *gin.Context, key K) (*V, bool, error)
 	Set(ctx *gin.Context, key K, value *V) error
 	Exists(ctx *gin.Context, key K) (bool, error)

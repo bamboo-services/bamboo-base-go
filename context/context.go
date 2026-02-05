@@ -3,6 +3,8 @@ package xCtx
 type ContextKey string
 
 const (
+	Nil              ContextKey = ""                        // 空值
+	Exec             ContextKey = "special_execution"       // 特殊执行
 	RequestKey       ContextKey = "context_request_key"     // 上下文请求键
 	ErrorCodeKey     ContextKey = "context_error_code"      // 上下文请求错误码
 	ErrorMessageKey  ContextKey = "context_error_message"   // 上下文请求错误描述
@@ -15,4 +17,14 @@ const (
 // String 返回 ContextKey 的字符串表示形式。
 func (s ContextKey) String() string {
 	return string(s)
+}
+
+// IsNil 检查 ContextKey 是否为空值
+func (s ContextKey) IsNil() bool {
+	return s == Nil
+}
+
+// IsExec 检查 ContextKey 是否为特殊执行
+func (s ContextKey) IsExec() bool {
+	return s == Exec
 }

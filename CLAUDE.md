@@ -4,6 +4,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 本文件为 Claude Code (claude.ai/code) 提供在此代码库中工作的指导说明。
 
+## ⚠️ 重要架构变更（v2.0）
+
+从 v2.0 版本开始，bamboo-base 进行了重大架构升级：
+
+### 核心变更
+
+1. **注册系统节点化**
+   - 从固定初始化流程改为可扩展的节点注册系统
+   - 支持依赖注入：每个节点可访问之前初始化的组件
+   - 节点函数签名：`func(ctx context.Context) (any, error)`
+
+2. **上下文管理标准化**
+   - 所有工具函数从 `gin.Context` 迁移到标准 `context.Context`
+   - 实现框架解耦，业务逻辑不再依赖 Gin
+   - 新增 `Must` 和 `Error` 两种版本的访问函数
+
+3. **初始化流程优化**
+   - 配置和日志初始化改为私有方法
+   - 雪花算法等内置组件自动注册
+   - 支持自定义节点动态注册
+
+### 迁移指南
+
+**旧版本 (v1.x)**：
+```go
+reg := xReg.Register()
+db := xCtxUtil.GetDB(ginCtx)
+```
+
+**新版本 (v2.0+)**：
+```go
+reg := xReg.Register(ctx, nodeList)
+db := xCtxUtil.MustGetDB(ginCtx.Request.Context())
+// 或
+db, err := xCtxUtil.GetDB(ginCtx.Request.Context())
+```
+
 ## 项目概述
 
 这是 `bamboo-base-go`，一个为 bamboo 服务提供基础组件的 Go 语言库。它被设计为一个可重用的基础库，用于构建基于 Gin 框架的 Web API，提供标准化的错误处理、日志记录、配置管理和响应格式化功能。
@@ -14,7 +51,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **注册系统** (`register/`): 集中式注册系统，负责引导应用程序启动 (包名: `xReg`)
   - `register.go` 包含主要的 `Register()` 函数，初始化所有组件
+  - `node/node.go` 提供节点化管理系统，支持依赖注入和顺序初始化
+  - `init/` 目录包含内置组件的初始化函数（如雪花算法）
   - 处理配置加载、日志器设置、Gin 引擎初始化和系统上下文设置
+  - **重要特性**：支持自定义节点注册，每个节点可访问之前初始化的组件
 
 - **环境变量管理** (`env/`): 类型安全的环境变量管理系统 (包名: `xEnv`)
   - `env.go` 定义 `EnvKey` 类型和所有环境变量常量
@@ -22,6 +62,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **上下文管理** (`context/`): 上下文键常量定义 (包名: `xCtx`)
   - `context.go` 定义 `ContextKey` 类型和所有上下文键常量
+  - 新增 `Nil` 和 `Exec` 特殊键，用于节点注册系统
+  - 提供 `IsNil()` 和 `IsExec()` 辅助方法
 
 - **错误处理** (`error/`): 全面的错误管理系统 (包名: `xError`)
   - `ErrorInterface` 定义标准错误接口合约
@@ -121,12 +163,13 @@ bamboo-base/
 ### 详细模块说明
 
 - **register/**: 应用注册初始化模块 (包名: `xReg`)
-  - `register.go`: 主注册函数 `Register()`，返回 `Reg` 结构体
-  - `register_config.go`: 配置初始化 (加载 .env 文件)
-  - `register_context.go`: 上下文初始化
-  - `register_gin.go`: Gin 引擎初始化
-  - `register_logger.go`: 日志器初始化
-  - `register_snowflake.go`: 雪花算法初始化
+  - `register.go`: 主注册函数 `Register(ctx, nodeList)`，返回 `Reg` 结构体
+  - `node/node.go`: 节点管理系统，提供 `RegNode` 类型和 `Use()`、`Exec()` 方法
+  - `init/init_snowflake.go`: 雪花算法初始化节点
+  - `register_config.go`: 配置初始化（私有方法）
+  - `register_gin.go`: Gin 引擎初始化（私有方法），包含上下文注入中间件
+  - `register_logger.go`: 日志器初始化（私有方法）
+  - **核心特性**: 节点化管理、依赖注入、顺序执行、错误传播
 
 - **env/**: 环境变量管理模块 (包名: `xEnv`)
   - `env.go`: 定义 `EnvKey` 类型和所有环境变量常量 (系统、数据库、Redis、雪花算法、日志、第三方服务等)
@@ -196,10 +239,103 @@ bamboo-base/
 
 ## 使用模式
 
+### 节点注册系统（重要！）
+
+bamboo-base 采用节点化的初始化系统，支持依赖注入和顺序执行。每个节点都是一个初始化函数，可以访问之前已初始化的组件。
+
+#### 节点函数签名
+
+```go
+type Node func(ctx context.Context) (any, error)
+```
+
+**参数说明**：
+- `ctx`: 包含已注册依赖的上下文，可通过 `ctx.Value(key)` 获取其他组件实例
+- 返回值：初始化成功的组件实例和可能的错误
+
+#### 注册流程
+
+```go
+// 1. 创建上下文
+ctx := context.Background()
+
+// 2. 注册自定义节点
+nodeList := []xRegNode.RegNodeList{
+    // 数据库初始化节点
+    {
+        Key: xCtx.DatabaseKey,
+        Node: func(ctx context.Context) (any, error) {
+            // 可以从 ctx 获取配置等已初始化的组件
+            dsn := "user:pass@tcp(127.0.0.1:3306)/dbname"
+            db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+            if err != nil {
+                return nil, err
+            }
+            return db, nil
+        },
+    },
+    // Redis 初始化节点
+    {
+        Key: xCtx.RedisClientKey,
+        Node: func(ctx context.Context) (any, error) {
+            rdb := redis.NewClient(&redis.Options{
+                Addr: "localhost:6379",
+            })
+            return rdb, nil
+        },
+    },
+}
+
+// 3. 执行注册
+reg := xReg.Register(ctx, nodeList)
+
+// 4. 使用初始化后的组件
+engine := reg.Serve
+engine.Run(":8080")
+```
+
+#### 内置节点
+
+系统自动注册以下内置节点：
+- **雪花算法节点** (`xCtx.SnowflakeNodeKey`): 自动初始化，无需手动注册
+
+#### 节点执行顺序
+
+节点按注册顺序依次执行：
+1. 配置加载 (自动)
+2. 日志器初始化 (自动)
+3. 雪花算法初始化 (自动)
+4. 用户自定义节点 (按 nodeList 顺序)
+5. Gin 引擎初始化 (自动)
+
+**重要**：后注册的节点可以通过 `ctx.Value()` 访问先注册节点的实例。
+
+#### 特殊执行节点
+
+如果需要执行某些逻辑但不需要将结果存入上下文，可以使用 `xCtx.Exec` 键：
+
+```go
+{
+    Key: xCtx.Exec,
+    Node: func(ctx context.Context) (any, error) {
+        // 执行一些初始化逻辑，但不存储结果
+        log.Println("执行特殊初始化...")
+        return nil, nil
+    },
+}
+```
+
 ### 初始化应用程序
 ```go
 // 创建注册实例并初始化所有组件
-reg := xReg.Register()
+ctx := context.Background()
+reg := xReg.Register(ctx, nil)  // nil 表示不注册额外的自定义节点
+
+// 或者注册自定义节点
+reg := xReg.Register(ctx, []xRegNode.RegNodeList{
+    {Key: xCtx.DatabaseKey, Node: myDatabaseInit},
+    {Key: xCtx.RedisClientKey, Node: myRedisInit},
+})
 
 // 访问初始化后的组件
 engine := reg.Serve      // *gin.Engine - HTTP 服务引擎
@@ -279,26 +415,119 @@ engine.Use(xMiddle.ResponseMiddleware)
 ```
 
 ### 上下文工具使用
+
+**重要变化**：从 v2.0 开始，所有上下文工具函数从 `gin.Context` 迁移到标准 `context.Context`，实现框架解耦。
+
+#### 基础工具
+
 ```go
-// 检查是否为调试模式
-if xCtxUtil.IsDebugMode(ctx) {
+// 检查是否为调试模式（无需上下文）
+if xCtxUtil.IsDebugMode() {
     // 调试逻辑
 }
 
 // 计算请求处理时间
+// 注意：gin.Context 实现了 context.Context 接口，可以直接传入
 overhead := xCtxUtil.CalcOverheadTime(ctx)
-
-// 获取系统组件
-db := xCtxUtil.GetDB(ctx)       // 数据库连接
-rdb := xCtxUtil.GetRDB(ctx)     // Redis 客户端
+overhead := xCtxUtil.CalcOverheadTime(ginCtx.Request.Context())  // 从 gin.Context 获取
 
 // 获取请求信息
 requestKey := xCtxUtil.GetRequestKey(ctx)
-errorCode := xCtxUtil.GetErrorCode(ctx)
+errorMsg := xCtxUtil.GetErrorMessage(ctx)
+```
 
-// 获取雪花算法节点
+#### 数据库访问（Must vs Error 版本）
+
+系统提供两种版本的数据库访问函数：
+
+```go
+// Must 版本：失败时 panic（适合启动阶段或必须成功的场景）
+db := xCtxUtil.MustGetDB(ctx)
+db.Create(&user)
+
+// Error 版本：返回错误（适合运行时或可容错的场景）
+db, err := xCtxUtil.GetDB(ctx)
+if err != nil {
+    return err
+}
+db.Create(&user)
+```
+
+**在 Gin Handler 中使用**：
+
+```go
+func CreateUser(c *gin.Context) {
+    // 方式 1: 使用 Must 版本（推荐，简洁）
+    db := xCtxUtil.MustGetDB(c.Request.Context())
+
+    // 方式 2: 使用 Error 版本（更安全）
+    db, err := xCtxUtil.GetDB(c.Request.Context())
+    if err != nil {
+        xResult.Error(c, err.ErrorCode, err.ErrorMessage, nil)
+        return
+    }
+
+    // 使用数据库
+    db.Create(&user)
+}
+```
+
+#### Redis 访问
+
+```go
+// Must 版本
+rdb := xCtxUtil.MustGetRDB(ctx)
+rdb.Set(ctx, "key", "value", 0)
+
+// Error 版本
+rdb, err := xCtxUtil.GetRDB(ctx)
+if err != nil {
+    return err
+}
+rdb.Set(ctx, "key", "value", 0)
+```
+
+#### 雪花 ID 生成
+
+```go
+// 获取雪花算法节点（自动回退到默认节点）
 snowflakeNode := xCtxUtil.GetSnowflakeNode(ctx)
-geneNode := xCtxUtil.GetGeneSnowflakeNode(ctx)
+
+// 生成标准雪花 ID
+id := xCtxUtil.MustGenerateSnowflakeID(ctx)           // panic 版本
+id, err := xCtxUtil.GenerateSnowflakeID(ctx)          // error 版本
+
+// 生成带基因的雪花 ID
+geneID := xCtxUtil.MustGenerateGeneSnowflakeID(ctx, xSnowflake.GeneOrder)  // panic 版本
+geneID, err := xCtxUtil.GenerateGeneSnowflakeID(ctx, xSnowflake.GeneOrder) // error 版本
+```
+
+#### 上下文传递最佳实践
+
+```go
+// ✅ 推荐：在 Gin Handler 中使用 Request.Context()
+func MyHandler(c *gin.Context) {
+    ctx := c.Request.Context()  // 获取标准 context.Context
+
+    // 使用上下文工具
+    db := xCtxUtil.MustGetDB(ctx)
+    id := xCtxUtil.MustGenerateSnowflakeID(ctx)
+
+    // 传递给业务逻辑
+    result, err := myService.DoSomething(ctx, id)
+}
+
+// ✅ 推荐：业务逻辑使用标准 context.Context
+func (s *MyService) DoSomething(ctx context.Context, id int64) error {
+    db := xCtxUtil.MustGetDB(ctx)
+    rdb := xCtxUtil.MustGetRDB(ctx)
+    // ... 业务逻辑
+}
+
+// ❌ 不推荐：直接传递 gin.Context 到业务层
+func (s *MyService) DoSomething(c *gin.Context, id int64) error {
+    // 业务层不应依赖 Gin 框架
+}
 ```
 
 ### 日志记录 (slog)
@@ -552,6 +781,18 @@ go test -cover ./...
 
 ## 最佳实践
 
+### 节点注册
+1. **按依赖顺序注册**: 被依赖的组件先注册（如：配置 → 日志 → 数据库 → 业务服务）
+2. **错误处理**: 节点函数返回 error 时会导致整个初始化流程中断并 panic
+3. **避免重复注册**: 相同的 ContextKey 不能注册多次
+4. **使用 Exec 键**: 对于不需要存储结果的初始化逻辑，使用 `xCtx.Exec` 键
+
+### 上下文传递
+1. **框架解耦**: 业务逻辑层使用 `context.Context` 而非 `gin.Context`
+2. **从 Gin 获取**: 在 Handler 中使用 `c.Request.Context()` 获取标准上下文
+3. **Must vs Error**: 启动阶段用 Must 版本，运行时用 Error 版本
+4. **上下文注入**: 系统自动将初始化上下文注入到每个 HTTP 请求中
+
 ### 错误处理
 1. **使用预定义错误码**: 优先使用 `error/error_code.go` 中的预定义错误码
 2. **结构化错误**: 通过 `xError.New()` 创建包含上下文信息的结构化错误
@@ -573,6 +814,12 @@ go test -cover ./...
 2. **敏感信息**: 使用环境变量保护敏感配置，不要将 `.env` 文件提交到版本控制
 3. **配置验证**: 必填配置项缺失时应用会自动 panic，确保启动前所有必填项已设置
 
+### 上下文注入机制
+1. **自动注入**: 系统通过 `injectContext` 中间件自动将初始化上下文注入到每个 HTTP 请求
+2. **访问方式**: 在 Handler 中使用 `c.Request.Context()` 获取包含所有初始化组件的上下文
+3. **生命周期**: 初始化上下文在应用启动时创建，在每个请求中可用
+4. **组件访问**: 通过 `xCtxUtil` 工具函数访问数据库、Redis、雪花节点等组件
+
 ### 代码组织
 1. **包导入约定**: 使用项目统一的包别名:
    - `xReg` - register 包 (注册初始化)
@@ -593,6 +840,44 @@ go test -cover ./...
 3. **工具函数**: 将通用逻辑封装为 `utility` 包中的工具函数
 
 ## 扩展指南
+
+### 添加自定义初始化节点
+
+创建自定义节点来初始化数据库、Redis、消息队列等组件：
+
+```go
+// 1. 定义初始化函数
+func InitDatabase(ctx context.Context) (any, error) {
+    // 可以从 ctx 获取其他已初始化的组件
+    log := ctx.Value(xCtx.LoggerKey).(*slog.Logger)
+
+    // 初始化数据库
+    dsn := xEnv.GetEnvString(xEnv.DatabaseHost, "localhost")
+    db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+        Logger: xLog.NewGormLogger(log),
+    })
+    if err != nil {
+        return nil, fmt.Errorf("数据库连接失败: %w", err)
+    }
+
+    log.Info("数据库初始化成功")
+    return db, nil
+}
+
+// 2. 注册节点
+nodeList := []xRegNode.RegNodeList{
+    {Key: xCtx.DatabaseKey, Node: InitDatabase},
+}
+
+// 3. 执行注册
+reg := xReg.Register(ctx, nodeList)
+```
+
+**节点开发建议**：
+1. 使用环境变量配置，通过 `xEnv.GetEnvXxx()` 获取
+2. 返回明确的错误信息，便于调试
+3. 记录初始化日志，方便追踪
+4. 考虑依赖关系，确保依赖的组件已初始化
 
 ### 添加新的错误码
 1. 在 `error/error_code.go` 中定义新的错误常量

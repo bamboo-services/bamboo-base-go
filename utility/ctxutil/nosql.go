@@ -1,21 +1,54 @@
 package xCtxUtil
 
 import (
-	"log/slog"
+	"context"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/context"
-	"github.com/gin-gonic/gin"
+	xError "github.com/bamboo-services/bamboo-base-go/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/redis/go-redis/v9"
 )
 
-// GetRDB 从 gin.Context 中获取 Redis 客户端实例。
+// MustGetRDB 从上下文中获取 Redis 客户端实例（panic 版本）。
+//
 // 如果上下文中未找到 Redis 客户端，则记录错误日志并触发 panic。
-// 返回值为 *redis.Client 类型，获取成功时返回对应的 Redis 客户端。
-func GetRDB(c *gin.Context) *redis.Client {
-	value, exists := c.Get(xConsts.RedisClientKey.String())
-	if exists {
-		return value.(*redis.Client)
+//
+// 参数说明:
+//   - ctx: context.Context 上下文
+//
+// 返回值:
+//   - *redis.Client: Redis 客户端实例
+func MustGetRDB(ctx context.Context) *redis.Client {
+	value := ctx.Value(xConsts.RedisClientKey)
+	if value != nil {
+		if rdb, ok := value.(*redis.Client); ok {
+			return rdb
+		}
 	}
-	slog.ErrorContext(c.Request.Context(), "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
+	xLog.Error(ctx, "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
 	panic("在上下文中找不到 Redis 客户端，真的注入成功了吗？")
+}
+
+// GetRDB 从上下文中获取 Redis 客户端实例（错误返回版本）。
+//
+// 如果上下文中未找到 Redis 客户端，则返回错误而不是 panic。
+//
+// 参数说明:
+//   - ctx: context.Context 上下文
+//
+// 返回值:
+//   - *redis.Client: Redis 客户端实例
+//   - *xError.Error: 错误信息，成功时为 nil
+func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
+	value := ctx.Value(xConsts.RedisClientKey)
+	if value != nil {
+		if rdb, ok := value.(*redis.Client); ok {
+			return rdb, nil
+		}
+	}
+	xLog.Error(ctx, "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
+	return nil, &xError.Error{
+		ErrorCode:    xError.CacheError,
+		ErrorMessage: "在上下文中找不到 Redis 客户端",
+	}
 }

@@ -1,11 +1,11 @@
 package xCtxUtil
 
 import (
+	"context"
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/context"
 	"github.com/bamboo-services/bamboo-base-go/env"
-	"github.com/gin-gonic/gin"
 )
 
 // IsDebugMode 判断当前是否处于调试模式。
@@ -24,13 +24,16 @@ func IsDebugMode() bool {
 // 该函数检查请求是否处于调试模式，如果是，则计算从 `UserStartTimeKey` 到当前时间的耗时。
 // 非调试模式下，始终返回 0。
 //
-// 参数 c 表示当前的 `gin.Context`，用于访问请求上下文数据。
+// 参数 ctx 表示当前的 `context.Context`，用于访问请求上下文数据。
 //
 // 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
-func CalcOverheadTime(c *gin.Context) int64 {
+func CalcOverheadTime(ctx context.Context) int64 {
 	if IsDebugMode() {
-		startTime := c.GetTime(xConsts.UserStartTimeKey.String())
-		return time.Now().Sub(startTime).Microseconds()
+		if startTimeValue := ctx.Value(xConsts.UserStartTimeKey); startTimeValue != nil {
+			if startTime, ok := startTimeValue.(time.Time); ok {
+				return time.Since(startTime).Microseconds()
+			}
+		}
 	}
 	return 0
 }
@@ -40,12 +43,17 @@ func CalcOverheadTime(c *gin.Context) int64 {
 // 该函数获取当前请求的唯一标识，如果不存在则返回空字符串。
 //
 // 参数说明:
-//   - c: `*gin.Context` 上下文对象
+//   - ctx: `context.Context` 上下文对象
 //
 // 返回值:
 //   - 请求唯一标识字符串
-func GetRequestKey(c *gin.Context) string {
-	return c.GetString(xConsts.RequestKey.String())
+func GetRequestKey(ctx context.Context) string {
+	if value := ctx.Value(xConsts.RequestKey); value != nil {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
 }
 
 // GetErrorMessage 从上下文中获取错误消息。
@@ -53,10 +61,15 @@ func GetRequestKey(c *gin.Context) string {
 // 该函数获取当前请求的错误消息，如果不存在则返回空字符串。
 //
 // 参数说明:
-//   - c: `*gin.Context` 上下文对象
+//   - ctx: `context.Context` 上下文对象
 //
 // 返回值:
 //   - 错误消息字符串
-func GetErrorMessage(c *gin.Context) string {
-	return c.GetString(xConsts.ErrorMessageKey.String())
+func GetErrorMessage(ctx context.Context) string {
+	if value := ctx.Value(xConsts.ErrorMessageKey); value != nil {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
 }

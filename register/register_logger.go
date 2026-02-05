@@ -1,25 +1,19 @@
 package xReg
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 )
 
-// LoggerInit 初始化日志记录器。
+// loggerInit 初始化并设置全局日志记录器。
 //
-// 该方法配置并初始化全局日志记录器，通过 slog.Default() 访问。
-// 它将 JSON 格式的日志输出到文件，同时将自定义格式的彩色日志输出到控制台。
-//
-// 日志格式:
-//   - 文件: JSON 格式，Info 级别及以上，支持自动切割和归档。
-//   - 控制台: <时间戳> [<日志等级>] [<trace>] [<日志类型>] <输出内容>，带颜色。
-//
-// 日志切割:
-//   - 按大小切割: 单文件超过 10MB 自动切割为 log.0.log, log.1.log ...
-//   - 按时间归档: 每天 00:00:05 将前一天日志打包为 logger-yyyy-MM-dd.tar.gz
-func (r *Reg) LoggerInit() {
+// 该方法根据当前运行模式（调试/发布）配置日志级别，并创建一个支持控制台输出与文件切割归档的日志记录器。
+// 文件日志按日期归档，单个文件大小限制为 10MB。初始化失败会触发 panic。
+func (r *Reg) loggerInit() {
 	// 创建日志切割写入器
 	rotator, err := xLog.NewRotatingWriter(xLog.RotatorConfig{
 		Dir:      ".logs",
@@ -28,12 +22,12 @@ func (r *Reg) LoggerInit() {
 		MaxSize:  10 * 1024 * 1024, // 10MB
 	})
 	if err != nil {
-		panic("[INIT] 日志切割器创建失败: " + err.Error())
+		panic(fmt.Sprintf("日志写入器创建失败: %v", err))
 	}
 
 	// 确定日志级别
 	logLevel := slog.LevelInfo
-	debugMode := isDebugMode()
+	debugMode := xCtxUtil.IsDebugMode()
 	if debugMode {
 		logLevel = slog.LevelDebug
 	}

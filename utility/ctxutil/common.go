@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/context"
 	"github.com/bamboo-services/bamboo-base-go/env"
 )
 
@@ -29,7 +29,7 @@ func IsDebugMode() bool {
 // 返回值为耗时的整数值（单位：微秒），当未启用调试模式时返回 0。
 func CalcOverheadTime(ctx context.Context) int64 {
 	if IsDebugMode() {
-		if startTimeValue := ctx.Value(xConsts.UserStartTimeKey); startTimeValue != nil {
+		if startTimeValue := ctx.Value(xCtx.UserStartTimeKey); startTimeValue != nil {
 			if startTime, ok := startTimeValue.(time.Time); ok {
 				return time.Since(startTime).Microseconds()
 			}
@@ -48,7 +48,7 @@ func CalcOverheadTime(ctx context.Context) int64 {
 // 返回值:
 //   - 请求唯一标识字符串
 func GetRequestKey(ctx context.Context) string {
-	if value := ctx.Value(xConsts.RequestKey); value != nil {
+	if value := ctx.Value(xCtx.RequestKey); value != nil {
 		if str, ok := value.(string); ok {
 			return str
 		}
@@ -66,7 +66,7 @@ func GetRequestKey(ctx context.Context) string {
 // 返回值:
 //   - 错误消息字符串
 func GetErrorMessage(ctx context.Context) string {
-	if value := ctx.Value(xConsts.ErrorMessageKey); value != nil {
+	if value := ctx.Value(xCtx.ErrorMessageKey); value != nil {
 		if str, ok := value.(string); ok {
 			return str
 		}

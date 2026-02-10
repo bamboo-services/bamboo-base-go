@@ -1,8 +1,6 @@
 package xReg
 
 import (
-	"context"
-
 	xHelper "github.com/bamboo-services/bamboo-base-go/helper"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
@@ -48,17 +46,6 @@ func (r *Reg) engineInit() {
 		engine.Use(xHelper.RequestContext())
 		engine.Use(xHelper.PanicRecovery())
 		engine.Use(xHelper.HttpLogger())
-		engine.Use(injectContext(r.Init.Ctx))
+		engine.Use(r.Init.InjectContext())
 	})
-}
-
-// injectContext 返回一个 Gin 中间件，用于将外部上下文注入到请求的上下文中。
-//
-// 该中间件将传入的 context.Context 设置为请求的上下文，确保在后续的处理流程中，
-// 可以访问该上下文中携带的值（如初始化配置、请求追踪信息等）。调用 c.Next() 继续执行后续中间件。
-func injectContext(ctx context.Context) func(c *gin.Context) {
-	return func(c *gin.Context) {
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
 }

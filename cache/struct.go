@@ -3,6 +3,7 @@ package xCache
 import (
 	"time"
 
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -12,4 +13,5 @@ import (
 type Cache struct {
 	RDB *redis.Client
 	TTL time.Duration
+	Log *xLog.LogNamedLogger
 }

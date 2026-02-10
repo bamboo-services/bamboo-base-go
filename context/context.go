@@ -5,6 +5,7 @@ type ContextKey string
 const (
 	Nil              ContextKey = ""                        // 空值
 	Exec             ContextKey = "special_execution"       // 特殊执行
+	RegNodeKey       ContextKey = "context_reg_node"        // 上下文注册节点
 	RequestKey       ContextKey = "context_request_key"     // 上下文请求键
 	ErrorCodeKey     ContextKey = "context_error_code"      // 上下文请求错误码
 	ErrorMessageKey  ContextKey = "context_error_message"   // 上下文请求错误描述

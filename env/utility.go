@@ -3,8 +3,9 @@ package xEnv
 import (
 	"os"
 	"strconv"
-	"strings"
 	"time"
+
+	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
 )
 
 // GetEnv 获取环境变量值。
@@ -17,6 +18,14 @@ import (
 //   - exists: 是否存在该环境变量
 func GetEnv(key EnvKey) (value string, exists bool) {
 	return os.LookupEnv(key.String())
+}
+
+// SetEnv 设置环境变量的值。
+//
+// 参数 key 为环境变量的键，参数 value 为对应的值。
+// 返回设置操作过程中遇到的错误。
+func SetEnv(key EnvKey, value string) error {
+	return os.Setenv(key.String(), value)
 }
 
 // GetEnvString 获取环境变量值，如果不存在则返回默认值。
@@ -64,12 +73,8 @@ func GetEnvInt(key EnvKey, defaultValue int) int {
 //   - 环境变量的布尔值，或默认值
 func GetEnvBool(key EnvKey, defaultValue bool) bool {
 	if value, exists := os.LookupEnv(key.String()); exists {
-		lower := strings.ToLower(value)
-		switch lower {
-		case "true", "1", "yes", "on":
-			return true
-		case "false", "0", "no", "off":
-			return false
+		if boolVal, ok := xUtil.Parse().Bool(value); ok {
+			return boolVal
 		}
 	}
 	return defaultValue

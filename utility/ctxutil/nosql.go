@@ -3,9 +3,10 @@ package xCtxUtil
 import (
 	"context"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/context"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,13 +20,26 @@ import (
 // 返回值:
 //   - *redis.Client: Redis 客户端实例
 func MustGetRDB(ctx context.Context) *redis.Client {
-	value := ctx.Value(xConsts.RedisClientKey)
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		ctx = ginCtx.Request.Context()
+	}
+	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
+				if rdb, ok := component.(*redis.Client); ok {
+					return rdb
+				}
+			}
+		}
+	}
+
+	value := ctx.Value(xCtx.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb
 		}
 	}
-	xLog.Error(ctx, "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
+	xLog.WithName(xLog.NamedUTIL).Error(ctx, "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
 	panic("在上下文中找不到 Redis 客户端，真的注入成功了吗？")
 }
 
@@ -40,13 +54,25 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 //   - *redis.Client: Redis 客户端实例
 //   - *xError.Error: 错误信息，成功时为 nil
 func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
-	value := ctx.Value(xConsts.RedisClientKey)
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		ctx = ginCtx.Request.Context()
+	}
+	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
+				if rdb, ok := component.(*redis.Client); ok {
+					return rdb, nil
+				}
+			}
+		}
+	}
+
+	value := ctx.Value(xCtx.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb, nil
 		}
 	}
-	xLog.Error(ctx, "在上下文中找不到 Redis 客户端，真的注入成功了吗？")
 	return nil, &xError.Error{
 		ErrorCode:    xError.CacheError,
 		ErrorMessage: "在上下文中找不到 Redis 客户端",

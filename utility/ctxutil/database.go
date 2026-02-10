@@ -3,9 +3,10 @@ package xCtxUtil
 import (
 	"context"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/context"
 	xError "github.com/bamboo-services/bamboo-base-go/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -23,13 +24,24 @@ import (
 // 返回值:
 //   - *gorm.DB: 数据库连接实例
 func MustGetDB(ctx context.Context) *gorm.DB {
-	value := ctx.Value(xConsts.DatabaseKey)
-	if value != nil {
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		ctx = ginCtx.Request.Context()
+	}
+	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
+				if db, ok := component.(*gorm.DB); ok {
+					return db.WithContext(ctx)
+				}
+			}
+		}
+	}
+	if value := ctx.Value(xCtx.DatabaseKey); value != nil {
 		if db, ok := value.(*gorm.DB); ok {
 			return db.WithContext(ctx)
 		}
 	}
-	xLog.Error(ctx, "在上下文中找不到数据库，真的注入成功了吗？")
+	xLog.WithName(xLog.NamedUTIL).Error(ctx, "在上下文中找不到数据库，真的注入成功了吗？")
 	panic("在上下文中找不到数据库，真的注入成功了吗？")
 }
 
@@ -45,13 +57,25 @@ func MustGetDB(ctx context.Context) *gorm.DB {
 //   - *gorm.DB: 数据库连接实例
 //   - *xError.Error: 错误信息，成功时为 nil
 func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
-	value := ctx.Value(xConsts.DatabaseKey)
+	if ginCtx, ok := ctx.(*gin.Context); ok {
+		ctx = ginCtx.Request.Context()
+	}
+	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
+				if db, ok := component.(*gorm.DB); ok {
+					return db.WithContext(ctx), nil
+				}
+			}
+		}
+	}
+
+	value := ctx.Value(xCtx.DatabaseKey)
 	if value != nil {
 		if db, ok := value.(*gorm.DB); ok {
 			return db.WithContext(ctx), nil
 		}
 	}
-	xLog.Error(ctx, "在上下文中找不到数据库，真的注入成功了吗？")
 	return nil, &xError.Error{
 		ErrorCode:    xError.DatabaseError,
 		ErrorMessage: "在上下文中找不到数据库",

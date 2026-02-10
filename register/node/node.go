@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/context"
+	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	"github.com/gin-gonic/gin"
 )
 
 // Node 定义了组件初始化函数的签名。
@@ -22,14 +24,15 @@ type Node func(ctx context.Context) (any, error)
 
 // RegNodeList 存储组件的上下文键及其初始化函数。
 type RegNodeList struct {
-	Key  xConsts.ContextKey
+	Key  xCtx.ContextKey
 	Node Node
 }
 
 // RegNode 是应用程序组件注册和初始化的管理器。
 type RegNode struct {
-	list []RegNodeList
-	Ctx  context.Context
+	list  []RegNodeList
+	value xCtx.ContextNodeList
+	Ctx   context.Context
 }
 
 // NewRegNode 创建并初始化 RegNode 实例。
@@ -44,8 +47,9 @@ func NewRegNode(ctx context.Context) *RegNode {
 		ctx = context.Background()
 	}
 	regNode := &RegNode{
-		list: make([]RegNodeList, 0),
-		Ctx:  ctx,
+		list:  make([]RegNodeList, 0),
+		value: xCtx.NewCtxNodeList(),
+		Ctx:   ctx,
 	}
 	return regNode
 }
@@ -71,18 +75,18 @@ func NewRegNode(ctx context.Context) *RegNode {
 //
 // 使用示例:
 //
-//	rn.Use(xConsts.ConfigKey, func(ctx context.Context) (any, error) {
+//	rn.Use(xCtx.ConfigKey, func(ctx context.Context) (any, error) {
 //	    return loadConfig(), nil
 //	})
-//	rn.Use(xConsts.DatabaseKey, func(ctx context.Context) (any, error) {
-//	    cfg := ctx.Value(xConsts.ConfigKey).(Config)
+//	rn.Use(xCtx.DatabaseKey, func(ctx context.Context) (any, error) {
+//	    cfg := ctx.Value(xCtx.ConfigKey).(Config)
 //	    return connectDB(cfg.DSN), nil
 //	})
-func (rn *RegNode) Use(ctxKey xConsts.ContextKey, registerFunc Node) {
+func (rn *RegNode) Use(ctxKey xCtx.ContextKey, registerFunc Node) {
 	if rn.list == nil {
 		panic("初始化外部禁止二次初始化")
 	}
-	if ctxKey != xConsts.Exec {
+	if ctxKey != xCtx.Exec {
 		if ctxKey.IsNil() {
 			return
 		}
@@ -122,20 +126,39 @@ func (rn *RegNode) Use(ctxKey xConsts.ContextKey, registerFunc Node) {
 // 使用示例:
 //
 //	rn := NewRegNode()
-//	rn.Use(xConsts.ConfigKey, loadConfigFunc)
-//	rn.Use(xConsts.LoggerKey, initLoggerFunc)
+//	rn.Use(xCtx.ConfigKey, loadConfigFunc)
+//	rn.Use(xCtx.LoggerKey, initLoggerFunc)
 //	rn.Exec() // 按顺序执行所有初始化函数
 //	// 此时 rn.Ctx 包含所有已初始化的组件
 func (rn *RegNode) Exec() {
+	log := xLog.WithName(xLog.NamedINIT)
+	log.Info(rn.Ctx, "========== 初始化开始 ==========")
 	for i, node := range rn.list {
 		val, err := node.Node(rn.Ctx)
 		if !node.Key.IsExec() {
 			if err != nil {
 				panic(fmt.Sprintf("执行注册节点失败: index=%d Key=%v err=%v", i, node.Key, err))
 			}
+			rn.value.Append(node.Key, val)
 			rn.Ctx = context.WithValue(rn.Ctx, node.Key, val)
 		}
 	}
-	// 释放空间
+	log.Info(rn.Ctx, "========== 初始化完成 ==========")
+
 	rn.list = nil
+	log.Debug(rn.Ctx, "初始化剩余项处理完毕")
+}
+
+// InjectContext 返回一个 Gin 中间件，用于将外部上下文注入到请求的上下文中。
+//
+// 该中间件将传入的 context.Context 设置为请求的上下文，确保在后续的处理流程中，
+// 可以访问该上下文中携带的值（如初始化配置、请求追踪信息等）。调用 c.Next() 继续执行后续中间件。
+func (rn *RegNode) InjectContext() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		httpCtx := c.Request.Context()
+		httpCtx = context.WithValue(httpCtx, xCtx.RegNodeKey, rn.value)
+
+		c.Request = c.Request.WithContext(httpCtx)
+		c.Next()
+	}
 }

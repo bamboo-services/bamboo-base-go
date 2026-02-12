@@ -26,13 +26,13 @@ func GetAuthorization(ctx *gin.Context) (string, error) {
 
 // GetToken 从 gin.Context 中获取指定类型的 Token 字符串。
 //
-// 如果 tokenType 不是 HeaderAccessToken 或 HeaderRefreshToken，则默认使用 HeaderAccessToken。
+// 如果 tokenType 不是 HeaderAuthorization 或 HeaderRefreshToken，则默认使用 HeaderAuthorization。
 // 如果请求头值包含 "Bearer " 前缀，会自动去除该前缀。
 func GetToken(ctx *gin.Context, tokenType Header) string {
 	switch tokenType {
-	case HeaderAccessToken, HeaderRefreshToken:
+	case HeaderAuthorization, HeaderRefreshToken:
 	default:
-		tokenType = HeaderAccessToken
+		tokenType = HeaderAuthorization
 	}
 	getToken := ctx.GetHeader(tokenType.String())
 	if strings.HasPrefix(getToken, "Bearer ") {

@@ -187,8 +187,29 @@ func (h *LogHandler) writeConsole(r slog.Record, contextUuid string) {
 		buf.WriteString(h.colorName(h.group))
 	}
 
+	// Option 名称
+	optionNames := make([]string, 0)
+	for _, attr := range h.attrs {
+		if !strings.HasPrefix(attr.Key, "option_name_") {
+			continue
+		}
+		if attr.Value.Kind() == slog.KindString {
+			optionNames = append(optionNames, attr.Value.String())
+			continue
+		}
+		if value, ok := attr.Value.Any().(string); ok {
+			optionNames = append(optionNames, value)
+		}
+	}
+	for _, option := range optionNames {
+		buf.WriteString(" \033[96m[")
+		buf.WriteString(option)
+		buf.WriteString("]\033[0m")
+		buf.WriteString("\t")
+	}
+
 	// 消息
-	buf.WriteString(" ")
+	buf.WriteString(" >> ")
 	buf.WriteString(r.Message)
 
 	// 收集所有属性
@@ -196,6 +217,9 @@ func (h *LogHandler) writeConsole(r slog.Record, contextUuid string) {
 
 	// 额外属性（棕色，换行显示）
 	r.Attrs(func(a slog.Attr) bool {
+		if strings.HasPrefix(a.Key, "option_name_") {
+			return true
+		}
 		if !hasAttrs {
 			hasAttrs = true
 		}
@@ -209,6 +233,9 @@ func (h *LogHandler) writeConsole(r slog.Record, contextUuid string) {
 
 	// 预设属性（棕色，换行显示）
 	for _, a := range h.attrs {
+		if strings.HasPrefix(a.Key, "option_name_") {
+			continue
+		}
 		if !hasAttrs {
 			hasAttrs = true
 		}

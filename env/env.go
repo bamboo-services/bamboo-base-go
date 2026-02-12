@@ -35,7 +35,7 @@ const (
 	NoSqlHost     EnvKey = "NOSQL_HOST"      // NoSQL 主机地址
 	NoSqlPort     EnvKey = "NOSQL_PORT"      // NoSQL 端口
 	NoSqlPass     EnvKey = "NOSQL_PASS"      // NoSQL 密码
-	NoSqlDB       EnvKey = "NOSQL_DB"        // NoSQL 数据库索引
+	NoSqlDatabase EnvKey = "NOSQL_DATABASE"  // NoSQL 数据库索引
 	NoSqlPoolSize EnvKey = "NOSQL_POOL_SIZE" // NoSQL 连接池大小
 	NoSqlPrefix   EnvKey = "NOSQL_PREFIX"    // NoSQL 连接池大小
 )

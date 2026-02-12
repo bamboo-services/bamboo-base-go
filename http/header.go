@@ -28,7 +28,6 @@ const (
 	HeaderReferer           Header = "Referer"             // 引用来源
 	HeaderUserAgent         Header = "User-Agent"          // 用户代理
 	HeaderRequestUUID       Header = "X-Request-UUID"      // 请求唯一标识符的响应头字段名，用于跟踪请求的唯一性和溯源性
-	HeaderAccessToken       Header = "X-Access-Token"      // 访问令牌的请求头字段名，通常用于携带 API 访问令牌以进行身份验证和授权
 	HeaderRefreshToken      Header = "X-Refresh-Token"     // 刷新令牌的请求头字段名，通常用于获取新的访问令牌
 	HeaderXForwardedFor     Header = "X-Forwarded-For"     // 代理转发 IP
 	HeaderXForwardedHost    Header = "X-Forwarded-Host"    // 代理转发 Host

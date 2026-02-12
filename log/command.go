@@ -2,6 +2,7 @@ package xLog
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 )
 
@@ -10,15 +11,25 @@ import (
 
 // LogNamedLogger 带名称的日志器
 // 名称会显示在日志输出中，如 [CORE]、[INIT] 等
+// optionName 会按顺序追加到 logger 名称后显示，如 [CORE] [DB]
 type LogNamedLogger struct {
 	logger *slog.Logger
 }
 
 // WithName 创建带名称的日志器
 // 推荐使用 context.Log* 常量作为名称
-func WithName(name string) *LogNamedLogger {
+// optionName 会通过 WithAttrs 写入 option_name_<number>
+func WithName(name string, optionName ...string) *LogNamedLogger {
+	handler := slog.Default().Handler().WithGroup(name)
+	if len(optionName) > 0 {
+		attrs := make([]slog.Attr, 0, len(optionName))
+		for index, option := range optionName {
+			attrs = append(attrs, slog.String(fmt.Sprintf("option_name_%d", index+1), option))
+		}
+		handler = handler.WithAttrs(attrs)
+	}
 	return &LogNamedLogger{
-		logger: slog.New(slog.Default().Handler().WithGroup(name)),
+		logger: slog.New(handler),
 	}
 }
 

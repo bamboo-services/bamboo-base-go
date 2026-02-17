@@ -103,7 +103,7 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 	// 创建错误响应
 	// 注意：使用 errorDetails... 展开切片，避免嵌套数组
 	_ = ctx.Error(xError.NewErrorHasData(
-		ctx,
+		ctx.Request.Context(),
 		xError.BodyError,
 		xError.ErrMessage(firstErrorMessage),
 		false,

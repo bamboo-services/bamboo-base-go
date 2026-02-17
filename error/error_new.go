@@ -1,17 +1,17 @@
 package xError
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
-	"github.com/gin-gonic/gin"
 )
 
 // NewError 创建一个新的错误对象。
 //
 // 参数说明:
-//   - ctx: `gin.Context` 请求上下文，用于日志记录。
+//   - ctx: `context.Context` 请求上下文，用于日志记录。
 //   - err: 错误代码对象，包含预定义的错误信息。
 //   - errorMessage: 自定义错误消息，用于补充具体的错误描述。
 //   - throw: 是否立即记录该错误，true 表示记录日志。
@@ -19,7 +19,7 @@ import (
 //
 // 返回值:
 //   - 返回指向 `Error` 对象的指针，包含完整的错误信息。
-func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw bool, getErr ...error) *Error {
+func NewError(ctx context.Context, err *ErrorCode, errorMessage ErrMessage, throw bool, getErr ...error) *Error {
 	newErr := &Error{
 		ErrorCode:    err,
 		ErrorMessage: errorMessage,
@@ -31,7 +31,7 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 		newErr.error = errors.New(errorMessage.String())
 	}
 	if throw {
-		xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), "业务错误",
+		xLog.WithName(xLog.NamedRESU).Warn(ctx, "业务错误",
 			slog.Int("code", int(err.Code)),
 			slog.String("message", newErr.ErrorMessage.String()),
 			slog.String("error", newErr.error.Error()),
@@ -42,7 +42,7 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 
 // NewErrorHasData 创建一个包含错误数据的自定义错误实例。
 //
-// 参数 ctx 表示 gin.Context 上下文对象，记录日志时使用。
+// 参数 ctx 表示 context.Context 上下文对象，记录日志时使用。
 // 参数 err 表示错误码对象，包含预定义的错误信息。
 // 参数 errorMessage 表示自定义错误消息，补充描述具体错误。
 // 参数 throw 表示是否抛出错误日志，为 true 时记录错误日志。
@@ -50,7 +50,7 @@ func NewError(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw b
 // 参数 data 表示错误相关的上下文数据，可选。
 //
 // 返回值为 *Error 类型，包含错误码、自定义消息、原始错误以及上下文数据。
-func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, throw bool, getErr error, data ...interface{}) *Error {
+func NewErrorHasData(ctx context.Context, err *ErrorCode, errorMessage ErrMessage, throw bool, getErr error, data ...interface{}) *Error {
 	newErr := &Error{
 		ErrorCode:    err,
 		ErrorMessage: errorMessage,
@@ -65,7 +65,7 @@ func NewErrorHasData(ctx *gin.Context, err *ErrorCode, errorMessage ErrMessage, 
 		newErr.Data = data
 	}
 	if throw {
-		xLog.WithName(xLog.NamedRESU).Warn(ctx.Request.Context(), "业务错误",
+		xLog.WithName(xLog.NamedRESU).Warn(ctx, "业务错误",
 			slog.Int("code", int(err.Code)),
 			slog.String("message", newErr.ErrorMessage.String()),
 			slog.String("error", newErr.error.Error()),

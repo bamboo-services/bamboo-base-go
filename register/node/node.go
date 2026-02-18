@@ -141,6 +141,10 @@ func (rn *RegNode) Exec() {
 			}
 			rn.value.Append(node.Key, val)
 			rn.Ctx = context.WithValue(rn.Ctx, node.Key, val)
+		} else {
+			if err != nil {
+				panic(fmt.Sprintf("执行逻辑节点失败: index=%d Key=%v err=%v", i, node.Key, err))
+			}
 		}
 	}
 	log.Info(rn.Ctx, "========== 初始化完成 ==========")

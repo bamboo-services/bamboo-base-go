@@ -42,7 +42,7 @@ func TestTraceGenerateRequestUUID(t *testing.T) {
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), stream)
 	requestUUID := ""
 
-	interceptor := Trace(context.Background())
+	interceptor := Trace()
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: stream.method}, func(handlerCtx context.Context, req interface{}) (interface{}, error) {
 		requestUUID = xCtxUtil.GetRequestKey(handlerCtx)
 		if requestUUID == "" {
@@ -83,7 +83,7 @@ func TestTraceReuseIncomingRequestUUID(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), incomingMD)
 	ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
 
-	interceptor := Trace(context.Background())
+	interceptor := Trace()
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: stream.method}, func(handlerCtx context.Context, req interface{}) (interface{}, error) {
 		requestUUID := xCtxUtil.GetRequestKey(handlerCtx)
 		if requestUUID != expected {

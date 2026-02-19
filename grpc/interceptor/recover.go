@@ -16,7 +16,7 @@ import (
 // 该拦截器通过 defer 和 recover() 机制保护 handler 调用，防止 panic 导致整个程序崩溃。
 // 当检测到 panic 时，会使用 ServerInternalError 错误码构建错误响应，并记录包含 panic 值
 // 和 RPC 方法的详细日志。
-func Recover(mainCtx context.Context) grpc.UnaryServerInterceptor {
+func Recover() grpc.UnaryServerInterceptor {
 	log := xLog.WithName(xLog.NamedGRPC)
 	toPanicGrpcError := func(recovered interface{}) *xGrpcError.Error {
 		if recoveredError, ok := recovered.(error); ok {

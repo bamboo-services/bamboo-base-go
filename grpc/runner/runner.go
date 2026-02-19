@@ -182,7 +182,7 @@ func run(ctx context.Context, config Config) {
 	serverOptionList := make([]grpc.ServerOption, 0, len(config.ServerOptions)+2)
 	serverOptionList = append(serverOptionList, config.ServerOptions...)
 	unaryInterceptorList := make([]grpc.UnaryServerInterceptor, 0, len(config.UnaryInterceptors)+1)
-	unaryInterceptorList = append(unaryInterceptorList, xGrpcInterface.Trace(ctx))
+	unaryInterceptorList = append(unaryInterceptorList, xGrpcInterface.Trace())
 	unaryInterceptorList = append(unaryInterceptorList, config.UnaryInterceptors...)
 	if len(unaryInterceptorList) > 0 {
 		serverOptionList = append(serverOptionList, grpc.ChainUnaryInterceptor(unaryInterceptorList...))

@@ -15,8 +15,7 @@ import (
 )
 
 // Trace 返回一个 gRPC 一元拦截器，用于自动生成或复用请求追踪 UUID，记录请求开始时间，并设置响应元数据。
-func Trace(mainCtx context.Context) grpc.UnaryServerInterceptor {
-	_ = mainCtx
+func Trace() grpc.UnaryServerInterceptor {
 	traceHeaderKey := strings.ToLower(xHttp.HeaderRequestUUID.String())
 	log := xLog.WithName(xLog.NamedGRPC)
 

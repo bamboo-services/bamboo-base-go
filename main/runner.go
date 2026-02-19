@@ -32,7 +32,8 @@ func Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Re
 		return
 	}
 
-	_, cancel := context.WithCancel(reg.Init.Ctx)
+	runCtx, cancel := context.WithCancel(reg.Init.Ctx)
+	reg.Init.Ctx = runCtx
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
@@ -56,9 +57,9 @@ func Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Re
 
 	go func() {
 		defer engineSync.Done()
-		log.Info(reg.Init.Ctx, "服务器已成功启动", slog.String("addr", "http(s)://"+server.Addr))
+		log.Info(runCtx, "服务器已成功启动", slog.String("addr", "http(s)://"+server.Addr))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error(reg.Init.Ctx, err.Error())
+			log.Error(runCtx, err.Error())
 		}
 	}()
 
@@ -78,7 +79,7 @@ func Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Re
 			defer close(done)
 			defer finish()
 			execFunc(ctx)
-		}(goroutineExec, reg.Init.Ctx, funcDone, doneFunc)
+		}(goroutineExec, runCtx, funcDone, doneFunc)
 
 		go func(done <-chan struct{}, finish func()) {
 			select {
@@ -94,16 +95,16 @@ func Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Re
 		cancel()
 		close(shutdownNotify)
 
-		log.Warn(reg.Init.Ctx, "正在关闭 HTTP 服务器...")
+		log.Warn(runCtx, "正在关闭 HTTP 服务器...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer shutdownCancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Error(reg.Init.Ctx, err.Error())
+			log.Error(runCtx, err.Error())
 		}
 	}()
 
 	engineSync.Wait()
-	log.Info(reg.Init.Ctx, "所有服务已安全退出")
+	log.Info(runCtx, "所有服务已安全退出")
 	return
 }

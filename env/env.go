@@ -14,6 +14,9 @@ const (
 	Debug EnvKey = "XLF_DEBUG" // 调试模式 (true/false)
 	Host  EnvKey = "XLF_HOST"  // 监听地址
 	Port  EnvKey = "XLF_PORT"  // 监听端口
+
+	GrpcPort       EnvKey = "GRPC_PORT"
+	GrpcReflection EnvKey = "GRPC_REFLECTION"
 )
 
 // ============================== 数据库配置 ==============================

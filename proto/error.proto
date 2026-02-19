@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package xBase;
+
+import "google/protobuf/any.proto";
+
+option go_package = "./grpc/generate;xGrpcGenerate";
+
+message GrpcError {
+  uint64 code = 1;
+  string output = 2;
+  string message = 3;
+  string error_message = 4;
+  google.protobuf.Any data = 5;
+}

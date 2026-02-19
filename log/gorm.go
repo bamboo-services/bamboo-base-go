@@ -165,7 +165,7 @@ func (l *SlogLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql 
 		if l.ignoreRecordNotFoundError && errors.Is(err, gorm.ErrRecordNotFound) {
 			return
 		}
-		l.logger.LogAttrs(ctx, slog.LevelError, "执行SQL语句失败", append(attrs, slog.String("error", err.Error()))...)
+		l.logger.LogAttrs(ctx, slog.LevelError, "SQL执行失败", append(attrs, slog.String("error", err.Error()))...)
 
 	// 慢查询
 	case l.slowThreshold > 0 && elapsed > l.slowThreshold && l.logLevel >= LevelWarn:
@@ -173,6 +173,6 @@ func (l *SlogLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql 
 
 	// 普通查询
 	case l.logLevel >= LevelInfo:
-		l.logger.LogAttrs(ctx, slog.LevelDebug, "成功执行SQL语句", attrs...)
+		l.logger.LogAttrs(ctx, slog.LevelInfo, "SQL执行成功", attrs...)
 	}
 }

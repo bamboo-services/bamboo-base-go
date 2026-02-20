@@ -2,18 +2,20 @@ syntax = "proto3";
 
 package xBase;
 
-import "google/protobuf/any.proto";
-import "proto/error.proto";
+option go_package = ".;xGrpcGenerate";
 
-option go_package = "./grpc/generate;xGrpcGenerate";
-
+// BaseResponse 表示 gRPC 统一响应的元信息部分。
 message BaseResponse {
+  // 请求追踪标识（对应 HTTP 的 X-Request-UUID）。
   string context = 1;
+  // 输出标识（如 "Success"、"PARAMETER_ERROR"）。
   string output = 2;
+  // 业务状态码（200 表示成功，其余与 xError.ErrorCode.Code 对应）。
   uint64 code = 3;
+  // 人类可读的描述信息。
   string message = 4;
+  // 补充性错误详情，仅在错误场景下填充。
   optional string error_message = 5;
+  // 请求处理耗时（微秒），仅在调试模式下填充。
   optional int64 overhead = 6;
-  google.protobuf.Any data = 7;
-  GrpcError error = 8;
 }

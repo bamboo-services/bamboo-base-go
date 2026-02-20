@@ -1,8 +1,6 @@
-PROTO_FILE ?= ./proto/normal_upload.proto
-
 .DEFAULT_GOAL := help
 
-.PHONY: help swag proto run dev tag tag-upload release
+.PHONY: help proto tidy tag tag-upload release
 
 # 版本文件路径
 VERSION_FILE := version
@@ -21,8 +19,7 @@ help:
 	@echo "BambooBase - 可用命令"
 	@echo ""
 	@echo "开发命令:"
-	@echo "  make proto      	- 生成指定 proto 的 gRPC 代码"
-	@echo "                   	  示例: make proto PROTO_FILE=./proto/normal_upload.proto"
+	@echo "  make proto      	- 使用 buf 生成 gRPC 代码"
 	@echo "  make tidy       	- 整理 Go 模块依赖"
 	@echo ""
 	@echo "发布命令:"
@@ -33,7 +30,7 @@ help:
 	@echo "  make release    	- 创建 tag 并推送到远程仓库"
 
 proto:
-	protoc --go_out=. --go-grpc_out=. $(PROTO_FILE)
+	buf generate
 
 tidy:
 	go mod tidy

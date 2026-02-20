@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	xError "github.com/bamboo-services/bamboo-base-go/error"
-	xGrpcError "github.com/bamboo-services/bamboo-base-go/grpc/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"google.golang.org/grpc"
 )
@@ -18,20 +17,22 @@ import (
 // 和 RPC 方法的详细日志。
 func Recover() grpc.UnaryServerInterceptor {
 	log := xLog.WithName(xLog.NamedGRPC)
-	toPanicGrpcError := func(recovered interface{}) *xGrpcError.Error {
+	toPanicError := func(ctx context.Context, recovered interface{}) *xError.Error {
 		if recoveredError, ok := recovered.(error); ok {
-			return xGrpcError.Wrap(
+			return xError.NewError(
+				ctx,
 				xError.ServerInternalError,
-				xGrpcError.ErrMessage(recoveredError.Error()),
-				nil,
+				xError.ErrMessage(recoveredError.Error()),
+				false,
 				recoveredError,
 			)
 		}
 
-		return xGrpcError.New(
+		return xError.NewError(
+			ctx,
 			xError.ServerInternalError,
-			xGrpcError.ErrMessage(fmt.Sprint(recovered)),
-			nil,
+			xError.ErrMessage(fmt.Sprint(recovered)),
+			false,
 		)
 	}
 
@@ -45,7 +46,8 @@ func Recover() grpc.UnaryServerInterceptor {
 			slog.Any("method", method),
 			slog.Any("panic", recovered),
 		)
-		return toStatusError(ctx, toPanicGrpcError(recovered))
+		xErr := toPanicError(ctx, recovered)
+		return toStatusError(xErr)
 	}
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {

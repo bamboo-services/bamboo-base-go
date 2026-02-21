@@ -1,4 +1,4 @@
-package xGrpcInterface
+package xGrpcIUnary
 
 import (
 	"context"

@@ -9,7 +9,8 @@ import (
 	"time"
 
 	xEnv "github.com/bamboo-services/bamboo-base-go/env"
-	xGrpcInterface "github.com/bamboo-services/bamboo-base-go/grpc/interceptor"
+	xGrpcIStream "github.com/bamboo-services/bamboo-base-go/grpc/interceptor/stream"
+	xGrpcIUnary "github.com/bamboo-services/bamboo-base-go/grpc/interceptor/unary"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -181,14 +182,27 @@ func run(ctx context.Context, config Config) {
 
 	serverOptionList := make([]grpc.ServerOption, 0, len(config.ServerOptions)+2)
 	serverOptionList = append(serverOptionList, config.ServerOptions...)
-	unaryInterceptorList := make([]grpc.UnaryServerInterceptor, 0, len(config.UnaryInterceptors)+1)
-	unaryInterceptorList = append(unaryInterceptorList, xGrpcInterface.Trace())
+
+	// Unary 拦截器链
+	unaryInterceptorList := make([]grpc.UnaryServerInterceptor, 0, len(config.UnaryInterceptors)+4)
+	unaryInterceptorList = append(unaryInterceptorList, xGrpcIUnary.InitContext(ctx))
+	unaryInterceptorList = append(unaryInterceptorList, xGrpcIUnary.Recover())
+	unaryInterceptorList = append(unaryInterceptorList, xGrpcIUnary.Trace())
 	unaryInterceptorList = append(unaryInterceptorList, config.UnaryInterceptors...)
+	unaryInterceptorList = append(unaryInterceptorList, xGrpcIUnary.Middleware())
 	if len(unaryInterceptorList) > 0 {
 		serverOptionList = append(serverOptionList, grpc.ChainUnaryInterceptor(unaryInterceptorList...))
 	}
-	if len(config.StreamInterceptors) > 0 {
-		serverOptionList = append(serverOptionList, grpc.ChainStreamInterceptor(config.StreamInterceptors...))
+
+	// Stream 拦截器链
+	streamInterceptorList := make([]grpc.StreamServerInterceptor, 0, len(config.StreamInterceptors)+4)
+	streamInterceptorList = append(streamInterceptorList, xGrpcIStream.InitContext(ctx))
+	streamInterceptorList = append(streamInterceptorList, xGrpcIStream.Recover())
+	streamInterceptorList = append(streamInterceptorList, xGrpcIStream.Trace())
+	streamInterceptorList = append(streamInterceptorList, config.StreamInterceptors...)
+	streamInterceptorList = append(streamInterceptorList, xGrpcIStream.Middleware())
+	if len(streamInterceptorList) > 0 {
+		serverOptionList = append(serverOptionList, grpc.ChainStreamInterceptor(streamInterceptorList...))
 	}
 
 	grpcServer := grpc.NewServer(serverOptionList...)

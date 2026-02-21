@@ -6,7 +6,7 @@ option go_package = ".;xGrpcGenerate";
 
 // BaseResponse 表示 gRPC 统一响应的元信息部分。
 message BaseResponse {
-  // 请求追踪标识（对应 HTTP 的 X-Request-UUID）。
+  // 请求追踪标识（。
   string context = 1;
   // 输出标识（如 "Success"、"PARAMETER_ERROR"）。
   string output = 2;

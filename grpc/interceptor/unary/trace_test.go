@@ -87,7 +87,7 @@ func TestTraceReuseIncomingRequestUUID(t *testing.T) {
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: stream.method}, func(handlerCtx context.Context, req interface{}) (interface{}, error) {
 		requestUUID := xCtxUtil.GetRequestKey(handlerCtx)
 		if requestUUID != expected {
-			t.Fatalf("request uuid should reuse incoming metadata value")
+			t.Fatalf("request uuid should reuse incoming constant value")
 		}
 		if strings.TrimSpace(requestUUID) == "" {
 			t.Fatalf("request uuid should not be blank")

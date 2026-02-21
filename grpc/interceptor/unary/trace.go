@@ -7,7 +7,7 @@ import (
 	"time"
 
 	xCtx "github.com/bamboo-services/bamboo-base-go/context"
-	xHttp "github.com/bamboo-services/bamboo-base-go/http"
+	xGrpcConst "github.com/bamboo-services/bamboo-base-go/grpc/constant"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -16,7 +16,7 @@ import (
 
 // Trace 返回一个 gRPC 一元拦截器，用于自动生成或复用请求追踪 UUID，记录请求开始时间，并设置响应元数据。
 func Trace() grpc.UnaryServerInterceptor {
-	traceHeaderKey := strings.ToLower(xHttp.HeaderRequestUUID.String())
+	traceHeaderKey := xGrpcConst.TrailerRequestUUID.String()
 	log := xLog.WithName(xLog.NamedGRPC)
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {

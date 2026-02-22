@@ -10,5 +10,5 @@ func (md Trailer) String() string {
 }
 
 const (
-	TrailerRequestUUID Trailer = "x_request_uuid" // 定义用于传递请求唯一标识符的元数据键，通常用于在中间件或拦截器中标识请求的唯一性。
+	TrailerRequestUUID Trailer = "x-request-uuid" // 定义用于传递请求唯一标识符的元数据键，通常用于在中间件或拦截器中标识请求的唯一性。
 )

@@ -36,18 +36,22 @@ func Trace() grpc.UnaryServerInterceptor {
 	log := xLog.WithName(xLog.NamedGRPC)
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		requestUUID, err := xUtil.Grpc().ExtractMetadata(ctx, xGrpcConst.MetadataRequestUUID)
-		if err != nil {
+		requestUUID, extractErr := xUtil.Grpc().ExtractMetadata(ctx, xGrpcConst.MetadataRequestUUID)
+		if extractErr != nil {
 			requestUUID = uuid.NewString()
 		}
 		traceCtx := context.WithValue(ctx, xCtx.RequestKey, requestUUID)
 		traceCtx = context.WithValue(traceCtx, xCtx.UserStartTimeKey, time.Now())
 
-		header := metadata.Pairs(xGrpcConst.TrailerRequestUUID.String(), requestUUID)
+		// 设置 header 和 trailer
+		md := metadata.Pairs(xGrpcConst.TrailerRequestUUID.String(), requestUUID)
+		if headerErr := grpc.SetHeader(traceCtx, md); headerErr != nil {
+			log.Warn(traceCtx, "设置 gRPC 请求追踪头失败", slog.Any("error", headerErr))
+		}
 
 		resp, err = handler(traceCtx, req)
 
-		if trailerErr := grpc.SetTrailer(traceCtx, header); trailerErr != nil {
+		if trailerErr := grpc.SetTrailer(traceCtx, md); trailerErr != nil {
 			log.Warn(traceCtx, "设置 gRPC 请求追踪尾失败", slog.Any("error", trailerErr))
 		}
 

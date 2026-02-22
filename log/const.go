@@ -44,4 +44,5 @@ const (
 	NamedTHOW = "THOW" // 抛出错误日志
 	NamedRESU = "RESU" // 响应结果日志
 	NamedRECO = "RECO" // 恢复层系统日志
+	NamedCRON = "CRON" // 定时任务日志
 )

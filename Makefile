@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto tidy tag tag-upload release
+.PHONY: help proto tidy tag tag-upload release test
 
 # 版本文件路径
 VERSION_FILE := version
@@ -21,6 +21,7 @@ help:
 	@echo "开发命令:"
 	@echo "  make proto      	- 使用 buf 生成 gRPC 代码"
 	@echo "  make tidy       	- 整理 Go 模块依赖"
+	@echo "  make test       	- 测试代码"
 	@echo ""
 	@echo "发布命令:"
 	@echo "  make tag        	- 创建带有时间戳的 tag（不推送）"
@@ -28,6 +29,9 @@ help:
 	@echo "                   	  示例: v1.0.0-202602191755"
 	@echo "  make tag-upload 	- 单独上传 tag"
 	@echo "  make release    	- 创建 tag 并推送到远程仓库"
+
+test:
+	go test -v ./...
 
 proto:
 	buf generate
@@ -47,4 +51,4 @@ tag-upload:
 	@echo "✅ Tag $(TAG_NAME) 推送成功！"
 
 # 创建 tag 并推送
-release: tag tag-upload
+release: test tag tag-upload

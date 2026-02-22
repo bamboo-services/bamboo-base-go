@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,9 +75,9 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 		currentDate: time.Now().Format("2006-01-02"),
 	}
 
-	// 打开或创建日志文件
-	if err := w.openFile(); err != nil {
-		return nil, err
+	// 执行启动状态检查（包含打开/创建文件）
+	if err := w.checkStartupState(); err != nil {
+		return nil, fmt.Errorf("启动检查失败: %w", err)
 	}
 
 	// 启动归档调度器
@@ -87,12 +88,22 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 
 // Write 写入数据到日志文件
 //
-// 实现 io.Writer 接口。当文件大小超过阈值时自动切割。
+// 实现 io.Writer 接口。支持以下自动切割条件:
+//  1. 检测到日期变化（跨天）
+//  2. 文件大小超过阈值
 func (w *RotatingWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// 检查是否需要切割
+	// 检查是否跨天
+	today := time.Now().Format("2006-01-02")
+	if w.currentDate != today {
+		if err := w.rotateForNewDay(today); err != nil {
+			return 0, fmt.Errorf("跨天切割日志失败: %w", err)
+		}
+	}
+
+	// 检查是否需要切割（大小）
 	if w.currentSize+int64(len(p)) > w.maxSize {
 		if err := w.rotate(); err != nil {
 			return 0, fmt.Errorf("日志切割失败: %w", err)
@@ -147,6 +158,69 @@ func (w *RotatingWriter) rotatedFilePath(index int) string {
 	return filepath.Join(w.dir, fmt.Sprintf("%s.%d%s", w.baseName, index, w.ext))
 }
 
+// datedFilePath 获取带日期的日志文件路径
+//
+// 格式: {dir}/{basename}-{date}{ext}
+// 示例: .logs/log-2024-01-15.log
+func (w *RotatingWriter) datedFilePath(date string) string {
+	return filepath.Join(w.dir, fmt.Sprintf("%s-%s%s", w.baseName, date, w.ext))
+}
+
+// datedFilePathWithIndex 获取带日期和序号的日志文件路径（避免冲突）
+//
+// 格式: {dir}/{basename}-{date}.{index}{ext}
+// 示例: .logs/log-2024-01-15.1.log
+func (w *RotatingWriter) datedFilePathWithIndex(date string, index int) string {
+	return filepath.Join(w.dir, fmt.Sprintf("%s-%s.%d%s", w.baseName, date, index, w.ext))
+}
+
+// renameCurrentLogByDate 将当前日志文件按日期重命名
+//
+// 重命名规则: log.log → log-YYYY-MM-DD.log
+// 如果目标文件已存在，追加序号避免覆盖: log-YYYY-MM-DD.1.log
+//
+// 注意: 此函数会关闭当前文件句柄，调用后需要重新打开文件
+func (w *RotatingWriter) renameCurrentLogByDate(date string) error {
+	currentPath := w.currentFilePath()
+
+	// 检查当前文件是否存在
+	if _, err := os.Stat(currentPath); os.IsNotExist(err) {
+		return nil // 文件不存在，无需重命名
+	}
+
+	// 关闭当前文件句柄
+	if w.file != nil {
+		if err := w.file.Close(); err != nil {
+			return fmt.Errorf("关闭日志文件失败: %w", err)
+		}
+		w.file = nil
+	}
+
+	// 构建目标文件名
+	targetPath := w.datedFilePath(date)
+
+	// 如果目标已存在，追加序号避免覆盖
+	counter := 1
+	for {
+		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+			break
+		}
+		// 防止无限循环
+		if counter > 1000 {
+			return fmt.Errorf("无法生成唯一的日期日志文件名")
+		}
+		targetPath = w.datedFilePathWithIndex(date, counter)
+		counter++
+	}
+
+	// 执行重命名
+	if err := os.Rename(currentPath, targetPath); err != nil {
+		return fmt.Errorf("重命名日志文件失败: %w", err)
+	}
+
+	return nil
+}
+
 // rotate 执行日志文件切割
 //
 // 切割流程:
@@ -179,6 +253,63 @@ func (w *RotatingWriter) rotate() error {
 	// 创建新的日志文件
 	w.currentSize = 0
 	return w.openFile()
+}
+
+// rotateForNewDay 跨天时切割日志
+//
+// 流程:
+//  1. 将当前 log.log 按日期重命名: log-YYYY-MM-DD.log
+//  2. 创建新的 log.log
+//  3. 更新 currentDate
+//  4. 异步触发归档
+//
+// 注意: 此方法在 Write() 中调用，已持有锁
+func (w *RotatingWriter) rotateForNewDay(newDate string) error {
+	// 按旧日期重命名当前日志
+	currentPath := w.currentFilePath()
+	if _, err := os.Stat(currentPath); err == nil {
+		// 关闭当前文件句柄
+		if w.file != nil {
+			if err := w.file.Close(); err != nil {
+				return fmt.Errorf("关闭日志文件失败: %w", err)
+			}
+			w.file = nil
+		}
+
+		datedPath := w.datedFilePath(w.currentDate)
+
+		// 避免文件名冲突
+		counter := 1
+		for {
+			if _, err := os.Stat(datedPath); os.IsNotExist(err) {
+				break
+			}
+			// 防止无限循环
+			if counter > 1000 {
+				return fmt.Errorf("无法生成唯一的日期日志文件名")
+			}
+			datedPath = w.datedFilePathWithIndex(w.currentDate, counter)
+			counter++
+		}
+
+		if err := os.Rename(currentPath, datedPath); err != nil {
+			return fmt.Errorf("跨天重命名日志失败: %w", err)
+		}
+	}
+
+	// 更新日期
+	w.currentDate = newDate
+
+	// 创建新文件
+	w.currentSize = 0
+	if err := w.openFile(); err != nil {
+		return err
+	}
+
+	// 触发归档（异步执行，避免阻塞写入）
+	go w.archiveYesterday()
+
+	return nil
 }
 
 // findMaxRotatedIndex 查找现有切割文件的最大索引
@@ -353,4 +484,145 @@ func (w *RotatingWriter) addFileToTar(tarWriter *tar.Writer, filePath string) er
 
 	_, err = io.Copy(tarWriter, file)
 	return err
+}
+
+// checkStartupState 启动时检查日志文件状态
+//
+// 检查内容:
+//  1. 当前日志文件大小是否超过限制 → 立即切割
+//  2. 当前日志文件日期是否为今天 → 按日期重命名后创建新文件
+//  3. 目录中是否存在旧日期日志文件 → 批量归档
+func (w *RotatingWriter) checkStartupState() error {
+	currentPath := w.currentFilePath()
+
+	// 检查当前日志文件是否存在
+	info, err := os.Stat(currentPath)
+	if os.IsNotExist(err) {
+		// 文件不存在，无需检查，直接创建新文件
+		return w.openFile()
+	}
+	if err != nil {
+		return fmt.Errorf("获取日志文件信息失败: %w", err)
+	}
+
+	// 获取文件修改时间，判断是否为当天
+	modTime := info.ModTime()
+	today := time.Now().Format("2006-01-02")
+	fileDate := modTime.Format("2006-01-02")
+
+	// 如果不是今天的日志，按日期重命名
+	if fileDate != today {
+		if err := w.renameCurrentLogByDate(fileDate); err != nil {
+			return fmt.Errorf("按日期重命名日志失败: %w", err)
+		}
+		// 重命名后创建新文件
+		if err := w.openFile(); err != nil {
+			return err
+		}
+	} else {
+		// 今天的日志，检查大小是否超限
+		if info.Size() >= w.maxSize {
+			if err := w.rotate(); err != nil {
+				return fmt.Errorf("启动时切割日志失败: %w", err)
+			}
+		} else {
+			// 文件正常，直接打开
+			if err := w.openFile(); err != nil {
+				return err
+			}
+		}
+	}
+
+	// 归档所有旧日期的日志文件
+	if err := w.archiveOldFiles(); err != nil {
+		// 归档失败仅记录警告，不阻断启动
+		fmt.Fprintf(os.Stderr, "[LOG] 启动时归档旧日志失败: %v\n", err)
+	}
+
+	return nil
+}
+
+// archiveOldFiles 批量归档所有非当天的日志文件
+//
+// 处理范围:
+//   - log.N.log 格式的切割文件
+//   - log-YYYY-MM-DD.log 格式的日期文件
+//
+// 归档规则:
+//   - 按文件修改日期分组
+//   - 每个日期创建一个 tar.gz 归档
+//   - 已存在归档的日期跳过
+func (w *RotatingWriter) archiveOldFiles() error {
+	today := time.Now().Format("2006-01-02")
+
+	// 收集所有需要归档的文件，按日期分组
+	filesByDate := make(map[string][]string)
+
+	entries, err := os.ReadDir(w.dir)
+	if err != nil {
+		return err
+	}
+
+	// 匹配模式
+	rotatedPattern := regexp.MustCompile(
+		fmt.Sprintf(`^%s\.(\d+)%s$`, regexp.QuoteMeta(w.baseName), regexp.QuoteMeta(w.ext)),
+	)
+	datedPattern := regexp.MustCompile(
+		fmt.Sprintf(`^%s-(\d{4}-\d{2}-\d{2})(\.\d+)?%s$`,
+			regexp.QuoteMeta(w.baseName), regexp.QuoteMeta(w.ext)),
+	)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+
+		// 跳过当前日志文件和归档文件
+		if name == w.baseName+w.ext || strings.HasSuffix(name, ".tar.gz") {
+			continue
+		}
+
+		// 获取文件信息
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// 按修改日期分组
+		fileDate := info.ModTime().Format("2006-01-02")
+
+		// 只归档非当天的文件
+		if fileDate == today {
+			continue
+		}
+
+		// 匹配需要归档的文件格式
+		if rotatedPattern.MatchString(name) || datedPattern.MatchString(name) {
+			filesByDate[fileDate] = append(filesByDate[fileDate],
+				filepath.Join(w.dir, name))
+		}
+	}
+
+	// 按日期批量归档
+	for date, files := range filesByDate {
+		archiveName := fmt.Sprintf("logger-%s.tar.gz", date)
+		archivePath := filepath.Join(w.dir, archiveName)
+
+		// 跳过已存在的归档
+		if _, err := os.Stat(archivePath); err == nil {
+			continue
+		}
+
+		if err := w.createTarGz(archivePath, files); err != nil {
+			return fmt.Errorf("创建 %s 归档失败: %w", date, err)
+		}
+
+		// 删除已归档文件
+		for _, file := range files {
+			os.Remove(file)
+		}
+	}
+
+	return nil
 }

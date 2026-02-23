@@ -6,8 +6,8 @@ import (
 	"reflect"
 
 	xError "github.com/bamboo-services/bamboo-base-go/error"
-	xGrpc "github.com/bamboo-services/bamboo-base-go/grpc"
-	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/grpc/generate"
+	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc"
+	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/plugins/grpc/generate"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/ctxutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"

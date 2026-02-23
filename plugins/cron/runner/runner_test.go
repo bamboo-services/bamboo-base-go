@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	xCron "github.com/bamboo-services/bamboo-base-go/cron"
+	xCron "github.com/bamboo-services/bamboo-base-go/plugins/cron"
 )
 
 func TestNew_WithSeconds(t *testing.T) {

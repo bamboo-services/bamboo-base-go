@@ -1,6 +1,8 @@
 package xGrpc
 
-import "google.golang.org/grpc/codes"
+import (
+	"google.golang.org/grpc/codes"
+)
 
 func ToGrpcStatusCode(code uint) codes.Code {
 	httpCode := code / 100

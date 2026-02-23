@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/grpc/middleware"
+	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/plugins/grpc/middleware"
 	"google.golang.org/grpc"
 )
 

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	xEnv "github.com/bamboo-services/bamboo-base-go/env"
-	xGrpcIStream "github.com/bamboo-services/bamboo-base-go/grpc/interceptor/stream"
-	xGrpcIUnary "github.com/bamboo-services/bamboo-base-go/grpc/interceptor/unary"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xGrpcIStream "github.com/bamboo-services/bamboo-base-go/plugins/grpc/interceptor/stream"
+	xGrpcIUnary "github.com/bamboo-services/bamboo-base-go/plugins/grpc/interceptor/unary"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

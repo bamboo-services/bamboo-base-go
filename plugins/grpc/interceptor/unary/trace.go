@@ -6,9 +6,9 @@ import (
 	"time"
 
 	xCtx "github.com/bamboo-services/bamboo-base-go/context"
-	xGrpcConst "github.com/bamboo-services/bamboo-base-go/grpc/constant"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
-	xUtil "github.com/bamboo-services/bamboo-base-go/utility"
+	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/constant"
+	xGrpcUtil "github.com/bamboo-services/bamboo-base-go/plugins/grpc/utility"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -36,7 +36,7 @@ func Trace() grpc.UnaryServerInterceptor {
 	log := xLog.WithName(xLog.NamedGRPC)
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		requestUUID, extractErr := xUtil.Grpc().ExtractMetadata(ctx, xGrpcConst.MetadataRequestUUID)
+		requestUUID, extractErr := xGrpcUtil.ExtractMetadata(ctx, xGrpcConst.MetadataRequestUUID)
 		if extractErr != nil {
 			requestUUID = uuid.NewString()
 		}

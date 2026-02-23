@@ -4,8 +4,8 @@ import (
 	"context"
 	"reflect"
 
-	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/grpc/generate"
 	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/plugins/grpc/generate"
 )
 
 // Success 返回表示操作成功的标准响应结构。

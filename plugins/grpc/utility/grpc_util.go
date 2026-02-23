@@ -1,4 +1,4 @@
-package xUtil
+package xGrpcUtil
 
 import (
 	"context"
@@ -6,15 +6,9 @@ import (
 	"strings"
 
 	xError "github.com/bamboo-services/bamboo-base-go/error"
-	xGrpcConst "github.com/bamboo-services/bamboo-base-go/grpc/constant"
+	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/constant"
 	"google.golang.org/grpc/metadata"
 )
-
-type grpc struct{}
-
-func Grpc() *grpc {
-	return &grpc{}
-}
 
 // ExtractMetadata 从 gRPC 传入上下文中提取指定键的元数据值
 //
@@ -28,7 +22,7 @@ func Grpc() *grpc {
 // 返回值:
 //   - string: 找到的第一个非空白元数据值。
 //   - error: 如果上下文中不存在元数据或指定键无有效值，返回 `xError.NotExist` 错误。
-func (g *grpc) ExtractMetadata(ctx context.Context, key xGrpcConst.Metadata) (string, *xError.Error) {
+func ExtractMetadata(ctx context.Context, key xGrpcConst.Metadata) (string, *xError.Error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", xError.NewError(ctx, xError.NotExist, "缺少 gRPC Trailer", false)

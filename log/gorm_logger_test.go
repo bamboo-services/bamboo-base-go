@@ -1,4 +1,4 @@
-package test
+package xLog
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +18,7 @@ func TestNewSlogLogger_DefaultConfig(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{})
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{})
 
 	// 测试普通查询（默认 Info 级别应该输出）
 	gormLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
@@ -38,9 +37,9 @@ func TestSlogLogger_Trace_SlowQuery(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
 		SlowThreshold: 100, // 100ms
-		LogLevel:      xLog.LevelInfo,
+		LogLevel:      LevelInfo,
 	})
 
 	// 模拟慢查询（200ms > 100ms 阈值）
@@ -64,9 +63,9 @@ func TestSlogLogger_Trace_NormalQuery(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
 		SlowThreshold: 200,
-		LogLevel:      xLog.LevelInfo,
+		LogLevel:      LevelInfo,
 	})
 
 	// 普通查询（无延迟）
@@ -89,8 +88,8 @@ func TestSlogLogger_Trace_Error(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel: xLog.LevelError,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel: LevelError,
 	})
 
 	// 模拟错误
@@ -116,8 +115,8 @@ func TestSlogLogger_Trace_IgnoreRecordNotFound(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel:                  xLog.LevelError,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel:                  LevelError,
 		IgnoreRecordNotFoundError: true,
 	})
 
@@ -138,8 +137,8 @@ func TestSlogLogger_Trace_NotIgnoreRecordNotFound(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel:                  xLog.LevelError,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel:                  LevelError,
 		IgnoreRecordNotFoundError: false, // 不忽略
 	})
 
@@ -160,8 +159,8 @@ func TestSlogLogger_Silent(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel: xLog.LevelSilent,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel: LevelSilent,
 	})
 
 	// Silent 模式应该不输出任何日志
@@ -189,8 +188,8 @@ func TestSlogLogger_LogLevel_Error(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel:      xLog.LevelError,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel:      LevelError,
 		SlowThreshold: 10, // 10ms
 	})
 
@@ -227,8 +226,8 @@ func TestSlogLogger_LogLevel_Warn(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel:      xLog.LevelWarn,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel:      LevelWarn,
 		SlowThreshold: 10, // 10ms
 	})
 
@@ -260,8 +259,8 @@ func TestSlogLogger_InfoWarnError(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel: xLog.LevelInfo,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel: LevelInfo,
 	})
 
 	gormLogger.Info(context.Background(), "info message: %s", "test")
@@ -288,8 +287,8 @@ func TestSlogLogger_LogMode(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel: xLog.LevelInfo,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel: LevelInfo,
 	})
 
 	// 使用 LogMode 切换到 Silent
@@ -311,8 +310,8 @@ func TestSlogLogger_SQLAttributes(t *testing.T) {
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(handler)
 
-	gormLogger := xLog.NewSlogLogger(logger, xLog.GormLoggerConfig{
-		LogLevel: xLog.LevelInfo,
+	gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+		LogLevel: LevelInfo,
 	})
 
 	gormLogger.Trace(context.Background(), time.Now(), func() (string, int64) {

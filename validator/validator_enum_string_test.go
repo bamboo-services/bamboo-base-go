@@ -1,9 +1,8 @@
-package test
+package xVaild
 
 import (
 	"testing"
 
-	xVaild "github.com/bamboo-services/bamboo-base-go/validator"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
@@ -111,7 +110,7 @@ func Test_ValidateEnumString_InvalidValues(t *testing.T) {
 				return
 			}
 
-			errors := xVaild.TranslateError(err)
+			errors := TranslateError(err)
 			t.Logf("验证错误: %+v", errors)
 
 			if _, exists := errors[tc.expectedField]; !exists {
@@ -138,7 +137,7 @@ func Test_ValidateEnumString_ErrorMessages(t *testing.T) {
 		t.Fatal("期望验证失败")
 	}
 
-	errors := xVaild.TranslateError(err)
+	errors := TranslateError(err)
 	t.Logf("中文错误消息: %+v", errors)
 
 	roleError := errors["角色"]

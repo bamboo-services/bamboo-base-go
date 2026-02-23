@@ -1,10 +1,8 @@
-package test
+package xEnv
 
 import (
 	"os"
 	"testing"
-
-	xUtil "github.com/bamboo-services/bamboo-base-go/env"
 )
 
 // Test_GetEnv 测试环境变量获取功能。
@@ -14,7 +12,7 @@ func Test_GetEnv(t *testing.T) {
 	defer os.Unsetenv("TEST_KEY")
 
 	// 测试存在的环境变量
-	value, exists := xUtil.GetEnv("TEST_KEY")
+	value, exists := GetEnv("TEST_KEY")
 	if !exists {
 		t.Error("GetEnv 应该返回 exists=true 对于已设置的环境变量")
 	}
@@ -23,7 +21,7 @@ func Test_GetEnv(t *testing.T) {
 	}
 
 	// 测试不存在的环境变量
-	_, exists = xUtil.GetEnv("NOT_EXISTS_KEY")
+	_, exists = GetEnv("NOT_EXISTS_KEY")
 	if exists {
 		t.Error("GetEnv 应该返回 exists=false 对于未设置的环境变量")
 	}
@@ -36,13 +34,13 @@ func Test_GetEnvOrDefault(t *testing.T) {
 	defer os.Unsetenv("EXISTING_KEY")
 
 	// 测试存在的环境变量
-	value := xUtil.GetEnvString("EXISTING_KEY", "default")
+	value := GetEnvString("EXISTING_KEY", "default")
 	if value != "existing_value" {
 		t.Errorf("GetEnvString = %s; want existing_value", value)
 	}
 
 	// 测试不存在的环境变量
-	value = xUtil.GetEnvString("NOT_EXISTS", "default_value")
+	value = GetEnvString("NOT_EXISTS", "default_value")
 	if value != "default_value" {
 		t.Errorf("GetEnvString = %s; want default_value", value)
 	}
@@ -54,7 +52,7 @@ func Test_GetEnvInt(t *testing.T) {
 	os.Setenv("INT_VALUE", "42")
 	defer os.Unsetenv("INT_VALUE")
 
-	value := xUtil.GetEnvInt("INT_VALUE", 0)
+	value := GetEnvInt("INT_VALUE", 0)
 	if value != 42 {
 		t.Errorf("GetEnvInt = %d; want 42", value)
 	}
@@ -63,13 +61,13 @@ func Test_GetEnvInt(t *testing.T) {
 	os.Setenv("INVALID_INT", "not_a_number")
 	defer os.Unsetenv("INVALID_INT")
 
-	value = xUtil.GetEnvInt("INVALID_INT", 100)
+	value = GetEnvInt("INVALID_INT", 100)
 	if value != 100 {
 		t.Errorf("GetEnvInt 对于无效输入应返回默认值 100, got %d", value)
 	}
 
 	// 测试不存在的环境变量
-	value = xUtil.GetEnvInt("NOT_EXISTS_INT", 999)
+	value = GetEnvInt("NOT_EXISTS_INT", 999)
 	if value != 999 {
 		t.Errorf("GetEnvInt = %d; want 999", value)
 	}
@@ -97,7 +95,7 @@ func Test_GetEnvBool(t *testing.T) {
 
 	for _, tc := range tests {
 		os.Setenv("TEST_BOOL", tc.envValue)
-		result := xUtil.GetEnvBool("TEST_BOOL", !tc.expected)
+		result := GetEnvBool("TEST_BOOL", !tc.expected)
 		if result != tc.expected {
 			t.Errorf("GetEnvBool(%s) = %v; want %v", tc.envValue, result, tc.expected)
 		}
@@ -105,12 +103,12 @@ func Test_GetEnvBool(t *testing.T) {
 	}
 
 	// 测试不存在的环境变量返回默认值
-	result := xUtil.GetEnvBool("NOT_EXISTS_BOOL", true)
+	result := GetEnvBool("NOT_EXISTS_BOOL", true)
 	if result != true {
 		t.Error("GetEnvBool 应该对不存在的键返回默认值 true")
 	}
 
-	result = xUtil.GetEnvBool("NOT_EXISTS_BOOL", false)
+	result = GetEnvBool("NOT_EXISTS_BOOL", false)
 	if result != false {
 		t.Error("GetEnvBool 应该对不存在的键返回默认值 false")
 	}
@@ -122,7 +120,7 @@ func Test_GetEnvFloat(t *testing.T) {
 	os.Setenv("FLOAT_VALUE", "3.14")
 	defer os.Unsetenv("FLOAT_VALUE")
 
-	value := xUtil.GetEnvFloat("FLOAT_VALUE", 0.0)
+	value := GetEnvFloat("FLOAT_VALUE", 0.0)
 	if value != 3.14 {
 		t.Errorf("GetEnvFloat = %f; want 3.14", value)
 	}
@@ -131,7 +129,7 @@ func Test_GetEnvFloat(t *testing.T) {
 	os.Setenv("INT_AS_FLOAT", "42")
 	defer os.Unsetenv("INT_AS_FLOAT")
 
-	value = xUtil.GetEnvFloat("INT_AS_FLOAT", 0.0)
+	value = GetEnvFloat("INT_AS_FLOAT", 0.0)
 	if value != 42.0 {
 		t.Errorf("GetEnvFloat = %f; want 42.0", value)
 	}
@@ -140,13 +138,13 @@ func Test_GetEnvFloat(t *testing.T) {
 	os.Setenv("INVALID_FLOAT", "not_a_float")
 	defer os.Unsetenv("INVALID_FLOAT")
 
-	value = xUtil.GetEnvFloat("INVALID_FLOAT", 1.5)
+	value = GetEnvFloat("INVALID_FLOAT", 1.5)
 	if value != 1.5 {
 		t.Errorf("GetEnvFloat 对于无效输入应返回默认值 1.5, got %f", value)
 	}
 
 	// 测试不存在的环境变量
-	value = xUtil.GetEnvFloat("NOT_EXISTS_FLOAT", 9.99)
+	value = GetEnvFloat("NOT_EXISTS_FLOAT", 9.99)
 	if value != 9.99 {
 		t.Errorf("GetEnvFloat = %f; want 9.99", value)
 	}

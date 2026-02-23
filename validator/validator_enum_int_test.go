@@ -1,9 +1,8 @@
-package test
+package xVaild
 
 import (
 	"testing"
 
-	xVaild "github.com/bamboo-services/bamboo-base-go/validator"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
@@ -25,10 +24,10 @@ type EnumTestStruct struct {
 // 初始化验证器
 func initValidator(t *testing.T) {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		if err := xVaild.RegisterCustomValidators(v); err != nil {
+		if err := RegisterCustomValidators(v); err != nil {
 			t.Fatalf("注册自定义验证器失败: %v", err)
 		}
-		if err := xVaild.RegisterTranslator(v); err != nil {
+		if err := RegisterTranslator(v); err != nil {
 			t.Fatalf("注册翻译器失败: %v", err)
 		}
 	}
@@ -159,7 +158,7 @@ func Test_ValidateEnumInt_InvalidValues(t *testing.T) {
 			}
 
 			// 检查错误消息
-			errors := xVaild.TranslateError(err)
+			errors := TranslateError(err)
 			t.Logf("验证错误: %+v", errors)
 
 			if _, exists := errors[tc.expectedField]; !exists {
@@ -189,7 +188,7 @@ func Test_ValidateEnumInt_ErrorMessages(t *testing.T) {
 	}
 
 	// 获取翻译后的错误消息
-	errors := xVaild.TranslateError(err)
+	errors := TranslateError(err)
 	t.Logf("中文错误消息: %+v", errors)
 
 	// 使用 label 的值（"性别"）而不是 json tag（"gender"）

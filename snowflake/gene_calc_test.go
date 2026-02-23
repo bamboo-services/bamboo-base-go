@@ -1,18 +1,16 @@
-package test
+package xSnowflake
 
 import (
 	"testing"
-
-	xSnowflake "github.com/bamboo-services/bamboo-base-go/snowflake"
 )
 
 // Test_GeneCalc_Hash 测试基于 SnowflakeID 计算基因
 func Test_GeneCalc_Hash(t *testing.T) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
 	// 测试不同的 ID 产生不同的基因
-	id1 := xSnowflake.SnowflakeID(1234567890)
-	id2 := xSnowflake.SnowflakeID(9876543210)
+	id1 := SnowflakeID(1234567890)
+	id2 := SnowflakeID(9876543210)
 
 	gene1 := calc.Hash(id1)
 	gene2 := calc.Hash(id2)
@@ -38,11 +36,11 @@ func Test_GeneCalc_Hash(t *testing.T) {
 
 // Test_GeneCalc_HashMulti 测试基于多个 ID 计算组合基因
 func Test_GeneCalc_HashMulti(t *testing.T) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
-	id1 := xSnowflake.SnowflakeID(111)
-	id2 := xSnowflake.SnowflakeID(222)
-	id3 := xSnowflake.SnowflakeID(333)
+	id1 := SnowflakeID(111)
+	id2 := SnowflakeID(222)
+	id3 := SnowflakeID(333)
 
 	// 测试两个 ID 的组合
 	gene12 := calc.HashMulti(id1, id2)
@@ -63,7 +61,7 @@ func Test_GeneCalc_HashMulti(t *testing.T) {
 
 // Test_GeneCalc_HashString 测试基于字符串计算基因
 func Test_GeneCalc_HashString(t *testing.T) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
 	// 测试不同字符串
 	gene1 := calc.HashString("order")
@@ -93,14 +91,14 @@ func Test_GeneCalc_HashString(t *testing.T) {
 
 // Test_GeneCalc_Distribution 测试基因分布均匀性
 func Test_GeneCalc_Distribution(t *testing.T) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
 	// 生成 1000 个基因，统计分布
 	const count = 1000
 	buckets := make(map[int64]int)
 
 	for i := 0; i < count; i++ {
-		id := xSnowflake.SnowflakeID(i*12345 + 67890) // 生成不同的 ID
+		id := SnowflakeID(i*12345 + 67890) // 生成不同的 ID
 		gene := calc.Hash(id)
 		buckets[int64(gene)]++
 	}
@@ -125,13 +123,13 @@ func Test_GeneCalc_Distribution(t *testing.T) {
 
 // Test_GeneCalc_Consistency 测试基因计算一致性
 func Test_GeneCalc_Consistency(t *testing.T) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
 	// 使用固定的 ID 验证一致性
-	fixedID := xSnowflake.SnowflakeID(1234567890123456789)
+	fixedID := SnowflakeID(1234567890123456789)
 
 	// 多次计算应得到相同结果
-	results := make([]xSnowflake.Gene, 10)
+	results := make([]Gene, 10)
 	for i := range results {
 		results[i] = calc.Hash(fixedID)
 	}
@@ -145,8 +143,8 @@ func Test_GeneCalc_Consistency(t *testing.T) {
 
 // Benchmark_GeneCalc_Hash 基准测试：Hash 方法
 func Benchmark_GeneCalc_Hash(b *testing.B) {
-	calc := xSnowflake.GeneCalc{}
-	id := xSnowflake.SnowflakeID(1234567890)
+	calc := GeneCalc{}
+	id := SnowflakeID(1234567890)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -156,10 +154,10 @@ func Benchmark_GeneCalc_Hash(b *testing.B) {
 
 // Benchmark_GeneCalc_HashMulti 基准测试：HashMulti 方法
 func Benchmark_GeneCalc_HashMulti(b *testing.B) {
-	calc := xSnowflake.GeneCalc{}
-	id1 := xSnowflake.SnowflakeID(111)
-	id2 := xSnowflake.SnowflakeID(222)
-	id3 := xSnowflake.SnowflakeID(333)
+	calc := GeneCalc{}
+	id1 := SnowflakeID(111)
+	id2 := SnowflakeID(222)
+	id3 := SnowflakeID(333)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -169,7 +167,7 @@ func Benchmark_GeneCalc_HashMulti(b *testing.B) {
 
 // Benchmark_GeneCalc_HashString 基准测试：HashString 方法
 func Benchmark_GeneCalc_HashString(b *testing.B) {
-	calc := xSnowflake.GeneCalc{}
+	calc := GeneCalc{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

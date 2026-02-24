@@ -6,6 +6,14 @@ import (
 	"unicode"
 )
 
+// Str 字符串工具结构体，提供常用的字符串处理方法。
+//
+// 使用方式：
+//
+//	xUtil.Str().IsBlank("")
+//	xUtil.Str().Mask("13812345678", 3, 4, "*")
+type Str struct{}
+
 // IsBlank 检查字符串是否为空白（空字符串或只包含空白字符）。
 //
 // 参数说明:
@@ -13,7 +21,7 @@ import (
 //
 // 返回值:
 //   - 如果字符串为空白返回 true，否则返回 false
-func IsBlank(str string) bool {
+func (Str) IsBlank(str string) bool {
 	return strings.TrimSpace(str) == ""
 }
 
@@ -24,8 +32,8 @@ func IsBlank(str string) bool {
 //
 // 返回值:
 //   - 如果字符串不为空白返回 true，否则返回 false
-func IsNotBlank(str string) bool {
-	return !IsBlank(str)
+func (s Str) IsNotBlank(str string) bool {
+	return !s.IsBlank(str)
 }
 
 // DefaultIfBlank 如果字符串为空白则返回默认值。
@@ -36,8 +44,8 @@ func IsNotBlank(str string) bool {
 //
 // 返回值:
 //   - 如果字符串为空白返回默认值，否则返回原字符串
-func DefaultIfBlank(str, defaultStr string) string {
-	if IsBlank(str) {
+func (s Str) DefaultIfBlank(str, defaultStr string) string {
+	if s.IsBlank(str) {
 		return defaultStr
 	}
 	return str
@@ -51,7 +59,7 @@ func DefaultIfBlank(str, defaultStr string) string {
 //
 // 返回值:
 //   - 截断后的字符串
-func Truncate(str string, maxLen int) string {
+func (Str) Truncate(str string, maxLen int) string {
 	if len(str) <= maxLen {
 		return str
 	}
@@ -67,7 +75,7 @@ func Truncate(str string, maxLen int) string {
 //
 // 返回值:
 //   - 截断后的字符串（包含后缀）
-func TruncateWithSuffix(str string, maxLen int, suffix string) string {
+func (Str) TruncateWithSuffix(str string, maxLen int, suffix string) string {
 	if suffix == "" {
 		suffix = "..."
 	}
@@ -90,7 +98,7 @@ func TruncateWithSuffix(str string, maxLen int, suffix string) string {
 //
 // 返回值:
 //   - 蛇形命名字符串
-func CamelToSnake(str string) string {
+func (Str) CamelToSnake(str string) string {
 	var result strings.Builder
 
 	for i, r := range str {
@@ -110,7 +118,7 @@ func CamelToSnake(str string) string {
 //
 // 返回值:
 //   - 驼峰命名字符串
-func SnakeToCamel(str string) string {
+func (Str) SnakeToCamel(str string) string {
 	parts := strings.Split(str, "_")
 	var result strings.Builder
 
@@ -132,13 +140,13 @@ func SnakeToCamel(str string) string {
 //
 // 返回值:
 //   - 如果是有效邮箱返回 true，否则返回 false
-func IsValidEmail(email string) bool {
+func (Str) IsValidEmail(email string) bool {
 	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	matched, _ := regexp.MatchString(pattern, email)
 	return matched
 }
 
-// MaskString 对字符串进行脱敏处理。
+// Mask 对字符串进行脱敏处理。
 //
 // 参数说明:
 //   - str: 要脱敏的字符串
@@ -148,7 +156,7 @@ func IsValidEmail(email string) bool {
 //
 // 返回值:
 //   - 脱敏后的字符串
-func MaskString(str string, start, end int, mask string) string {
+func (Str) Mask(str string, start, end int, mask string) string {
 	if mask == "" {
 		mask = "*"
 	}
@@ -169,7 +177,7 @@ func MaskString(str string, start, end int, mask string) string {
 //
 // 返回值:
 //   - 移除空白字符后的字符串
-func RemoveSpaces(str string) string {
+func (Str) RemoveSpaces(str string) string {
 	return strings.ReplaceAll(str, " ", "")
 }
 
@@ -180,7 +188,7 @@ func RemoveSpaces(str string) string {
 //
 // 返回值:
 //   - 单词数量
-func CountWords(str string) int {
+func (Str) CountWords(str string) int {
 	str = strings.TrimSpace(str)
 	if str == "" {
 		return 0

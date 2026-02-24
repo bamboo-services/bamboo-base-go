@@ -5,9 +5,10 @@ import (
 	"testing"
 )
 
-// Test_GenerateSecurityKet 测试 GenerateLongSecurityKey 函数的正确性。
-func Test_GenerateSecurityKet(t *testing.T) {
-	key := GenerateLongSecurityKey()
+// Test_GenerateSecurityKey 测试 Security.GenerateLongKey 方法的正确性。
+func Test_GenerateSecurityKey(t *testing.T) {
+	s := Security{}
+	key := s.GenerateLongKey()
 	t.Logf("生成的安全密钥: %s", key)
 	if len(key) < 10 {
 		t.Errorf("生成的安全密钥长度不足: %d", len(key))

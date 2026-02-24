@@ -1,4 +1,4 @@
-package common
+package xBase
 
 import (
 	xError "github.com/bamboo-services/bamboo-base-go/common/error"

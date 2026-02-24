@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/cron
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241915
 	github.com/robfig/cron/v3 v3.0.1
 )
 

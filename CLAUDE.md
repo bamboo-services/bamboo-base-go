@@ -20,7 +20,7 @@ go vet ./...                        # 静态检查
 go fmt ./...                        # 格式化代码
 
 # 发布命令
-make release PKG=major              # 发布指定模块 (major|utility|defined)
+make release PKG=major              # 发布指定模块 (major|common|defined)
 make release-plugins PLG=grpc       # 发布指定插件 (cron|grpc)
 make release-all                    # 发布全部模块和插件
 ```
@@ -34,9 +34,9 @@ make release-all                    # 发布全部模块和插件
 ```
 bamboo-base/
 ├── go.work                  # 工作区配置
-├── major/                   # 核心层 - HTTP框架、注册系统、日志、错误处理
+├── major/                   # 核心层 - HTTP框架、注册系统
+├── common/                  # 通用层 - 错误处理、日志、验证器、雪花算法、工具函数
 ├── defined/                 # 定义层 - 上下文键常量、环境变量常量
-├── utility/                 # 工具层 - 通用函数、上下文工具
 ├── plugins/cron/            # 插件 - 定时任务 (robfig/cron)
 └── plugins/grpc/            # 插件 - gRPC框架 (拦截器、运行器、proto)
 ```
@@ -44,9 +44,9 @@ bamboo-base/
 ### 模块依赖链
 
 ```
-defined → utility → major (基础依赖方向)
-plugins/cron → major
-plugins/grpc → defined + major + utility
+defined → common → major (基础依赖方向)
+plugins/cron → common
+plugins/grpc → defined + common
 ```
 
 ### 各模块核心包
@@ -55,23 +55,25 @@ plugins/grpc → defined + major + utility
 |------|--------|------|------|
 | major | `register/` | `xReg` | 节点化注册初始化系统 |
 | major | `main/` | `xMain` | 应用运行器 (信号监听、优雅关闭) |
-| major | `error/` | `xError` | 结构化错误码体系 |
 | major | `result/` | `xResult` | HTTP 响应处理 |
-| major | `log/` | `xLog` | slog 自定义 Handler (彩色控制台 + JSON 文件) |
 | major | `middleware/` | `xMiddle` | Gin 中间件 (CORS、统一响应) |
-| major | `validator/` | `xValidator` | 自定义验证器 (enum_int/enum_string/enum_float 等) |
-| major | `snowflake/` | `xSnowflake` | 雪花算法 (标准 + 基因型) |
 | major | `models/` | `xModels` | GORM 实体基类、分页模型 |
 | major | `cache/` | `xCache` | 缓存泛型接口 |
 | major | `http/` | `xHttp` | HTTP 常量 |
 | major | `route/` | `xRoute` | 404/405 路由处理 |
+| major | `helper/` | `xHelper` | 辅助工具 (恢复、上下文、HTTP 日志) |
+| major | `hook/` | `xHook` | Redis 钩子 |
+| common | `error/` | `xError` | 结构化错误码体系 |
+| common | `log/` | `xLog` | slog 自定义 Handler (彩色控制台 + JSON 文件) |
+| common | `validator/` | `xVaild` | 自定义验证器 (enum_int/enum_string/enum_float 等) |
+| common | `snowflake/` | `xSnowflake` | 雪花算法 (标准 + 基因型) |
+| common | `utility/package/` | `pack` | 通用工具 (Ptr/Val/字符串/时间/验证/密码/绑定) |
+| common | `utility/context/` | `xCtxUtil` | 上下文工具 (DB/Redis/Snowflake 的 Must/Error 版本) |
 | defined | `context/` | `xCtx` | 上下文键常量 (ContextKey 类型) |
 | defined | `env/` | `xEnv` | 环境变量常量与类型安全获取函数 |
-| utility | `package/` | `xUtil` | 通用工具 (Ptr/Val/字符串/时间/验证/密码/绑定) |
-| utility | `context/` | `xCtxUtil` | 上下文工具 (DB/Redis/Snowflake 的 Must/Error 版本) |
 | plugins/grpc | `runner/` | `xGrpcRunner` | gRPC 服务运行器 |
 | plugins/grpc | `interceptor/` | - | 一元和流式 RPC 拦截器 |
-| plugins/cron | `runner/` | - | 定时任务运行器 |
+| plugins/cron | `runner/` | `xCronRunner` | 定时任务运行器 |
 
 ## 核心架构模式
 
@@ -114,9 +116,9 @@ xResult.Error(c, xError.NotFound, "用户不存在", nil)
 ### 请求绑定
 
 ```go
-data := xUtil.BindData(c, &CreateRequest{})  // JSON body
-query := xUtil.BindQuery(c, &ListQuery{})     // query params
-uri := xUtil.BindURI(c, &PathParams{})        // URI params
+data := pack.BindData(c, &CreateRequest{})  // JSON body
+query := pack.BindQuery(c, &ListQuery{})     // query params
+uri := pack.BindURI(c, &PathParams{})        // URI params
 // 返回 nil 表示绑定失败，已自动写入错误响应
 ```
 
@@ -124,7 +126,7 @@ uri := xUtil.BindURI(c, &PathParams{})        // URI params
 
 ### 包导入别名
 
-所有包使用 `x` 前缀别名，这是强制约定: `xReg`、`xEnv`、`xCtx`、`xError`、`xResult`、`xMiddle`、`xLog`、`xUtil`、`xCtxUtil`、`xModels`、`xSnowflake`、`xValidator`、`xHttp`、`xRoute`、`xCache`、`xMain`。
+所有包使用 `x` 前缀别名，这是强制约定: `xReg`、`xEnv`、`xCtx`、`xError`、`xResult`、`xMiddle`、`xLog`、`xCtxUtil`、`xModels`、`xSnowflake`、`xVaild`、`xHttp`、`xRoute`、`xCache`、`xMain`、`xHelper`、`xHook`。`common/utility/package/` 使用 `pack` 别名。
 
 ### 环境变量
 
@@ -132,11 +134,11 @@ uri := xUtil.BindURI(c, &PathParams{})        // URI params
 
 ### 错误码
 
-预定义错误码在 `major/error/error_code.go` 中，新增错误码需遵循现有编号规则。
+预定义错误码在 `common/error/error_code.go` 中，新增错误码需遵循现有编号规则。
 
 ### 验证器
 
-自定义验证器在 `major/validator/` 中，包括 `strict_url`、`strict_uuid`、`alphanum_underscore`、`regexp`、`enum_int`、`enum_string`、`enum_float`。使用 `label` tag 提供中文字段名。
+自定义验证器在 `common/validator/` 中，包括 `strict_url`、`strict_uuid`、`alphanum_underscore`、`regexp`、`enum_int`、`enum_string`、`enum_float`。使用 `label` tag 提供中文字段名。
 
 ### GORM 实体
 

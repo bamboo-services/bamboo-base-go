@@ -84,3 +84,11 @@ func Timer() *pack.Timer { return &pack.Timer{} }
 func Parse() *pack.Parse {
 	return &pack.Parse{}
 }
+
+// Valid 返回一个新的 `pack.Valid` 实例，用于执行各种验证任务。
+//
+// 通过 `Valid` 函数获取的验证器实例，您可以调用其方法完成对手机号、身份证号码、URL、IP 等格式的验证。
+// 此函数不接受任何参数，也不会直接返回错误。
+func Valid() *pack.Valid {
+	return &pack.Valid{}
+}

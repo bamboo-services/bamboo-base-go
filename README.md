@@ -132,25 +132,26 @@ bamboo-base/
 ├── go.work                       # Go 工作区配置
 ├── major/                        # 核心层模块
 │   ├── cache/                    #   缓存泛型接口 (xCache)
-│   ├── error/                    #   错误处理 (xError)
-│   ├── helper/                   #   辅助工具 (恢复、上下文、日志)
-│   ├── hook/                     #   Redis 钩子
+│   ├── helper/                   #   辅助工具 (xHelper)
+│   ├── hook/                     #   Redis 钩子 (xHook)
 │   ├── http/                     #   HTTP 常量 (xHttp)
-│   ├── log/                      #   日志系统 (xLog)
 │   ├── main/                     #   应用运行器 (xMain)
 │   ├── middleware/               #   Gin 中间件 (xMiddle)
 │   ├── models/                   #   数据模型与分页 (xModels)
 │   ├── register/                 #   节点化注册初始化 (xReg)
 │   ├── result/                   #   HTTP 响应处理 (xResult)
-│   ├── route/                    #   路由处理 (xRoute)
+│   └── route/                    #   路由处理 (xRoute)
+├── common/                       # 通用层模块
+│   ├── error/                    #   错误处理 (xError)
+│   ├── log/                      #   日志系统 (xLog)
 │   ├── snowflake/                #   雪花算法 (xSnowflake)
-│   └── validator/                #   验证器 (xValidator)
+│   ├── validator/                #   验证器 (xVaild)
+│   └── utility/                  #   工具函数
+│       ├── context/              #     上下文工具 (xCtxUtil)
+│       └── package/              #     通用工具函数 (pack)
 ├── defined/                      # 定义层模块
 │   ├── context/                  #   上下文键常量 (xCtx)
 │   └── env/                      #   环境变量管理 (xEnv)
-├── utility/                      # 工具层模块
-│   ├── context/                  #   上下文工具 (xCtxUtil)
-│   └── package/                  #   通用工具函数 (xUtil)
 └── plugins/                      # 插件模块
     ├── cron/                     #   定时任务插件
     └── grpc/                     #   gRPC 框架插件
@@ -159,9 +160,9 @@ bamboo-base/
 ### 模块依赖关系
 
 ```
-defined ──> utility ──> major
-plugins/cron ──────────> major
-plugins/grpc ──> defined + major + utility
+defined ──> common ──> major
+plugins/cron ──────────> common
+plugins/grpc ──> defined + common
 ```
 
 ## 核心依赖

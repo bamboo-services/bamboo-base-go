@@ -31,7 +31,7 @@ help:
 	@echo "  make test                     - 测试代码"
 	@echo ""
 	@echo "发布命令:"
-	@echo "  make release PKG=<name>       - 发布指定模块 (major|utility|defined)"
+	@echo "  make release PKG=<name>       - 发布指定模块 (major|common|defined)"
 	@echo "  make release-plugins PLG=<name> - 发布指定插件 (cron|grpc)"
 	@echo "  make release-all              - 发布全部模块和插件"
 	@echo ""

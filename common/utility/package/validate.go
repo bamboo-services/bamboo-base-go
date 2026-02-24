@@ -6,28 +6,30 @@ import (
 	"strings"
 )
 
-// IsValidPhone 检查是否为有效的手机号码（中国大陆）。
+type Valid struct{}
+
+// IsPhone 检查是否为有效的手机号码（中国大陆）。
 //
 // 参数说明:
 //   - phone: 要验证的手机号码
 //
 // 返回值:
 //   - 如果是有效手机号返回 true，否则返回 false
-func IsValidPhone(phone string) bool {
+func (v *Valid) IsPhone(phone string) bool {
 	// 中国大陆手机号码正则：1开头，第二位是3-9，总共11位
 	pattern := `^1[3-9]\d{9}$`
 	matched, _ := regexp.MatchString(pattern, phone)
 	return matched
 }
 
-// IsValidIDCard 检查是否为有效的身份证号码（中国大陆）。
+// IsIDCard 检查是否为有效的身份证号码（中国大陆）。
 //
 // 参数说明:
 //   - idCard: 要验证的身份证号码
 //
 // 返回值:
 //   - 如果是有效身份证号返回 true，否则返回 false
-func IsValidIDCard(idCard string) bool {
+func (v *Valid) IsIDCard(idCard string) bool {
 	if len(idCard) != 18 {
 		return false
 	}
@@ -49,27 +51,27 @@ func IsValidIDCard(idCard string) bool {
 	return true
 }
 
-// IsValidURL 检查是否为有效的 URL。
+// IsURI 检查是否为有效的 URL。
 //
 // 参数说明:
 //   - url: 要验证的 URL
 //
 // 返回值:
 //   - 如果是有效 URL 返回 true，否则返回 false
-func IsValidURL(url string) bool {
+func (v *Valid) IsURI(url string) bool {
 	pattern := `^https?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(:[0-9]+)?(/.*)?$`
 	matched, _ := regexp.MatchString(pattern, url)
 	return matched
 }
 
-// IsValidIP 检查是否为有效的 IP 地址。
+// IsIP 检查是否为有效的 IP 地址。
 //
 // 参数说明:
 //   - ip: 要验证的 IP 地址
 //
 // 返回值:
 //   - 如果是有效 IP 地址返回 true，否则返回 false
-func IsValidIP(ip string) bool {
+func (v *Valid) IsIP(ip string) bool {
 	parts := strings.Split(ip, ".")
 	if len(parts) != 4 {
 		return false
@@ -92,7 +94,7 @@ func IsValidIP(ip string) bool {
 //
 // 返回值:
 //   - 如果只包含数字返回 true，否则返回 false
-func IsNumeric(str string) bool {
+func (v *Valid) IsNumeric(str string) bool {
 	if str == "" {
 		return false
 	}
@@ -113,7 +115,7 @@ func IsNumeric(str string) bool {
 //
 // 返回值:
 //   - 如果只包含字母返回 true，否则返回 false
-func IsAlpha(str string) bool {
+func (v *Valid) IsAlpha(str string) bool {
 	if str == "" {
 		return false
 	}
@@ -130,7 +132,7 @@ func IsAlpha(str string) bool {
 //
 // 返回值:
 //   - 如果只包含字母和数字返回 true，否则返回 false
-func IsAlphaNumeric(str string) bool {
+func (v *Valid) IsAlphaNumeric(str string) bool {
 	if str == "" {
 		return false
 	}
@@ -140,7 +142,7 @@ func IsAlphaNumeric(str string) bool {
 	return matched
 }
 
-// IsValidUsername 检查是否为有效的用户名。
+// IsUsername 检查是否为有效的用户名。
 //
 // 用户名规则：4-20位，只能包含字母、数字、下划线，必须以字母开头。
 //
@@ -149,7 +151,7 @@ func IsAlphaNumeric(str string) bool {
 //
 // 返回值:
 //   - 如果是有效用户名返回 true，否则返回 false
-func IsValidUsername(username string) bool {
+func (v *Valid) IsUsername(username string) bool {
 	if len(username) < 4 || len(username) > 20 {
 		return false
 	}
@@ -190,11 +192,11 @@ func IsStrongPassword(password string) bool {
 //
 // 返回值:
 //   - 如果在范围内返回 true，否则返回 false
-func InRange(value, min, max float64) bool {
+func (v *Valid) InRange(value, min, max float64) bool {
 	return value >= min && value <= max
 }
 
-// IsValidLength 检查字符串长度是否在指定范围内。
+// IsLength 检查字符串长度是否在指定范围内。
 //
 // 参数说明:
 //   - str: 要检查的字符串
@@ -203,32 +205,32 @@ func InRange(value, min, max float64) bool {
 //
 // 返回值:
 //   - 如果长度在范围内返回 true，否则返回 false
-func IsValidLength(str string, minLen, maxLen int) bool {
+func (v *Valid) IsLength(str string, minLen, maxLen int) bool {
 	length := len(str)
 	return length >= minLen && length <= maxLen
 }
 
-// IsValidUUID 检查是否为有效的 UUID。
+// IsUUID 检查是否为有效的 UUID。
 //
 // 参数说明:
 //   - uuid: 要验证的 UUID 字符串
 //
 // 返回值:
 //   - 如果是有效 UUID 返回 true，否则返回 false
-func IsValidUUID(uuid string) bool {
+func (v *Valid) IsUUID(uuid string) bool {
 	pattern := `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`
 	matched, _ := regexp.MatchString(pattern, uuid)
 	return matched
 }
 
-// IsValidJSON 检查字符串是否为有效的 JSON 格式（简单检查）。
+// IsJSON 检查字符串是否为有效的 JSON 格式（简单检查）。
 //
 // 参数说明:
 //   - jsonStr: 要验证的 JSON 字符串
 //
 // 返回值:
 //   - 如果是有效 JSON 格式返回 true，否则返回 false
-func IsValidJSON(jsonStr string) bool {
+func (v *Valid) IsJSON(jsonStr string) bool {
 	jsonStr = strings.TrimSpace(jsonStr)
 	if jsonStr == "" {
 		return false

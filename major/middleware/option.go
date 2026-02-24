@@ -1,7 +1,7 @@
 package xMiddle
 
 import (
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	"github.com/gin-gonic/gin"
 )
 

@@ -3,7 +3,7 @@ package xModels
 import (
 	"time"
 
-	xSnowflake "github.com/bamboo-services/bamboo-base-go/major/snowflake"
+	xSnowflake "github.com/bamboo-services/bamboo-base-go/common/snowflake"
 	"gorm.io/gorm"
 )
 

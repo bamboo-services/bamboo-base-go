@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/constant"
 	"google.golang.org/grpc/metadata"
 )

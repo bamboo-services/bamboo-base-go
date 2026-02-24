@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
 	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

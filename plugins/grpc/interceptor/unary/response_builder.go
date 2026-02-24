@@ -5,10 +5,10 @@ import (
 	"errors"
 	"reflect"
 
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc"
 	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/plugins/grpc/generate"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )

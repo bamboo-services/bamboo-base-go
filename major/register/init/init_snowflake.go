@@ -3,8 +3,8 @@ package xInit
 import (
 	"context"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	xSnowflake "github.com/bamboo-services/bamboo-base-go/major/snowflake"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	xSnowflake "github.com/bamboo-services/bamboo-base-go/common/snowflake"
 )
 
 // SnowflakeInit 初始化并验证雪花算法默认节点。

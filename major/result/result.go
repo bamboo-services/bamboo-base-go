@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"strings"
 
+	xBase "github.com/bamboo-services/bamboo-base-go/common"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
 	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xBase "github.com/bamboo-services/bamboo-base-go/major"
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	"github.com/bamboo-services/bamboo-base-go/utility/context"
 	"github.com/gin-gonic/gin"
 )
 

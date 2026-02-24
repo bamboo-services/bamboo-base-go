@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	"github.com/bamboo-services/bamboo-base-go/utility/context"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
 	"github.com/gin-gonic/gin"
 )
 

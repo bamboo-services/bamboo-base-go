@@ -1,6 +1,6 @@
 package xModels
 
-import xSnowflake "github.com/bamboo-services/bamboo-base-go/major/snowflake"
+import xSnowflake "github.com/bamboo-services/bamboo-base-go/common/snowflake"
 
 // GeneProvider 基因提供者接口
 //

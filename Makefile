@@ -13,7 +13,7 @@ ROOT_VERSION := $(shell cat version | sed 's/^v//')
 TIMESTAMP := $(shell date +"%Y%m%d%H%M")
 
 # 内部模块列表（非 plugins）
-PACKAGES := major utility defined
+PACKAGES := major common defined
 
 # 插件列表
 PLUGINS := cron grpc
@@ -68,10 +68,10 @@ $(strip $(1))/v$(ROOT_VERSION).$(shell cat $(1)/version)-$(TIMESTAMP)
 endef
 
 # --- make release PKG=<name> ---
-# 发布指定模块（major / utility / defined）
+# 发布指定模块（major / common / defined）
 release:
 ifndef PKG
-	$(error 请指定模块名称: make release PKG=<major|utility|defined>)
+	$(error 请指定模块名称: make release PKG=<major|common|defined>)
 endif
 ifeq ($(filter $(PKG),$(PACKAGES)),)
 	$(error 无效的模块名称 "$(PKG)",可选值: $(PACKAGES))

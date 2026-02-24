@@ -3,7 +3,7 @@ package xReg
 import (
 	"context"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xInit "github.com/bamboo-services/bamboo-base-go/major/register/init"
 	xRegNode "github.com/bamboo-services/bamboo-base-go/major/register/node"
 	"github.com/gin-gonic/gin"
@@ -48,7 +48,7 @@ func Register(ctx context.Context, nodeList []xRegNode.RegNodeList) *Reg {
 	reg.loggerInit()
 
 	// 初始化节点注册
-	reg.Init.Use(xConsts.SnowflakeNodeKey, xInit.SnowflakeInit) // 雪花算法初始化配置器
+	reg.Init.Use(xCtx.SnowflakeNodeKey, xInit.SnowflakeInit) // 雪花算法初始化配置器
 	for _, node := range nodeList {
 		reg.Init.Use(node.Key, node.Node)
 	}

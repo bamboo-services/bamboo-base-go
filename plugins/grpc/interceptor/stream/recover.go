@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	xError "github.com/bamboo-services/bamboo-base-go/error"
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xError "github.com/bamboo-services/bamboo-base-go/major/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/context"
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/constant"
 	xGrpcUtil "github.com/bamboo-services/bamboo-base-go/plugins/grpc/utility"
 	"github.com/google/uuid"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/plugins/grpc/generate"
 )
 

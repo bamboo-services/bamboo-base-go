@@ -371,7 +371,7 @@ xResult.Error(ctx, xError.NotFound, "用户不存在", nil)
 应用程序通过环境变量配置，支持 `.env` 文件加载。使用 `xEnv` 包的类型安全函数获取配置：
 
 ```go
-import xEnv "github.com/bamboo-services/bamboo-base-go/env"
+import xEnv "github.com/bamboo-services/bamboo-base-go/major/env"
 
 // 获取配置 (类型安全)
 debug := xEnv.GetEnvBool(xEnv.Debug, false)           // 布尔值

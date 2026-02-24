@@ -3,7 +3,7 @@ package xGrpcIStream
 import (
 	"context"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
 	"google.golang.org/grpc"
 )
 

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	xEnv "github.com/bamboo-services/bamboo-base-go/env"
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xEnv "github.com/bamboo-services/bamboo-base-go/major/env"
+	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xGrpcIStream "github.com/bamboo-services/bamboo-base-go/plugins/grpc/interceptor/stream"
 	xGrpcIUnary "github.com/bamboo-services/bamboo-base-go/plugins/grpc/interceptor/unary"
 	"google.golang.org/grpc"

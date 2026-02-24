@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/log"
+	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xCron "github.com/bamboo-services/bamboo-base-go/plugins/cron"
 	"github.com/robfig/cron/v3"
 )

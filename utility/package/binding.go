@@ -1,9 +1,14 @@
-package xUtil
+package pack
 
 import (
 	xVaild "github.com/bamboo-services/bamboo-base-go/major/validator"
 	"github.com/gin-gonic/gin"
 )
+
+type Binding[T any] struct {
+	Context *gin.Context // 上下文
+	Data    *T           // 转化的数据
+}
 
 // BindData 绑定请求体数据到指定结构体并进行校验
 //
@@ -18,14 +23,14 @@ import (
 //   - 返回泛型结构体指针，当绑定成功时为 `&data`，否则为 `nil`。
 //
 // 注意: 该函数仅支持 JSON 格式的请求体数据。异常情况会结束当前 HTTP 请求生命周期。
-func BindData[T any](ctx *gin.Context, data *T) *T {
-	bindErr := ctx.ShouldBindBodyWithJSON(&data)
+func (u *Binding[T]) BindData() *T {
+	bindErr := u.Context.ShouldBindBodyWithJSON(&u.Data)
 	if bindErr != nil {
-		xVaild.HandleValidationError(ctx, bindErr)
-		ctx.Abort()
+		xVaild.HandleValidationError(u.Context, bindErr)
+		u.Context.Abort()
 		return nil
 	}
-	return data
+	return u.Data
 }
 
 // BindQuery 将查询参数绑定到指定的结构体指针并处理验证错误。
@@ -39,14 +44,14 @@ func BindData[T any](ctx *gin.Context, data *T) *T {
 //
 // 返回值:
 //   - 返回泛型结构体指针，当绑定成功时为 `&data`，否则为 `nil`。
-func BindQuery[T any](ctx *gin.Context, data *T) *T {
-	bindErr := ctx.ShouldBindQuery(data)
+func (u *Binding[T]) BindQuery() *T {
+	bindErr := u.Context.ShouldBindQuery(u.Data)
 	if bindErr != nil {
-		xVaild.HandleValidationError(ctx, bindErr)
-		ctx.Abort()
+		xVaild.HandleValidationError(u.Context, bindErr)
+		u.Context.Abort()
 		return nil
 	}
-	return data
+	return u.Data
 }
 
 // BindURI 将 URI 路径参数绑定到指定的结构体指针并处理验证错误。
@@ -60,14 +65,14 @@ func BindQuery[T any](ctx *gin.Context, data *T) *T {
 //
 // 返回值:
 //   - 返回泛型结构体指针，当绑定成功时为 `&data`，否则为 `nil`。
-func BindURI[T any](ctx *gin.Context, data *T) *T {
-	bindErr := ctx.ShouldBindUri(data)
+func (u *Binding[T]) BindURI() *T {
+	bindErr := u.Context.ShouldBindUri(u.Data)
 	if bindErr != nil {
-		xVaild.HandleValidationError(ctx, bindErr)
-		ctx.Abort()
+		xVaild.HandleValidationError(u.Context, bindErr)
+		u.Context.Abort()
 		return nil
 	}
-	return data
+	return u.Data
 }
 
 // BindHeader 将 HTTP 请求头绑定到指定的结构体指针并处理验证错误。
@@ -81,12 +86,12 @@ func BindURI[T any](ctx *gin.Context, data *T) *T {
 //
 // 返回值:
 //   - 返回泛型结构体指针，当绑定成功时为 `&data`，否则为 `nil`。
-func BindHeader[T any](ctx *gin.Context, data *T) *T {
-	bindErr := ctx.ShouldBindHeader(data)
+func (u *Binding[T]) BindHeader() *T {
+	bindErr := u.Context.ShouldBindHeader(u.Data)
 	if bindErr != nil {
-		xVaild.HandleValidationError(ctx, bindErr)
-		ctx.Abort()
+		xVaild.HandleValidationError(u.Context, bindErr)
+		u.Context.Abort()
 		return nil
 	}
-	return data
+	return u.Data
 }

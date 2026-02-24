@@ -3,7 +3,7 @@ package xMiddle
 import (
 	"errors"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/major/context"
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	xResult "github.com/bamboo-services/bamboo-base-go/major/result"
 	"github.com/gin-gonic/gin"

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
-	"github.com/bamboo-services/bamboo-base-go/major/env"
+	"github.com/bamboo-services/bamboo-base-go/defined/context"
+	"github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
 // IsDebugMode 判断当前是否处于调试模式。

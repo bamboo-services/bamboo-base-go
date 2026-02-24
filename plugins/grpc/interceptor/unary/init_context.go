@@ -3,7 +3,7 @@ package xGrpcIUnary
 import (
 	"context"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"google.golang.org/grpc"
 )
 

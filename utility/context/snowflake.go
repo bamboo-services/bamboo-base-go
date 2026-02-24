@@ -3,7 +3,7 @@ package xCtxUtil
 import (
 	"context"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/major/snowflake"
 	"github.com/gin-gonic/gin"
 )
@@ -22,9 +22,9 @@ func GetSnowflakeNode(ctx context.Context) *xSnowflake.Node {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx.SnowflakeNodeKey); component != nil {
+	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx2.SnowflakeNodeKey); component != nil {
 				if node, ok := component.(*xSnowflake.Node); ok {
 					return node
 				}
@@ -32,7 +32,7 @@ func GetSnowflakeNode(ctx context.Context) *xSnowflake.Node {
 		}
 	}
 
-	value := ctx.Value(xCtx.SnowflakeNodeKey)
+	value := ctx.Value(xCtx2.SnowflakeNodeKey)
 	if value != nil {
 		if node, ok := value.(*xSnowflake.Node); ok {
 			return node

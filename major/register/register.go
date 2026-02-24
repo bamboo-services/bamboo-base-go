@@ -3,7 +3,7 @@ package xReg
 import (
 	"context"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/major/context"
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xInit "github.com/bamboo-services/bamboo-base-go/major/register/init"
 	xRegNode "github.com/bamboo-services/bamboo-base-go/major/register/node"
 	"github.com/gin-gonic/gin"

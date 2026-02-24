@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	"github.com/gin-gonic/gin"
 )
@@ -12,12 +12,12 @@ import (
 // MustGet 是一个通用的组件获取函数
 // T: 想要获取的组件类型
 // key: 注册时使用的 ContextKey
-func MustGet[T any](ctx context.Context, key xCtx.ContextKey) T {
+func MustGet[T any](ctx context.Context, key xCtx2.ContextKey) T {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if val := ctx.Value(xCtx.RegNodeKey); val != nil {
-		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
+	if val := ctx.Value(xCtx2.RegNodeKey); val != nil {
+		if nodeList, ok := val.(xCtx2.ContextNodeList); ok {
 			if component := nodeList.Get(key); component != nil {
 				if typed, ok := component.(T); ok {
 					return typed
@@ -48,14 +48,14 @@ func MustGet[T any](ctx context.Context, key xCtx.ContextKey) T {
 // 返回值:
 //   - T: 组件实例（失败时为零值）
 //   - *xError.Error: 错误信息，成功时为 nil
-func Get[T any](ctx context.Context, key xCtx.ContextKey) (T, *xError.Error) {
+func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *xError.Error) {
 	var zero T
 
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if val := ctx.Value(xCtx.RegNodeKey); val != nil {
-		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
+	if val := ctx.Value(xCtx2.RegNodeKey); val != nil {
+		if nodeList, ok := val.(xCtx2.ContextNodeList); ok {
 			if component := nodeList.Get(key); component != nil {
 				if typed, ok := component.(T); ok {
 					return typed, nil

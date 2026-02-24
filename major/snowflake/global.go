@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/bamboo-services/bamboo-base-go/major/env"
+	"github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
 var (

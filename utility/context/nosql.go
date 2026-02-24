@@ -3,7 +3,7 @@ package xCtxUtil
 import (
 	"context"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"
@@ -23,9 +23,9 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
+	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx2.RedisClientKey); component != nil {
 				if rdb, ok := component.(*redis.Client); ok {
 					return rdb
 				}
@@ -33,7 +33,7 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 		}
 	}
 
-	value := ctx.Value(xCtx.RedisClientKey)
+	value := ctx.Value(xCtx2.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb
@@ -57,9 +57,9 @@ func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
+	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx2.RedisClientKey); component != nil {
 				if rdb, ok := component.(*redis.Client); ok {
 					return rdb, nil
 				}
@@ -67,7 +67,7 @@ func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
 		}
 	}
 
-	value := ctx.Value(xCtx.RedisClientKey)
+	value := ctx.Value(xCtx2.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb, nil

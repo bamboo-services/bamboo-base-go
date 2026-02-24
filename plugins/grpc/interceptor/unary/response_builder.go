@@ -6,9 +6,9 @@ import (
 	"reflect"
 
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/major/utility/ctxutil"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc"
 	xGrpcGenerate "github.com/bamboo-services/bamboo-base-go/plugins/grpc/generate"
+	xCtxUtil "github.com/bamboo-services/bamboo-base-go/utility/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )

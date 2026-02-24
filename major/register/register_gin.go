@@ -3,8 +3,8 @@ package xReg
 import (
 	xHelper "github.com/bamboo-services/bamboo-base-go/major/helper"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/major/utility/ctxutil"
 	xVaild "github.com/bamboo-services/bamboo-base-go/major/validator"
+	"github.com/bamboo-services/bamboo-base-go/utility/context"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"

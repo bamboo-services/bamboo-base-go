@@ -6,7 +6,7 @@ import (
 	"os"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/major/utility/ctxutil"
+	"github.com/bamboo-services/bamboo-base-go/utility/context"
 )
 
 // loggerInit 初始化并设置全局日志记录器。

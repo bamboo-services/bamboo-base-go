@@ -3,7 +3,7 @@ package xCtxUtil
 import (
 	"context"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"
@@ -27,16 +27,16 @@ func MustGetDB(ctx context.Context) *gorm.DB {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
+	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx2.DatabaseKey); component != nil {
 				if db, ok := component.(*gorm.DB); ok {
 					return db.WithContext(ctx)
 				}
 			}
 		}
 	}
-	if value := ctx.Value(xCtx.DatabaseKey); value != nil {
+	if value := ctx.Value(xCtx2.DatabaseKey); value != nil {
 		if db, ok := value.(*gorm.DB); ok {
 			return db.WithContext(ctx)
 		}
@@ -60,9 +60,9 @@ func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
-	if value := ctx.Value(xCtx.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
+	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx2.DatabaseKey); component != nil {
 				if db, ok := component.(*gorm.DB); ok {
 					return db.WithContext(ctx), nil
 				}
@@ -70,7 +70,7 @@ func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
 		}
 	}
 
-	value := ctx.Value(xCtx.DatabaseKey)
+	value := ctx.Value(xCtx2.DatabaseKey)
 	if value != nil {
 		if db, ok := value.(*gorm.DB); ok {
 			return db.WithContext(ctx), nil

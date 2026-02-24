@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	xCtx "github.com/bamboo-services/bamboo-base-go/major/context"
+	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"
 )
@@ -24,14 +24,14 @@ type Node func(ctx context.Context) (any, error)
 
 // RegNodeList 存储组件的上下文键及其初始化函数。
 type RegNodeList struct {
-	Key  xCtx.ContextKey
+	Key  xCtx2.ContextKey
 	Node Node
 }
 
 // RegNode 是应用程序组件注册和初始化的管理器。
 type RegNode struct {
 	list  []RegNodeList
-	value xCtx.ContextNodeList
+	value xCtx2.ContextNodeList
 	Ctx   context.Context
 }
 
@@ -48,7 +48,7 @@ func NewRegNode(ctx context.Context) *RegNode {
 	}
 	regNode := &RegNode{
 		list:  make([]RegNodeList, 0),
-		value: xCtx.NewCtxNodeList(),
+		value: xCtx2.NewCtxNodeList(),
 		Ctx:   ctx,
 	}
 	return regNode
@@ -82,11 +82,11 @@ func NewRegNode(ctx context.Context) *RegNode {
 //	    cfg := ctx.Value(xCtx.ConfigKey).(Config)
 //	    return connectDB(cfg.DSN), nil
 //	})
-func (rn *RegNode) Use(ctxKey xCtx.ContextKey, registerFunc Node) {
+func (rn *RegNode) Use(ctxKey xCtx2.ContextKey, registerFunc Node) {
 	if rn.list == nil {
 		panic("初始化外部禁止二次初始化")
 	}
-	if ctxKey != xCtx.Exec {
+	if ctxKey != xCtx2.Exec {
 		if ctxKey.IsNil() {
 			return
 		}
@@ -160,7 +160,7 @@ func (rn *RegNode) Exec() {
 func (rn *RegNode) InjectContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		httpCtx := c.Request.Context()
-		httpCtx = context.WithValue(httpCtx, xCtx.RegNodeKey, rn.value)
+		httpCtx = context.WithValue(httpCtx, xCtx2.RegNodeKey, rn.value)
 
 		c.Request = c.Request.WithContext(httpCtx)
 		c.Next()

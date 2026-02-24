@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/major/context"
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"github.com/bamboo-services/bamboo-base-go/major/http"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

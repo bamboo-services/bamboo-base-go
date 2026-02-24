@@ -9,7 +9,7 @@ import (
 	"time"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
-	xCtxUtil "github.com/bamboo-services/bamboo-base-go/major/utility/ctxutil"
+	"github.com/bamboo-services/bamboo-base-go/utility/context"
 	"github.com/gin-gonic/gin"
 )
 

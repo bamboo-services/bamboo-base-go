@@ -4,8 +4,8 @@ import (
 	"io"
 	"log/slog"
 
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xBase "github.com/bamboo-services/bamboo-base-go/major"
-	xConsts "github.com/bamboo-services/bamboo-base-go/major/context"
 	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"

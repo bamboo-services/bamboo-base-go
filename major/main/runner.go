@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	xEnv "github.com/bamboo-services/bamboo-base-go/major/env"
+	xEnv2 "github.com/bamboo-services/bamboo-base-go/defined/env"
 	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xReg "github.com/bamboo-services/bamboo-base-go/major/register"
 )
@@ -44,8 +44,8 @@ func Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Re
 		routeFunc(reg)
 	}
 
-	getHost := xEnv.GetEnvString(xEnv.Host, "localhost")
-	getPort := xEnv.GetEnvString(xEnv.Port, "1118")
+	getHost := xEnv2.GetEnvString(xEnv2.Host, "localhost")
+	getPort := xEnv2.GetEnvString(xEnv2.Port, "1118")
 	server := &http.Server{
 		Addr:    getHost + ":" + getPort,
 		Handler: reg.Serve,

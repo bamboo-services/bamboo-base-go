@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	xUtil "github.com/bamboo-services/bamboo-base-go/major/utility"
+	xUtil "github.com/bamboo-services/bamboo-base-go/utility/package"
 )
 
 // GetEnv 获取环境变量值。

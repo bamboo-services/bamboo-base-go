@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/major/context"
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"github.com/gin-gonic/gin"
 )
 

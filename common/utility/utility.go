@@ -14,16 +14,16 @@ import (
 //   - data: 泛型结构体指针，用于接收绑定后的数据
 //
 // 返回值:
-//   - *pack.Binding[T] 绑定工具实例，可链式调用 BindData / BindQuery / BindURI / BindHeader
+//   - *pack.Binding[T] 绑定工具实例，可链式调用 Data / Query / URI / Header
 //
 // 使用方式：
 //
 //	var req CreateUserRequest
-//	if data := xUtil.Bind(ctx, &req).BindData(); data == nil {
+//	if data := xUtil.Bind(ctx, &req).Data(); data == nil {
 //	    return
 //	}
-//	// 也支持 BindQuery / BindURI / BindHeader
-//	xUtil.Bind(ctx, &req).BindQuery()
+//	// 也支持 Query / URI / Header
+//	xUtil.Bind(ctx, &req).Query()
 func Bind[T any](ctx *gin.Context, data *T) *pack.Binding[T] {
 	return &pack.Binding[T]{
 		Context: ctx,

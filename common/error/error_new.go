@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 )
 
 // NewError 创建一个新的错误对象。

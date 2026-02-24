@@ -3,9 +3,9 @@ package xCtxUtil
 import (
 	"context"
 
+	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -53,7 +53,7 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 // 返回值:
 //   - *redis.Client: Redis 客户端实例
 //   - *xError.Error: 错误信息，成功时为 nil
-func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
+func GetRDB(ctx context.Context) (*redis.Client, *error2.Error) {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
@@ -73,8 +73,8 @@ func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
 			return rdb, nil
 		}
 	}
-	return nil, &xError.Error{
-		ErrorCode:    xError.CacheError,
+	return nil, &error2.Error{
+		ErrorCode:    error2.CacheError,
 		ErrorMessage: "在上下文中找不到 Redis 客户端",
 	}
 }

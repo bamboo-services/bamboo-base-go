@@ -9,10 +9,9 @@ import (
 	"log/slog"
 	"strings"
 
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
+	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	log2 "github.com/bamboo-services/bamboo-base-go/common/log"
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 )
 
 // ValidationErrorDetail 验证错误详情
@@ -80,7 +79,7 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 		}
 	} else {
 		// 处理非标准验证错误（如 JSON 解析错误、未注册的验证器等）
-		log := xLog.WithName(xLog.NamedVALD)
+		log := log2.WithName(log2.NamedVALD)
 		log.Warn(ctx.Request.Context(),
 			"验证错误无法解析为 ValidationErrors",
 			slog.String("error", bindErr.Error()),
@@ -102,10 +101,10 @@ func HandleValidationError(ctx *gin.Context, bindErr error) {
 
 	// 创建错误响应
 	// 注意：使用 errorDetails... 展开切片，避免嵌套数组
-	_ = ctx.Error(xError.NewErrorHasData(
+	_ = ctx.Error(error2.NewErrorHasData(
 		ctx.Request.Context(),
-		xError.BodyError,
-		xError.ErrMessage(firstErrorMessage),
+		error2.BodyError,
+		error2.ErrMessage(firstErrorMessage),
 		false,
 		bindErr,
 		interfaceSlice(errorDetails)...,

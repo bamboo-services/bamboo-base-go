@@ -1,7 +1,7 @@
 package pack
 
 import (
-	xVaild "github.com/bamboo-services/bamboo-base-go/major/validator"
+	xVaild "github.com/bamboo-services/bamboo-base-go/common/validator"
 	"github.com/gin-gonic/gin"
 )
 

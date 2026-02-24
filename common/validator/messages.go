@@ -3,7 +3,6 @@ package xVaild
 import (
 	"errors"
 	"fmt"
-	"github.com/go-playground/validator/v10"
 )
 
 // ValidationErrorMessages 定义验证错误消息的映射

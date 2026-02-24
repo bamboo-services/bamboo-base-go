@@ -3,8 +3,8 @@ package xCtxUtil
 import (
 	"context"
 
+	xSnowflake "github.com/bamboo-services/bamboo-base-go/common/snowflake"
 	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xSnowflake "github.com/bamboo-services/bamboo-base-go/major/snowflake"
 	"github.com/gin-gonic/gin"
 )
 

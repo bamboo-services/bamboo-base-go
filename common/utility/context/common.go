@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/bamboo-services/bamboo-base-go/defined/env"
+	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
 // IsDebugMode 判断当前是否处于调试模式。

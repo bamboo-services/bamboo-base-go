@@ -3,9 +3,9 @@ package xCtxUtil
 import (
 	"context"
 
+	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -56,7 +56,7 @@ func MustGetDB(ctx context.Context) *gorm.DB {
 // 返回值:
 //   - *gorm.DB: 数据库连接实例
 //   - *xError.Error: 错误信息，成功时为 nil
-func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
+func GetDB(ctx context.Context) (*gorm.DB, *error2.Error) {
 	if ginCtx, ok := ctx.(*gin.Context); ok {
 		ctx = ginCtx.Request.Context()
 	}
@@ -76,8 +76,8 @@ func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
 			return db.WithContext(ctx), nil
 		}
 	}
-	return nil, &xError.Error{
-		ErrorCode:    xError.DatabaseError,
+	return nil, &error2.Error{
+		ErrorCode:    error2.DatabaseError,
 		ErrorMessage: "在上下文中找不到数据库",
 	}
 }

@@ -1,7 +1,7 @@
 package xUtil
 
 import (
-	pack "github.com/bamboo-services/bamboo-base-go/utility/package"
+	pack "github.com/bamboo-services/bamboo-base-go/common/utility/package"
 	"github.com/gin-gonic/gin"
 )
 

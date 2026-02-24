@@ -1,6 +1,8 @@
-package major
+package common
 
-import xError "github.com/bamboo-services/bamboo-base-go/major/error"
+import (
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
+)
 
 // BaseResponse 表示通用的响应结构体，用于封装 API 的返回结果。
 //

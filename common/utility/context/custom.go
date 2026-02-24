@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
 	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	xError "github.com/bamboo-services/bamboo-base-go/major/error"
 	"github.com/gin-gonic/gin"
 )
 
@@ -48,7 +48,7 @@ func MustGet[T any](ctx context.Context, key xCtx2.ContextKey) T {
 // 返回值:
 //   - T: 组件实例（失败时为零值）
 //   - *xError.Error: 错误信息，成功时为 nil
-func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *xError.Error) {
+func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *error2.Error) {
 	var zero T
 
 	if ginCtx, ok := ctx.(*gin.Context); ok {
@@ -70,8 +70,8 @@ func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *xError.Error) {
 		}
 	}
 
-	return zero, &xError.Error{
-		ErrorCode:    xError.ServerInternalError,
-		ErrorMessage: xError.ErrMessage(fmt.Sprintf("SDK 组件缺失: 无法在上下文中找到 Key 为 [%v] 的组件", key)),
+	return zero, &error2.Error{
+		ErrorCode:    error2.ServerInternalError,
+		ErrorMessage: error2.ErrMessage(fmt.Sprintf("SDK 组件缺失: 无法在上下文中找到 Key 为 [%v] 的组件", key)),
 	}
 }

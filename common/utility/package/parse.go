@@ -7,19 +7,7 @@ import (
 	"strings"
 )
 
-type parse struct{}
-
-// Parse 返回解析工具实例。
-//
-// 可用于链式调用解析方法，例如：
-//
-//	xUtil.Parse().Int("123")
-//
-// 返回值:
-//   - *parse: 解析工具实例
-func Parse() *parse {
-	return &parse{}
-}
+type Parse struct{}
 
 // Int 将输入值转换为 int 类型。
 //
@@ -33,7 +21,7 @@ func Parse() *parse {
 // 返回值:
 //   - int: 转换后的整数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Int(value any) (int, bool) {
+func (Parse) Int(value any) (int, bool) {
 	number, ok := parseIntRange(value, math.MinInt, math.MaxInt, strconv.IntSize)
 	if !ok {
 		return 0, false
@@ -53,7 +41,7 @@ func (parse) Int(value any) (int, bool) {
 // 返回值:
 //   - int8: 转换后的整数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Int8(value any) (int8, bool) {
+func (Parse) Int8(value any) (int8, bool) {
 	number, ok := parseIntRange(value, math.MinInt8, math.MaxInt8, 8)
 	if !ok {
 		return 0, false
@@ -73,7 +61,7 @@ func (parse) Int8(value any) (int8, bool) {
 // 返回值:
 //   - int16: 转换后的整数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Int16(value any) (int16, bool) {
+func (Parse) Int16(value any) (int16, bool) {
 	number, ok := parseIntRange(value, math.MinInt16, math.MaxInt16, 16)
 	if !ok {
 		return 0, false
@@ -93,7 +81,7 @@ func (parse) Int16(value any) (int16, bool) {
 // 返回值:
 //   - int32: 转换后的整数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Int32(value any) (int32, bool) {
+func (Parse) Int32(value any) (int32, bool) {
 	number, ok := parseIntRange(value, math.MinInt32, math.MaxInt32, 32)
 	if !ok {
 		return 0, false
@@ -113,7 +101,7 @@ func (parse) Int32(value any) (int32, bool) {
 // 返回值:
 //   - int64: 转换后的整数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Int64(value any) (int64, bool) {
+func (Parse) Int64(value any) (int64, bool) {
 	return parseIntRange(value, math.MinInt64, math.MaxInt64, 64)
 }
 
@@ -130,7 +118,7 @@ func (parse) Int64(value any) (int64, bool) {
 // 返回值:
 //   - uint: 转换后的无符号整数值
 //   - bool: 是否转换成功（类型不支持、负数或超出范围时返回 false）
-func (parse) Uint(value any) (uint, bool) {
+func (Parse) Uint(value any) (uint, bool) {
 	number, ok := parseUintRange(value, math.MaxUint, strconv.IntSize)
 	if !ok {
 		return 0, false
@@ -151,7 +139,7 @@ func (parse) Uint(value any) (uint, bool) {
 // 返回值:
 //   - uint8: 转换后的无符号整数值
 //   - bool: 是否转换成功（类型不支持、负数或超出范围时返回 false）
-func (parse) Uint8(value any) (uint8, bool) {
+func (Parse) Uint8(value any) (uint8, bool) {
 	number, ok := parseUintRange(value, math.MaxUint8, 8)
 	if !ok {
 		return 0, false
@@ -172,7 +160,7 @@ func (parse) Uint8(value any) (uint8, bool) {
 // 返回值:
 //   - uint16: 转换后的无符号整数值
 //   - bool: 是否转换成功（类型不支持、负数或超出范围时返回 false）
-func (parse) Uint16(value any) (uint16, bool) {
+func (Parse) Uint16(value any) (uint16, bool) {
 	number, ok := parseUintRange(value, math.MaxUint16, 16)
 	if !ok {
 		return 0, false
@@ -193,7 +181,7 @@ func (parse) Uint16(value any) (uint16, bool) {
 // 返回值:
 //   - uint32: 转换后的无符号整数值
 //   - bool: 是否转换成功（类型不支持、负数或超出范围时返回 false）
-func (parse) Uint32(value any) (uint32, bool) {
+func (Parse) Uint32(value any) (uint32, bool) {
 	number, ok := parseUintRange(value, math.MaxUint32, 32)
 	if !ok {
 		return 0, false
@@ -214,7 +202,7 @@ func (parse) Uint32(value any) (uint32, bool) {
 // 返回值:
 //   - uint64: 转换后的无符号整数值
 //   - bool: 是否转换成功（类型不支持、负数或超出范围时返回 false）
-func (parse) Uint64(value any) (uint64, bool) {
+func (Parse) Uint64(value any) (uint64, bool) {
 	return parseUintRange(value, math.MaxUint64, 64)
 }
 
@@ -230,7 +218,7 @@ func (parse) Uint64(value any) (uint64, bool) {
 // 返回值:
 //   - float32: 转换后的浮点数值
 //   - bool: 是否转换成功（类型不支持或超出范围时返回 false）
-func (parse) Float32(value any) (float32, bool) {
+func (Parse) Float32(value any) (float32, bool) {
 	number, ok := parseFloatValue(value, 32)
 	if !ok {
 		return 0, false
@@ -252,7 +240,7 @@ func (parse) Float32(value any) (float32, bool) {
 // 返回值:
 //   - float64: 转换后的浮点数值
 //   - bool: 是否转换成功（类型不支持或解析失败时返回 false）
-func (parse) Float64(value any) (float64, bool) {
+func (Parse) Float64(value any) (float64, bool) {
 	return parseFloatValue(value, 64)
 }
 
@@ -268,7 +256,7 @@ func (parse) Float64(value any) (float64, bool) {
 // 返回值:
 //   - bool: 转换后的布尔值
 //   - bool: 是否转换成功（类型不支持或字符串不可识别时返回 false）
-func (parse) Bool(value any) (bool, bool) {
+func (Parse) Bool(value any) (bool, bool) {
 	switch v := value.(type) {
 	case bool:
 		return v, true
@@ -325,7 +313,7 @@ func (parse) Bool(value any) (bool, bool) {
 // 返回值:
 //   - string: 转换后的字符串
 //   - bool: 是否转换成功（类型不支持时返回 false）
-func (parse) String(value any) (string, bool) {
+func (Parse) String(value any) (string, bool) {
 	switch v := value.(type) {
 	case string:
 		return v, true

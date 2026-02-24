@@ -77,3 +77,10 @@ func Str() *pack.Str { return &pack.Str{} }
 //	xUtil.Timer().Now()
 //	xUtil.Timer().Format(t, layout)
 func Timer() *pack.Timer { return &pack.Timer{} }
+
+// Parse 返回一个新的 `Parse` 实例，用于执行多种类型的值解析操作。
+//
+// 该函数通常用于初始化值转换工具，工具内包含丰富的类型解析方法。
+func Parse() *pack.Parse {
+	return &pack.Parse{}
+}

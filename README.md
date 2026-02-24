@@ -1,7 +1,7 @@
 # Bamboo Base Go
 
-[![Go Version](https://img.shields.io/badge/Go-1.24.6+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.25.0+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 [![Documentation](https://img.shields.io/badge/Docs-doc.x--lf.com-green?style=flat-square)](https://doc.x-lf.com/docs/bamboo-base-go)
 
 Bamboo Base Go 是 Bamboo 服务的基础组件库，面向 Gin HTTP API 与 gRPC 服务的统一启动、错误处理、日志、配置与上下文注入。
@@ -125,25 +125,43 @@ cp .env.example .env
 
 ## 项目结构
 
+项目使用 Go Workspace (`go.work`) 管理多个独立模块：
+
 ```
 bamboo-base/
-├── cache/       # 缓存泛型接口定义 (xCache)
-├── context/     # 上下文键常量与节点存储 (xCtx)
-├── env/         # 环境变量管理 (xEnv)
-├── error/       # 错误处理 (xError)
-├── grpc/        # gRPC 运行时、拦截器、错误与响应 (xGrpc*)
-├── http/        # HTTP 常量 (xHttp)
-├── log/         # 日志系统 (xLog)
-├── main/        # 应用运行器 (xMain)
-├── middleware/  # Gin 中间件 (xMiddle)
-├── models/      # 数据模型（含分页模型）(xModels)
-├── proto/       # gRPC proto 定义
-├── register/    # 注册初始化 (xReg)
-├── result/      # HTTP 响应处理 (xResult)
-├── route/       # 路由处理 (xRoute)
-├── snowflake/   # 雪花算法 (xSnowflake)
-├── utility/     # 工具函数与绑定函数 (xUtil)
-└── validator/   # 验证器 (xValidator)
+├── go.work                       # Go 工作区配置
+├── major/                        # 核心层模块
+│   ├── cache/                    #   缓存泛型接口 (xCache)
+│   ├── error/                    #   错误处理 (xError)
+│   ├── helper/                   #   辅助工具 (恢复、上下文、日志)
+│   ├── hook/                     #   Redis 钩子
+│   ├── http/                     #   HTTP 常量 (xHttp)
+│   ├── log/                      #   日志系统 (xLog)
+│   ├── main/                     #   应用运行器 (xMain)
+│   ├── middleware/               #   Gin 中间件 (xMiddle)
+│   ├── models/                   #   数据模型与分页 (xModels)
+│   ├── register/                 #   节点化注册初始化 (xReg)
+│   ├── result/                   #   HTTP 响应处理 (xResult)
+│   ├── route/                    #   路由处理 (xRoute)
+│   ├── snowflake/                #   雪花算法 (xSnowflake)
+│   └── validator/                #   验证器 (xValidator)
+├── defined/                      # 定义层模块
+│   ├── context/                  #   上下文键常量 (xCtx)
+│   └── env/                      #   环境变量管理 (xEnv)
+├── utility/                      # 工具层模块
+│   ├── context/                  #   上下文工具 (xCtxUtil)
+│   └── package/                  #   通用工具函数 (xUtil)
+└── plugins/                      # 插件模块
+    ├── cron/                     #   定时任务插件
+    └── grpc/                     #   gRPC 框架插件
+```
+
+### 模块依赖关系
+
+```
+defined ──> utility ──> major
+plugins/cron ──────────> major
+plugins/grpc ──> defined + major + utility
 ```
 
 ## 核心依赖
@@ -166,7 +184,9 @@ bamboo-base/
 
 ## 许可证
 
-MIT License
+[Apache License 2.0](LICENSE)
+
+Copyright 2025-2026 Bamboo Services
 
 ## 链接
 

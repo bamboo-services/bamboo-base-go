@@ -3,6 +3,8 @@ module github.com/bamboo-services/bamboo-base-go/major
 go 1.25.0
 
 require (
+	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241721
+	github.com/bamboo-services/bamboo-base-go/utility v1.0.0-202602241721
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
@@ -10,7 +12,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.18.0
-	golang.org/x/crypto v0.48.0
 	gorm.io/gorm v1.31.1
 )
 
@@ -41,6 +42,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/arch v0.24.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect

@@ -1,3 +1,9 @@
+github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241721 h1:s5SRteTtJFAWnfclC/CuhcjAukp1B1wcmcenWRzrhlo=
+github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241721/go.mod h1:83ZGbvSd62QBhhjKa7toNP2+eKRK3Gs5AIxdYEaRmAQ=
+github.com/bamboo-services/bamboo-base-go/major v1.0.0-202602241721 h1:rNvVsdZFxdgWaKImNUbSupVIW9irzQTEO6/l1UeTWOs=
+github.com/bamboo-services/bamboo-base-go/major v1.0.0-202602241721/go.mod h1:lDw2J1Ga1PW5/cUx4YdDFUXHHWB90sAs+KQZFwUaz5k=
+github.com/bamboo-services/bamboo-base-go/utility v1.0.0-202602241721 h1:UVEbASxa2BCVcG6nktimYZSx5dsbWrRDwCkb5MVIepI=
+github.com/bamboo-services/bamboo-base-go/utility v1.0.0-202602241721/go.mod h1:s80iHmbY6Y6maUiqOyk5fGyvovNq5X/hRh9hDQ76UD8=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=

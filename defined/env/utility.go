@@ -3,9 +3,8 @@ package xEnv
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
-
-	xUtil "github.com/bamboo-services/bamboo-base-go/utility/package"
 )
 
 // GetEnv 获取环境变量值。
@@ -73,7 +72,7 @@ func GetEnvInt(key EnvKey, defaultValue int) int {
 //   - 环境变量的布尔值，或默认值
 func GetEnvBool(key EnvKey, defaultValue bool) bool {
 	if value, exists := os.LookupEnv(key.String()); exists {
-		if boolVal, ok := xUtil.Parse().Bool(value); ok {
+		if boolVal, ok := parseBool(value); ok {
 			return boolVal
 		}
 	}
@@ -126,4 +125,62 @@ func GetEnvDuration(key EnvKey, defaultValue int64) time.Duration {
 		}
 	}
 	return time.Duration(defaultValue)
+}
+
+// Bool 将输入值转换为 bool 类型。
+//
+// 支持的类型包括 bool、所有整数、浮点数以及 string。
+// 数值类型中非 0 视为 true；0 视为 false。
+// 字符串支持 true/false、1/0、yes/no、on/off、enabled/disabled（不区分大小写）。
+//
+// 参数说明:
+//   - value: 需要解析的输入值
+//
+// 返回值:
+//   - bool: 转换后的布尔值
+//   - bool: 是否转换成功（类型不支持或字符串不可识别时返回 false）
+func parseBool(value any) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	case int:
+		return v != 0, true
+	case int8:
+		return v != 0, true
+	case int16:
+		return v != 0, true
+	case int32:
+		return v != 0, true
+	case int64:
+		return v != 0, true
+	case uint:
+		return v != 0, true
+	case uint8:
+		return v != 0, true
+	case uint16:
+		return v != 0, true
+	case uint32:
+		return v != 0, true
+	case uint64:
+		return v != 0, true
+	case float32:
+		return v != 0, true
+	case float64:
+		return v != 0, true
+	case string:
+		trimmed := strings.ToLower(strings.TrimSpace(v))
+		if trimmed == "" {
+			return false, false
+		}
+		switch trimmed {
+		case "true", "1", "yes", "on", "enabled":
+			return true, true
+		case "false", "0", "no", "off", "disabled":
+			return false, true
+		default:
+			return false, false
+		}
+	default:
+		return false, false
+	}
 }

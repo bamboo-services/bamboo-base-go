@@ -12,6 +12,7 @@ import (
 	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
 	log2 "github.com/bamboo-services/bamboo-base-go/common/log"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 // ValidationErrorDetail 验证错误详情

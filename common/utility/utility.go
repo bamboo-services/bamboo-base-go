@@ -27,7 +27,7 @@ import (
 func Bind[T any](ctx *gin.Context, data *T) *pack.Binding[T] {
 	return &pack.Binding[T]{
 		Context: ctx,
-		Data:    data,
+		GetData: data,
 	}
 }
 

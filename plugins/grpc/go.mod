@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/grpc
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241827
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855
 	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812
 	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.79.1
@@ -45,6 +45,6 @@ require (
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260223185530-2f722ef697dc // indirect
 	gorm.io/gorm v1.31.1 // indirect
 )

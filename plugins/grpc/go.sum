@@ -1,5 +1,7 @@
 github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241827 h1:VM/Srf0Cg4FrxbdivT+a4kK6AhXwwSePbwEhCMHJbBY=
 github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241827/go.mod h1:vzW9wX2j9yrCm4wz2ENFnEk6igrw0073/3M0F2ZqCQw=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855 h1:mHiZySXryaskKRn0veYVIFfcDmRVfEloCoqiwIbMiJg=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855/go.mod h1:vzW9wX2j9yrCm4wz2ENFnEk6igrw0073/3M0F2ZqCQw=
 github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812 h1:OWRF0+L0SvpblN8FfikrDzvC584FkREQMHK3JPDAD/I=
 github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812/go.mod h1:HeZrdm3jyUYr9QK0ciS9Qs0aXKanwuxnW40XZi1DS3M=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
@@ -125,6 +127,8 @@ gonum.org/v1/gonum v0.16.0 h1:5+ul4Swaf3ESvrOnidPp4GZbzf0mxVQpDCYUQE7OJfk=
 gonum.org/v1/gonum v0.16.0/go.mod h1:fef3am4MQ93R2HHpKnLk4/Tbh/s0+wqD5nfa6Pnwy4E=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d h1:t/LOSXPJ9R0B6fnZNyALBRfZBH0Uy0gT+uR+SJ6syqQ=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d/go.mod h1:4Hqkh8ycfw05ld/3BWL7rJOSfebL2Q+DVDeRgYgxUU8=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260223185530-2f722ef697dc h1:51Wupg8spF+5FC6D+iMKbOddFjMckETnNnEiZ+HX37s=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260223185530-2f722ef697dc/go.mod h1:4Hqkh8ycfw05ld/3BWL7rJOSfebL2Q+DVDeRgYgxUU8=
 google.golang.org/grpc v1.79.1 h1:zGhSi45ODB9/p3VAawt9a+O/MULLl9dpizzNNpq7flY=
 google.golang.org/grpc v1.79.1/go.mod h1:KmT0Kjez+0dde/v2j9vzwoAScgEPx/Bw1CYChhHLrHQ=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=

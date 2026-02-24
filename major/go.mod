@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/major
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241827
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855
 	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-playground/validator/v10 v10.30.1

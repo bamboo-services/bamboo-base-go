@@ -3,12 +3,12 @@ module github.com/bamboo-services/bamboo-base-go/plugins/cron
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241827
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855
 	github.com/robfig/cron/v3 v3.0.1
 )
 
 require (
-	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241721 // indirect
+	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect

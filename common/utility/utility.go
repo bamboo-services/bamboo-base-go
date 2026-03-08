@@ -92,3 +92,10 @@ func Parse() *pack.Parse {
 func Valid() *pack.Valid {
 	return &pack.Valid{}
 }
+
+// Function 创建并返回一个新的 Function 实例。
+//
+// 返回的实例用于提供函数名称获取、方法名称解析等反射相关的工具方法。
+func Function() *pack.Function {
+	return &pack.Function{}
+}

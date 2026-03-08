@@ -4,6 +4,8 @@ github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855 h1:mHiZySXr
 github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241855/go.mod h1:vzW9wX2j9yrCm4wz2ENFnEk6igrw0073/3M0F2ZqCQw=
 github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081511 h1:RNn+Usbg+hEtikCoYwxgAdBVCViiF6OlnJzG4OBpQ1g=
 github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081511/go.mod h1:vzW9wX2j9yrCm4wz2ENFnEk6igrw0073/3M0F2ZqCQw=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081522 h1:l2uw94pzRfO40aF+FskGMja9EJ7QSeW3MATVmqp9YWc=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081522/go.mod h1:vzW9wX2j9yrCm4wz2ENFnEk6igrw0073/3M0F2ZqCQw=
 github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812 h1:OWRF0+L0SvpblN8FfikrDzvC584FkREQMHK3JPDAD/I=
 github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812/go.mod h1:HeZrdm3jyUYr9QK0ciS9Qs0aXKanwuxnW40XZi1DS3M=
 github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241921 h1:qSGjexmOggcuXtB1VwgAyGzuYzQoQqsExGaXICG8Clc=

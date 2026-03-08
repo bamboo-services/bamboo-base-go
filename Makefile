@@ -33,8 +33,9 @@ help:
 	@echo "发布命令:"
 	@echo "  make release PKG=<name>       - 发布指定模块 (major|common|defined)"
 	@echo "  make release-plugins PLG=<name> - 发布指定插件 (cron|grpc)"
-	@echo "  make release-all              - 发布全部模块和插件"
+	@echo "  make release-all              - 按依赖顺序发布全部模块和插件"
 	@echo ""
+	@echo "依赖顺序: defined → common → major, plugins/cron, plugins/grpc"
 	@echo "版本格式: v{version}-{YYYYMMDDHHMM}"
 	@echo "  根版本号:   $(ROOT_VERSION)  (来自 ./version)"
 	@echo "  时间戳:     $(TIMESTAMP)"
@@ -77,6 +78,28 @@ define build_tag
 $(strip $(1))/v$(ROOT_VERSION).$(shell cat $(1)/version)-$(TIMESTAMP)
 endef
 
+# 更新下游模块依赖的函数
+# $(1): 已发布的模块名 (如 defined, common)
+# $(2): 新版本 tag (如 defined/v1.0.0-202603081200)
+define update_dep
+	@echo "   🔄 更新下游模块的 $(1) 依赖版本..."
+	@if [ "$(1)" = "defined" ]; then \
+		for mod in common major plugins/grpc; do \
+			if [ -f "$$mod/go.mod" ]; then \
+				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/defined v[0-9].*|github.com/bamboo-services/bamboo-base-go/defined $(2)|g' $$mod/go.mod; \
+				echo "      ✅ $$mod/go.mod"; \
+			fi; \
+		done; \
+	elif [ "$(1)" = "common" ]; then \
+		for mod in major plugins/cron plugins/grpc; do \
+			if [ -f "$$mod/go.mod" ]; then \
+				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/common v[0-9].*|github.com/bamboo-services/bamboo-base-go/common $(2)|g' $$mod/go.mod; \
+				echo "      ✅ $$mod/go.mod"; \
+			fi; \
+		done; \
+	fi
+endef
+
 # --- make release PKG=<name> ---
 # 发布指定模块（major / common / defined）
 release:
@@ -110,25 +133,54 @@ endif
 	@echo "✅ plugins/$(PLG) 发布完成: $(TAG)"
 
 # --- make release-all ---
-# 发布全部模块和插件
+# 按依赖顺序发布全部模块和插件，并自动更新下游依赖
+# 依赖链: defined → common → major, plugins/cron → common, plugins/grpc → defined + common
+# 发布顺序: defined → common → major → plugins/cron → plugins/grpc
 release-all:
-	@echo "🚀 发布全部模块和插件"
+	@echo "🚀 按依赖顺序发布全部模块和插件"
 	@echo "   时间戳: $(TIMESTAMP)"
+	@echo "   顺序: defined → common → major → plugins/cron → plugins/grpc"
 	@echo ""
-	@for pkg in $(PACKAGES); do \
-		tag="$$pkg/v$(ROOT_VERSION).$$(cat $$pkg/version)-$(TIMESTAMP)"; \
-		echo "📦 [$$pkg] → $$tag"; \
-		git tag -a "$$tag" -m "Release $$tag"; \
-		echo "   ✅ tag 创建成功"; \
-	done
-	@for plg in $(PLUGINS); do \
-		tag="plugins/$$plg/v$(ROOT_VERSION).$$(cat plugins/$$plg/version)-$(TIMESTAMP)"; \
-		echo "🔌 [plugins/$$plg] → $$tag"; \
-		git tag -a "$$tag" -m "Release $$tag"; \
-		echo "   ✅ tag 创建成功"; \
-	done
+	@# 1. 发布 defined (无依赖，最底层)
+	@$(eval TAG_DEFINED := $(call build_tag,defined))
+	@echo "📦 [1/5] 发布 defined"
+	@echo "   tag: $(TAG_DEFINED)"
+	@git tag -a "$(TAG_DEFINED)" -m "Release $(TAG_DEFINED)"
+	@git push origin "$(TAG_DEFINED)"
+	@echo "   ✅ defined 发布完成"
+	$(call update_dep,defined,$(TAG_DEFINED))
 	@echo ""
-	@echo "推送所有 tag 到远程仓库..."
-	@git push --tags
+	@# 2. 发布 common (依赖 defined)
+	@$(eval TAG_COMMON := $(call build_tag,common))
+	@echo "📦 [2/5] 发布 common"
+	@echo "   tag: $(TAG_COMMON)"
+	@git tag -a "$(TAG_COMMON)" -m "Release $(TAG_COMMON)"
+	@git push origin "$(TAG_COMMON)"
+	@echo "   ✅ common 发布完成"
+	$(call update_dep,common,$(TAG_COMMON))
+	@echo ""
+	@# 3. 发布 major (依赖 common, defined)
+	@$(eval TAG_MAJOR := $(call build_tag,major))
+	@echo "📦 [3/5] 发布 major"
+	@echo "   tag: $(TAG_MAJOR)"
+	@git tag -a "$(TAG_MAJOR)" -m "Release $(TAG_MAJOR)"
+	@git push origin "$(TAG_MAJOR)"
+	@echo "   ✅ major 发布完成"
+	@echo ""
+	@# 4. 发布 plugins/cron (依赖 common)
+	@$(eval TAG_CRON := $(call build_tag,plugins/cron))
+	@echo "🔌 [4/5] 发布 plugins/cron"
+	@echo "   tag: $(TAG_CRON)"
+	@git tag -a "$(TAG_CRON)" -m "Release $(TAG_CRON)"
+	@git push origin "$(TAG_CRON)"
+	@echo "   ✅ plugins/cron 发布完成"
+	@echo ""
+	@# 5. 发布 plugins/grpc (依赖 defined + common)
+	@$(eval TAG_GRPC := $(call build_tag,plugins/grpc))
+	@echo "🔌 [5/5] 发布 plugins/grpc"
+	@echo "   tag: $(TAG_GRPC)"
+	@git tag -a "$(TAG_GRPC)" -m "Release $(TAG_GRPC)"
+	@git push origin "$(TAG_GRPC)"
+	@echo "   ✅ plugins/grpc 发布完成"
 	@echo ""
 	@echo "🎉 全部发布完成！"

@@ -3,9 +3,9 @@ module github.com/bamboo-services/bamboo-base-go/major
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202602241923
-	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241812
-	github.com/gin-gonic/gin v1.11.0
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081511
+	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241921
+	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -39,10 +39,11 @@ require (
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/arch v0.24.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect

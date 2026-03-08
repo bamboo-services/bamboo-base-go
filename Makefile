@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto tidy test release release-plugins release-all
+.PHONY: help proto tidy test release release-plugins release-all vet
 
 # ============================================================
 # 基础变量
@@ -55,6 +55,16 @@ proto:
 
 tidy:
 	go mod tidy
+
+vet:
+	@for pkg in $(PACKAGES); do \
+		tag="$$pkg"; \
+		go vet ./$$tag/...; \
+	done
+	@for plg in $(PLUGINS); do \
+		tag="plugins/$$plg"; \
+		go vet ./$$tag/...; \
+	done
 
 # ============================================================
 # 发布命令

@@ -3,8 +3,8 @@ module github.com/bamboo-services/bamboo-base-go/plugins/grpc
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603081522
-	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202602241921
+	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202603141642
+	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202603141642
 	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11

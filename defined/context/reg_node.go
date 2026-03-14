@@ -17,13 +17,13 @@ func NewCtxNodeList() ContextNodeList {
 }
 
 // GetList 返回底层的节点切片，提供对有序集合的直接访问。
-func (c ContextNodeList) GetList() []ContextNode {
-	return c
+func (c *ContextNodeList) GetList() []ContextNode {
+	return *c
 }
 
 // Get 获取 ContextNode 中存储的数据值并返回。
-func (c ContextNodeList) Get(key ContextKey) any {
-	for _, node := range c {
+func (c *ContextNodeList) Get(key ContextKey) any {
+	for _, node := range *c {
 		if node.Key == key {
 			return node.Value
 		}

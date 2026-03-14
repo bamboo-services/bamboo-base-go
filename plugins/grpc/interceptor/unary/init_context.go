@@ -3,6 +3,7 @@ package xGrpcIUnary
 import (
 	"context"
 
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"google.golang.org/grpc"
 )
@@ -16,15 +17,25 @@ import (
 //
 // 返回的拦截器确保所有 RPC 调用共享相同的上下文节点链路。
 func InitContext(mainCtx context.Context) grpc.UnaryServerInterceptor {
+	log := xLog.WithName(xLog.NamedGRPC, "InitContext")
+
 	var ctxNodeList xCtx.ContextNodeList
-	if val := mainCtx.Value(xCtx.RegNodeKey); val != nil {
-		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
-			ctxNodeList = nodeList
+	if mainCtx != nil {
+		if val := mainCtx.Value(xCtx.RegNodeKey); val != nil {
+			if nodeList, ok := val.(xCtx.ContextNodeList); ok {
+				ctxNodeList = nodeList
+			}
 		}
 	}
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		newCtx := context.WithValue(ctx, xCtx.RegNodeKey, ctxNodeList)
-		return handler(newCtx, req)
+		if ctx == nil {
+			log.Warn(ctx, "接收到 nil 上下文，使用 context.Background() 替代")
+			ctx = context.Background()
+		}
+		if ctx.Value(xCtx.RegNodeKey) == nil && ctxNodeList != nil {
+			ctx = context.WithValue(ctx, xCtx.RegNodeKey, ctxNodeList)
+		}
+		return handler(ctx, req)
 	}
 }

@@ -25,6 +25,7 @@ type Config struct {
 
 // cronLogger 适配 xLog.LogNamedLogger 到 cron.Logger 接口
 type cronLogger struct {
+	ctx   context.Context
 	log   *xLog.LogNamedLogger
 	mu    sync.Mutex
 	cache map[string]bool
@@ -147,7 +148,7 @@ func run(ctx context.Context, config Config) {
 		cronOpts = append(cronOpts, cron.WithLocation(config.Location))
 	}
 	// 添加自定义日志
-	cronOpts = append(cronOpts, cron.WithLogger(newCronLogger(log)))
+	cronOpts = append(cronOpts, cron.WithLogger(newCronLogger(ctx, log)))
 
 	// 创建 cron 管理器
 	c := cron.New(cronOpts...)
@@ -208,8 +209,12 @@ func stopCron(c *cron.Cron, timeout time.Duration) {
 }
 
 // newCronLogger 创建 cron 日志适配器
-func newCronLogger(log *xLog.LogNamedLogger) *cronLogger {
+func newCronLogger(ctx context.Context, log *xLog.LogNamedLogger) *cronLogger {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &cronLogger{
+		ctx:   ctx,
 		log:   log,
 		cache: make(map[string]bool),
 	}
@@ -217,17 +222,15 @@ func newCronLogger(log *xLog.LogNamedLogger) *cronLogger {
 
 // Info 实现 cron.Logger 接口
 func (l *cronLogger) Info(msg string, keysAndValues ...any) {
-	ctx := context.Background()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.cache[msg] {
-		l.log.SugarInfo(ctx, msg, keysAndValues...)
+		l.log.SugarInfo(l.ctx, msg, keysAndValues...)
 		l.cache[msg] = true
 	}
 }
 
 // Error 实现 cron.Logger 接口
 func (l *cronLogger) Error(err error, msg string, keysAndValues ...any) {
-	ctx := context.Background()
-	l.log.SugarError(ctx, msg, append([]any{"error", err}, keysAndValues...)...)
+	l.log.SugarError(l.ctx, msg, append([]any{"error", err}, keysAndValues...)...)
 }

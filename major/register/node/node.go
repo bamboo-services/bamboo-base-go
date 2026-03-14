@@ -130,7 +130,7 @@ func (rn *RegNode) Use(ctxKey xCtx.ContextKey, registerFunc Node) {
 //	rn.Use(xCtx.LoggerKey, initLoggerFunc)
 //	rn.Exec() // 按顺序执行所有初始化函数
 //	// 此时 rn.Ctx 包含所有已初始化的组件
-func (rn *RegNode) Exec() {
+func (rn *RegNode) Exec() xCtx.ContextNodeList {
 	log := xLog.WithName(xLog.NamedINIT)
 	log.Info(rn.Ctx, "========== 初始化开始 ==========")
 	for i, node := range rn.list {
@@ -149,8 +149,24 @@ func (rn *RegNode) Exec() {
 	}
 	log.Info(rn.Ctx, "========== 初始化完成 ==========")
 
+	rn.Ctx = context.WithValue(rn.Ctx, xCtx.RegNodeKey, rn.value)
 	rn.list = nil
 	log.Debug(rn.Ctx, "初始化剩余项处理完毕")
+
+	return rn.value
+}
+
+// GetRegNodeList 获取已注册并初始化的组件上下文列表。
+//
+// 返回通过 Exec() 执行后生成的上下文节点列表 (xCtx.ContextNodeList)，
+// 其中包含所有通过 Use() 注册并成功初始化的组件 Key-Value 对。
+func GetRegNodeList(ctx context.Context) xCtx.ContextNodeList {
+	if val := ctx.Value(xCtx.RegNodeKey); val != nil {
+		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
+			return nodeList
+		}
+	}
+	return nil
 }
 
 // InjectContext 返回一个 Gin 中间件，用于将外部上下文注入到请求的上下文中。

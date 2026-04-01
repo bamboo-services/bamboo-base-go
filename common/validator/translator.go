@@ -137,6 +137,17 @@ func registerCustomTranslations(validate *validator.Validate) {
 			return t
 		},
 	)
+
+	// 自定义 snowflake 的翻译
+	_ = validate.RegisterTranslation("snowflake", trans,
+		func(ut ut.Translator) error {
+			return ut.Add("snowflake", "{0} 必须是有效的 Snowflake ID", true)
+		},
+		func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("snowflake", fe.Field())
+			return t
+		},
+	)
 }
 
 // GetTranslator 获取翻译器实例

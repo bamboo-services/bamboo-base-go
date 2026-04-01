@@ -19,6 +19,7 @@ import (
 //   - enum_int: 整数枚举值验证（支持所有整数类型及自定义数值类型）
 //   - enum_string: 字符串枚举值验证（支持字符串及自定义字符串类型）
 //   - enum_float: 浮点数枚举值验证（支持浮点数及自定义浮点数类型）
+//   - snowflake: Snowflake ID 格式验证（纯数字、长度 1~20）
 //
 // 使用示例：
 //
@@ -39,6 +40,7 @@ func RegisterCustomValidators(validate *validator.Validate) error {
 		"enum_int":            ValidateEnumInt,
 		"enum_string":         ValidateEnumString,
 		"enum_float":          ValidateEnumFloat,
+		"snowflake":           ValidateSnowflake,
 	}
 
 	// 注册所有验证器

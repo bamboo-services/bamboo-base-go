@@ -5,13 +5,32 @@ import (
 	"runtime/debug"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	"github.com/gin-gonic/gin"
 )
 
 // Async 从父上下文中提取组件引用，创建独立的上下文后在新的 goroutine 中异步执行 fn。
 //
 // 异步任务的上下文不受父上下文取消的影响，可以通过 xCtxUtil 系列函数访问 DB、Redis 等组件。
 // 返回的 *Task 可通过 Cancel 强制终止或 Wait 等待完成。
-func Async(parentCtx context.Context, fn func(ctx context.Context)) *Task {
+//
+// 不允许传入 *gin.Context，请使用 c.Request.Context() 获取标准 context.Context。
+//
+// 可选配置:
+//   - WithName(name): 设置异步任务名称，名称会显示在日志中
+//   - WithDebug(): 启用调试日志（输出开始执行、执行完成）
+//   - WithLogger(logger): 设置自定义日志器
+func Async(parentCtx context.Context, fn func(ctx context.Context), options ...Option) *Task {
+	if _, ok := parentCtx.(*gin.Context); ok {
+		panic("async: 不允许传入 *gin.Context，请使用 c.Request.Context() 获取标准 context.Context")
+	}
+
+	config := defaultConfig()
+	for _, option := range options {
+		if option != nil {
+			option(&config)
+		}
+	}
+
 	ctx, cancel := detachContext(parentCtx)
 	task := &Task{
 		ctx:    ctx,
@@ -19,36 +38,38 @@ func Async(parentCtx context.Context, fn func(ctx context.Context)) *Task {
 		done:   make(chan struct{}),
 	}
 
+	log := resolveLogger(config)
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				xLog.SugarError(ctx, "async task panicked",
+				log.SugarError(ctx, "async task panicked",
 					"error", r,
 					"stack", string(debug.Stack()),
 				)
 			}
+			if config.Debug {
+				log.SugarInfo(ctx, "异步任务执行完成")
+			}
 			close(task.done)
 		}()
+
+		if config.Debug {
+			log.SugarInfo(ctx, "异步任务开始执行")
+		}
 		fn(ctx)
 	}()
 
 	return task
 }
 
-// Cancel 强制终止异步任务，调用后异步任务的 ctx.Done() 将被触发。
-//
-// Cancel 不会阻塞等待任务退出，仅发送取消信号。
-func Cancel(task *Task) {
-	if task == nil {
-		return
+// resolveLogger 根据配置解析日志器，优先使用自定义日志器，否则根据名称创建默认日志器。
+func resolveLogger(config Config) *xLog.LogNamedLogger {
+	if config.Logger != nil {
+		return config.Logger
 	}
-	task.cancel()
-}
-
-// Wait 阻塞等待异步任务执行完成（正常结束或 Panic 恢复后均会返回）。
-func Wait(task *Task) {
-	if task == nil {
-		return
+	if config.Name != "" {
+		return xLog.WithName(xLog.NamedTASK, config.Name)
 	}
-	<-task.done
+	return xLog.WithName(xLog.NamedTASK)
 }

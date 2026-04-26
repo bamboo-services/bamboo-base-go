@@ -2,11 +2,13 @@ package xAsync
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
+	"github.com/gin-gonic/gin"
 )
 
 // newCtxWithNodeList 创建一个携带 RegNodeKey 的测试上下文
@@ -132,5 +134,81 @@ func TestAsync_PanicRecovery(t *testing.T) {
 
 	if !task.IsDone() {
 		t.Error("Panic 后 IsDone 应返回 true")
+	}
+}
+
+func TestAsync_RejectGinContext(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("传入 *gin.Context 应触发 panic")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "*gin.Context") {
+			t.Errorf("panic 信息应包含 *gin.Context，实际为: %v", r)
+		}
+	}()
+
+	ginCtx := &gin.Context{}
+	Async(ginCtx, func(ctx context.Context) {})
+}
+
+func TestAsync_WithName(t *testing.T) {
+	var executed bool
+	task := Async(context.Background(), func(ctx context.Context) {
+		executed = true
+	}, WithName("TestTask"))
+
+	Wait(task)
+	if !executed {
+		t.Error("带名称的异步任务未执行")
+	}
+}
+
+func TestAsync_WithDebug(t *testing.T) {
+	var executed bool
+	task := Async(context.Background(), func(ctx context.Context) {
+		executed = true
+	}, WithDebug())
+
+	Wait(task)
+	if !executed {
+		t.Error("Debug 模式的异步任务未执行")
+	}
+}
+
+func TestAsync_WithNameAndDebug(t *testing.T) {
+	var executed bool
+	task := Async(context.Background(), func(ctx context.Context) {
+		executed = true
+	}, WithName("SyncUser"), WithDebug())
+
+	Wait(task)
+	if !executed {
+		t.Error("带名称和 Debug 的异步任务未执行")
+	}
+}
+
+func TestAsync_WithNilOption(t *testing.T) {
+	var executed bool
+	task := Async(context.Background(), func(ctx context.Context) {
+		executed = true
+	}, nil)
+
+	Wait(task)
+	if !executed {
+		t.Error("传入 nil Option 不应影响任务执行")
+	}
+}
+
+func TestAsync_EmptyName(t *testing.T) {
+	var executed bool
+	task := Async(context.Background(), func(ctx context.Context) {
+		executed = true
+	}, WithName(""))
+
+	Wait(task)
+	if !executed {
+		t.Error("空名称不应影响任务执行")
 	}
 }

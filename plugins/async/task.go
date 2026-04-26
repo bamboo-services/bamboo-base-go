@@ -23,3 +23,21 @@ func (t *Task) IsDone() bool {
 		return false
 	}
 }
+
+// Cancel 强制终止异步任务，调用后异步任务的 ctx.Done() 将被触发。
+//
+// Cancel 不会阻塞等待任务退出，仅发送取消信号。
+func Cancel(task *Task) {
+	if task == nil {
+		return
+	}
+	task.cancel()
+}
+
+// Wait 阻塞等待异步任务执行完成（正常结束或 Panic 恢复后均会返回）。
+func Wait(task *Task) {
+	if task == nil {
+		return
+	}
+	<-task.done
+}

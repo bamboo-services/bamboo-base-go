@@ -11,13 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// newCtxWithNodeList 创建一个携带 RegNodeKey 的测试上下文
+// newCtxWithNodeList 创建一个携带 RegNodeKey 和 RequestKey 的测试上下文
 func newCtxWithNodeList() context.Context {
 	ctx := context.Background()
 	list := xCtx.NewCtxNodeList()
 	list.Append(xCtx.DatabaseKey, "mock_db")
 	list.Append(xCtx.RedisClientKey, "mock_redis")
-	return context.WithValue(ctx, xCtx.RegNodeKey, list)
+	ctx = context.WithValue(ctx, xCtx.RegNodeKey, list)
+	ctx = context.WithValue(ctx, xCtx.RequestKey, "test-trace-uuid")
+	return ctx
 }
 
 func TestAsync_BasicExecution(t *testing.T) {
@@ -210,5 +212,41 @@ func TestAsync_EmptyName(t *testing.T) {
 	Wait(task)
 	if !executed {
 		t.Error("空名称不应影响任务执行")
+	}
+}
+
+func TestAsync_RequestKeyCopied(t *testing.T) {
+	parentCtx := newCtxWithNodeList()
+
+	var gotTraceID string
+	task := Async(parentCtx, func(ctx context.Context) {
+		if val := ctx.Value(xCtx.RequestKey); val != nil {
+			gotTraceID, _ = val.(string)
+		}
+	})
+
+	Wait(task)
+	if gotTraceID != "test-trace-uuid" {
+		t.Errorf("期望 RequestKey = 'test-trace-uuid'，实际为 %q", gotTraceID)
+	}
+}
+
+func TestAsync_ParentCancelDoesNotAffectDetachedRequestKey(t *testing.T) {
+	parentCtx, parentCancel := context.WithCancel(context.Background())
+	parentCtx = context.WithValue(parentCtx, xCtx.RequestKey, "trace-123")
+
+	var gotTraceID string
+	task := Async(parentCtx, func(ctx context.Context) {
+		time.Sleep(50 * time.Millisecond)
+		if val := ctx.Value(xCtx.RequestKey); val != nil {
+			gotTraceID, _ = val.(string)
+		}
+	})
+
+	parentCancel()
+
+	Wait(task)
+	if gotTraceID != "trace-123" {
+		t.Errorf("期望 RequestKey = 'trace-123'，实际为 %q", gotTraceID)
 	}
 }

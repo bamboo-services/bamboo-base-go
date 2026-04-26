@@ -3,8 +3,8 @@ module github.com/bamboo-services/bamboo-base-go/plugins/async
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202604011538
-	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202603141642
+	github.com/bamboo-services/bamboo-base-go/common common/v1.0.0-202604262346
+	github.com/bamboo-services/bamboo-base-go/defined defined/v1.0.0-202604262346
 )
 
 require (

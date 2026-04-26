@@ -133,7 +133,7 @@ func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	}
 
 	// 1. 尝试从 gin.Context 指针中提取 (HTTP 请求场景)
-	if ginCtx, ok := ctx.(*gin.Context); ok && ginCtx != nil {
+	if ginCtx, ok := ctx.(*gin.Context); ok {
 		// 先尝试从 gin.Context 自身的存储中获取
 		if contextUUID, exists := ginCtx.Get(string(xConsts.RequestKey)); exists {
 			if traceStr, ok := contextUUID.(string); ok {

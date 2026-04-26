@@ -86,14 +86,14 @@ define update_dep
 	@if [ "$(1)" = "defined" ]; then \
 		for mod in common major plugins/grpc plugins/async; do \
 			if [ -f "$$mod/go.mod" ]; then \
-				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/defined v[0-9].*|github.com/bamboo-services/bamboo-base-go/defined $(2)|g' $$mod/go.mod; \
+				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/defined v[0-9].*|github.com/bamboo-services/bamboo-base-go/defined $(notdir $(2))|g' $$mod/go.mod; \
 				echo "      ✅ $$mod/go.mod"; \
 			fi; \
 		done; \
 	elif [ "$(1)" = "common" ]; then \
 		for mod in major plugins/cron plugins/grpc plugins/async; do \
 			if [ -f "$$mod/go.mod" ]; then \
-				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/common v[0-9].*|github.com/bamboo-services/bamboo-base-go/common $(2)|g' $$mod/go.mod; \
+				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/common v[0-9].*|github.com/bamboo-services/bamboo-base-go/common $(notdir $(2))|g' $$mod/go.mod; \
 				echo "      ✅ $$mod/go.mod"; \
 			fi; \
 		done; \

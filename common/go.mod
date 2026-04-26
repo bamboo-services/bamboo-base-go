@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/common
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/defined defined/v1.0.0-202604262346
+	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202604270609
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1

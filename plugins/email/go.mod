@@ -1,11 +1,11 @@
-module github.com/bamboo-services/bamboo-base-go/plugins/async
+module github.com/bamboo-services/bamboo-base-go/plugins/email
 
 go 1.25.0
 
 require (
 	github.com/bamboo-services/bamboo-base-go/common v1.0.0-202604270610
 	github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202604270610
-	github.com/gin-gonic/gin v1.12.0
+	github.com/wneessen/go-mail v0.7.2
 )
 
 require (
@@ -15,6 +15,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
+	github.com/gin-gonic/gin v1.12.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect

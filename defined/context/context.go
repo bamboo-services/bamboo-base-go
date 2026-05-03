@@ -13,6 +13,7 @@ const (
 	DatabaseKey      ContextKey = "context_database"        // 上下文数据库客户端
 	RedisClientKey   ContextKey = "context_redis_client"    // 上下文 Redis 客户端
 	SnowflakeNodeKey ContextKey = "context_snowflake_node"  // 上下文雪花算法节点
+	EmailClientKey   ContextKey = "context_email_client"    // 上下文邮件客户端
 )
 
 // String 返回 ContextKey 的字符串表示形式。

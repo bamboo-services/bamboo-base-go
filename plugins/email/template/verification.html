@@ -1,0 +1,37 @@
+{{define "content"}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td style="padding-bottom: 24px;">
+            <h2 style="margin: 0 0 16px; font-size: 20px; font-weight: 600; color: #1a1a1a;">
+                验证码
+            </h2>
+            <p style="margin: 0 0 24px; font-size: 15px; color: #555555; line-height: 1.6;">
+                您正在进行身份验证，请在页面中输入以下验证码完成操作：
+            </p>
+        </td>
+    </tr>
+    <tr>
+        <td align="center" style="padding-bottom: 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0f4ff; border-radius: 8px; border: 1px dashed #4f7cff;">
+                <tr>
+                    <td align="center" style="padding: 20px 40px;">
+                        <span style="font-size: 36px; font-weight: 700; color: #4f7cff; letter-spacing: 8px; font-family: 'Courier New', Courier, monospace;">
+                            {{.Code}}
+                        </span>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding-top: 8px;">
+            <p style="margin: 0; font-size: 14px; color: #888888; line-height: 1.6;">
+                验证码将在 <strong style="color: #e74c3c;">{{.Expire}}</strong> 后失效，请尽快使用。
+            </p>
+            <p style="margin: 16px 0 0; font-size: 14px; color: #888888; line-height: 1.6;">
+                如非本人操作，请忽略此邮件。
+            </p>
+        </td>
+    </tr>
+</table>
+{{end}}

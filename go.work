@@ -1,0 +1,11 @@
+go 1.25.0
+
+use (
+	./common
+	./defined
+	./major
+	./plugins/async
+	./plugins/cron
+	./plugins/email
+	./plugins/grpc
+)

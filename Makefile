@@ -16,7 +16,7 @@ TIMESTAMP := $(shell date +"%Y%m%d%H%M")
 PACKAGES := major common defined
 
 # 插件列表
-PLUGINS := cron grpc async
+PLUGINS := cron grpc async email
 
 # ============================================================
 # 帮助信息
@@ -84,14 +84,14 @@ endef
 define update_dep
 	@echo "   🔄 更新下游模块的 $(1) 依赖版本..."
 	@if [ "$(1)" = "defined" ]; then \
-		for mod in common major plugins/grpc plugins/async; do \
+		for mod in common major plugins/grpc plugins/async plugins/email; do \
 			if [ -f "$$mod/go.mod" ]; then \
 				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/defined v[0-9].*|github.com/bamboo-services/bamboo-base-go/defined $(notdir $(2))|g' $$mod/go.mod; \
 				echo "      ✅ $$mod/go.mod"; \
 			fi; \
 		done; \
 	elif [ "$(1)" = "common" ]; then \
-		for mod in major plugins/cron plugins/grpc plugins/async; do \
+		for mod in major plugins/cron plugins/grpc plugins/async plugins/email; do \
 			if [ -f "$$mod/go.mod" ]; then \
 				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/common v[0-9].*|github.com/bamboo-services/bamboo-base-go/common $(notdir $(2))|g' $$mod/go.mod; \
 				echo "      ✅ $$mod/go.mod"; \
@@ -139,11 +139,11 @@ endif
 release-all:
 	@echo "🚀 按依赖顺序发布全部模块和插件"
 	@echo "   时间戳: $(TIMESTAMP)"
-	@echo "   顺序: defined → common → major → plugins/cron → plugins/grpc → plugins/async"
+	@echo "   顺序: defined → common → major → plugins/cron → plugins/grpc → plugins/async → plugins/email"
 	@echo ""
 	@# 1. 发布 defined (无依赖，最底层)
 	@$(eval TAG_DEFINED := $(call build_tag,defined))
-	@echo "📦 [1/6] 发布 defined"
+	@echo "📦 [1/7] 发布 defined"
 	@echo "   tag: $(TAG_DEFINED)"
 	@git tag -a "$(TAG_DEFINED)" -m "Release $(TAG_DEFINED)"
 	@git push origin "$(TAG_DEFINED)"
@@ -152,7 +152,7 @@ release-all:
 	@echo ""
 	@# 2. 发布 common (依赖 defined)
 	@$(eval TAG_COMMON := $(call build_tag,common))
-	@echo "📦 [2/6] 发布 common"
+	@echo "📦 [2/7] 发布 common"
 	@echo "   tag: $(TAG_COMMON)"
 	@git tag -a "$(TAG_COMMON)" -m "Release $(TAG_COMMON)"
 	@git push origin "$(TAG_COMMON)"
@@ -161,7 +161,7 @@ release-all:
 	@echo ""
 	@# 3. 发布 major (依赖 common, defined)
 	@$(eval TAG_MAJOR := $(call build_tag,major))
-	@echo "📦 [3/6] 发布 major"
+	@echo "📦 [3/7] 发布 major"
 	@echo "   tag: $(TAG_MAJOR)"
 	@git tag -a "$(TAG_MAJOR)" -m "Release $(TAG_MAJOR)"
 	@git push origin "$(TAG_MAJOR)"
@@ -169,7 +169,7 @@ release-all:
 	@echo ""
 	@# 4. 发布 plugins/cron (依赖 common)
 	@$(eval TAG_CRON := $(call build_tag,plugins/cron))
-	@echo "🔌 [4/6] 发布 plugins/cron"
+	@echo "🔌 [4/7] 发布 plugins/cron"
 	@echo "   tag: $(TAG_CRON)"
 	@git tag -a "$(TAG_CRON)" -m "Release $(TAG_CRON)"
 	@git push origin "$(TAG_CRON)"
@@ -177,7 +177,7 @@ release-all:
 	@echo ""
 	@# 5. 发布 plugins/grpc (依赖 defined + common)
 	@$(eval TAG_GRPC := $(call build_tag,plugins/grpc))
-	@echo "🔌 [5/6] 发布 plugins/grpc"
+	@echo "🔌 [5/7] 发布 plugins/grpc"
 	@echo "   tag: $(TAG_GRPC)"
 	@git tag -a "$(TAG_GRPC)" -m "Release $(TAG_GRPC)"
 	@git push origin "$(TAG_GRPC)"
@@ -185,10 +185,18 @@ release-all:
 	@echo ""
 	@# 6. 发布 plugins/async (依赖 defined + common)
 	@$(eval TAG_ASYNC := $(call build_tag,plugins/async))
-	@echo "🔌 [6/6] 发布 plugins/async"
+	@echo "🔌 [6/7] 发布 plugins/async"
 	@echo "   tag: $(TAG_ASYNC)"
 	@git tag -a "$(TAG_ASYNC)" -m "Release $(TAG_ASYNC)"
 	@git push origin "$(TAG_ASYNC)"
 	@echo "   ✅ plugins/async 发布完成"
+	@echo ""
+	@# 7. 发布 plugins/email (依赖 defined + common)
+	@$(eval TAG_EMAIL := $(call build_tag,plugins/email))
+	@echo "🔌 [7/7] 发布 plugins/email"
+	@echo "   tag: $(TAG_EMAIL)"
+	@git tag -a "$(TAG_EMAIL)" -m "Release $(TAG_EMAIL)"
+	@git push origin "$(TAG_EMAIL)"
+	@echo "   ✅ plugins/email 发布完成"
 	@echo ""
 	@echo "🎉 全部发布完成！"

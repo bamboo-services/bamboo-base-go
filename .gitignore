@@ -24,3 +24,6 @@ go.work.sum
 *.test.binary
 *.test.binary.gz
 *.test.binary.gz.*
+
+### AI ###
+.sisyphus/

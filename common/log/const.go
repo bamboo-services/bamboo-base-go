@@ -45,4 +45,5 @@ const (
 	NamedRESU = "RESU" // 响应结果日志
 	NamedRECO = "RECO" // 恢复层系统日志
 	NamedCRON = "CRON" // 定时任务日志
+	NamedEMAIL = "EMAIL" // 邮件服务日志
 )

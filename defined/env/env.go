@@ -74,6 +74,10 @@ const (
 	EmailPass EnvKey = "EMAIL_PASS" // 邮件密码
 	EmailFrom EnvKey = "EMAIL_FROM" // 发件人地址
 
+	EmailTLS         EnvKey = "EMAIL_TLS"          // 邮件 TLS 策略
+	EmailFromName    EnvKey = "EMAIL_FROM_NAME"    // 发件人名称
+	EmailTemplateDir EnvKey = "EMAIL_TEMPLATE_DIR" // 外部邮件模板目录
+
 	OssEndpoint  EnvKey = "OSS_ENDPOINT"   // OSS 端点
 	OssAccessKey EnvKey = "OSS_ACCESS_KEY" // OSS AccessKey
 	OssSecretKey EnvKey = "OSS_SECRET_KEY" // OSS SecretKey

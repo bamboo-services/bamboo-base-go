@@ -1,6 +1,8 @@
 package xEmail
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -46,24 +48,112 @@ func TestTemplateManagerRender(t *testing.T) {
 		t.Fatalf("创建模板管理器失败: %v", err)
 	}
 
-	// 内置模板使用 {{define "content"}} 定义内容块，
-	// "base" 模板通过 {{template "content" .}} 包含内容。
-	// 按 ParseFS 的字典序，welcome.html 最后解析，其 "content" 定义为最终版本。
+	// 测试渲染 welcome 模板（通过 Render 方法）
 	data := map[string]string{
 		"Username": "test_user",
 	}
-
-	var buf strings.Builder
-	if err := tmpl.templates.ExecuteTemplate(&buf, "base", data); err != nil {
-		t.Fatalf("渲染 base 模板失败: %v", err)
+	html, err := tmpl.Render("welcome", data)
+	if err != nil {
+		t.Fatalf("渲染 welcome 模板失败: %v", err)
 	}
 
-	html := buf.String()
+	// 验证 base 布局
 	if !strings.Contains(html, "Bamboo Service") {
 		t.Error("渲染结果应包含 Bamboo Service 标题")
 	}
+	if !strings.Contains(html, "此邮件由 Bamboo Service 自动发送") {
+		t.Error("渲染结果应包含页脚")
+	}
+	// 验证内容模板
 	if !strings.Contains(html, "test_user") {
 		t.Error("渲染结果应包含用户名 test_user")
+	}
+	if !strings.Contains(html, "欢迎加入") {
+		t.Error("渲染结果应包含欢迎标题")
+	}
+}
+
+// TestRenderVerification 测试渲染验证码模板
+func TestRenderVerification(t *testing.T) {
+	tmpl, err := newTemplateManager("")
+	if err != nil {
+		t.Fatalf("创建模板管理器失败: %v", err)
+	}
+
+	html, err := tmpl.Render("verification", map[string]string{
+		"Code":   "123456",
+		"Expire": "5分钟",
+	})
+	if err != nil {
+		t.Fatalf("渲染 verification 模板失败: %v", err)
+	}
+
+	if !strings.Contains(html, "Bamboo Service") {
+		t.Error("渲染结果应包含 Bamboo Service 标题")
+	}
+	if !strings.Contains(html, "123456") {
+		t.Error("渲染结果应包含验证码 123456")
+	}
+	if !strings.Contains(html, "5分钟") {
+		t.Error("渲染结果应包含过期时间 5分钟")
+	}
+	if !strings.Contains(html, "验证码") {
+		t.Error("渲染结果应包含验证码标题")
+	}
+}
+
+// TestRenderResetPassword 测试渲染重置密码模板
+func TestRenderResetPassword(t *testing.T) {
+	tmpl, err := newTemplateManager("")
+	if err != nil {
+		t.Fatalf("创建模板管理器失败: %v", err)
+	}
+
+	html, err := tmpl.Render("reset_password", map[string]string{
+		"ResetURL": "https://example.com/reset?token=abc123",
+		"Expire":   "30分钟",
+	})
+	if err != nil {
+		t.Fatalf("渲染 reset_password 模板失败: %v", err)
+	}
+
+	if !strings.Contains(html, "Bamboo Service") {
+		t.Error("渲染结果应包含 Bamboo Service 标题")
+	}
+	if !strings.Contains(html, "https://example.com/reset?token=abc123") {
+		t.Error("渲染结果应包含重置链接")
+	}
+	if !strings.Contains(html, "重置密码") {
+		t.Error("渲染结果应包含重置密码标题")
+	}
+	if !strings.Contains(html, "30分钟") {
+		t.Error("渲染结果应包含过期时间 30分钟")
+	}
+}
+
+// TestRenderExternalTemplate 测试渲染外部模板
+func TestRenderExternalTemplate(t *testing.T) {
+	tmpDir := t.TempDir()
+	customHTML := `{{define "custom_report"}}<p>报告内容: {{.Title}}</p>{{end}}`
+	os.WriteFile(filepath.Join(tmpDir, "custom_report.html"), []byte(customHTML), 0o644)
+
+	tmpl, err := newTemplateManager(tmpDir)
+	if err != nil {
+		t.Fatalf("创建模板管理器失败: %v", err)
+	}
+
+	html, err := tmpl.Render("custom_report", map[string]string{
+		"Title": "月度报告",
+	})
+	if err != nil {
+		t.Fatalf("渲染外部模板失败: %v", err)
+	}
+
+	if !strings.Contains(html, "月度报告") {
+		t.Errorf("渲染结果应包含 月度报告, 实际: %s", html)
+	}
+	if !strings.Contains(html, "Bamboo Service") {
+		t.Error("外部模板渲染结果应包含 Bamboo Service 标题")
 	}
 }
 

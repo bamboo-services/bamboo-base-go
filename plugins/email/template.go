@@ -45,9 +45,24 @@ func newTemplateManager(externalDir string) (*TemplateManager, error) {
 //
 // name 为模板名称（不含 .html 后缀），data 为模板数据。
 func (t *TemplateManager) Render(name string, data any) (string, error) {
+	// 查找指定名称的内容模板
+	contentTmpl := t.templates.Lookup(name)
+	if contentTmpl == nil {
+		return "", fmt.Errorf("模板 %s 不存在", name)
+	}
+
+	// 克隆模板集合并将内容模板注入 "content" 槽位
+	tmp, err := t.templates.Clone()
+	if err != nil {
+		return "", fmt.Errorf("克隆模板失败: %w", err)
+	}
+	tmp, err = tmp.AddParseTree("content", contentTmpl.Tree)
+	if err != nil {
+		return "", fmt.Errorf("组合模板失败: %w", err)
+	}
+
 	var buf strings.Builder
-	tmplName := "template/" + name + ".html"
-	if err := t.templates.ExecuteTemplate(&buf, tmplName, data); err != nil {
+	if err := tmp.ExecuteTemplate(&buf, "base", data); err != nil {
 		return "", fmt.Errorf("渲染模板 %s 失败: %w", name, err)
 	}
 	return buf.String(), nil
@@ -90,16 +105,15 @@ func extractTemplateNames(tmpl *template.Template) []string {
 	var names []string
 	for _, t := range tmpl.Templates() {
 		name := t.Name()
-		if name == "" {
+		if name == "" || name == "base" || name == "content" {
 			continue
 		}
 		// 提取 "template/verification.html" -> "verification"
+		// 或 "verification.html" -> "verification" (外部模板)
 		if cleanName, ok := strings.CutSuffix(name, ".html"); ok {
-			cleanName, ok = strings.CutPrefix(cleanName, "template/")
-			if ok || !strings.Contains(name, "/") {
-				if cleanName != "_base" {
-					names = append(names, cleanName)
-				}
+			cleanName, _ = strings.CutPrefix(cleanName, "template/")
+			if cleanName != "_base" {
+				names = append(names, cleanName)
 			}
 		}
 	}

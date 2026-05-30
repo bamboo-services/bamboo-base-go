@@ -68,7 +68,7 @@ func NewSlogLogger(slogger *slog.Logger, config GormLoggerConfig) logger.Interfa
 		config.SlowThreshold = 200 // 默认 200ms
 	}
 	if config.LogLevel == 0 {
-		config.LogLevel = LevelInfo // 默认 Info 级别
+		config.LogLevel = LevelWarn // 默认 Warn 级别
 	}
 
 	return &SlogLogger{
@@ -89,7 +89,18 @@ func NewSlogLogger(slogger *slog.Logger, config GormLoggerConfig) logger.Interfa
 //   - logger.Interface: 新的 Logger 实例
 func (l *SlogLogger) LogMode(level logger.LogLevel) logger.Interface {
 	newLogger := *l
-	newLogger.logLevel = LogLevel(level)
+	switch level {
+	case logger.Silent:
+		newLogger.logLevel = LevelSilent
+	case logger.Error:
+		newLogger.logLevel = LevelError
+	case logger.Warn:
+		newLogger.logLevel = LevelWarn
+	case logger.Info:
+		newLogger.logLevel = LevelInfo
+	default:
+		newLogger.logLevel = LevelWarn
+	}
 	return &newLogger
 }
 

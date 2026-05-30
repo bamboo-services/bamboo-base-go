@@ -20,14 +20,14 @@ func TestNewSlogLogger_DefaultConfig(t *testing.T) {
 
 	gormLogger := NewSlogLogger(logger, GormLoggerConfig{})
 
-	// 测试普通查询（默认 Info 级别应该输出）
+	// 测试普通查询（默认 LevelWarn 级别不应输出）
 	gormLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
 		return "SELECT * FROM users", 10
 	}, nil)
 
 	output := buf.String()
-	if !strings.Contains(output, "SQL执行") {
-		t.Errorf("默认配置应输出 SQL 日志, got: %s", output)
+	if output != "" {
+		t.Errorf("默认 LevelWarn 配置不应输出 SQL 日志, got: %s", output)
 	}
 }
 
@@ -302,6 +302,122 @@ func TestSlogLogger_LogMode(t *testing.T) {
 	if output != "" {
 		t.Errorf("LogMode(Silent) 后应无输出, got: %s", output)
 	}
+}
+
+// TestSlogLogger_LogMode_Mapping 测试 LogMode 的级别映射行为
+func TestSlogLogger_LogMode_Mapping(t *testing.T) {
+	t.Run("Silent", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+
+		gormLogger := NewSlogLogger(logger, GormLoggerConfig{LogLevel: LevelInfo})
+		silentLogger := gormLogger.LogMode(1) // 1 = Silent
+
+		silentLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "SELECT 1", 1
+		}, nil)
+
+		if buf.String() != "" {
+			t.Errorf("LogMode(Silent) 应无输出")
+		}
+	})
+
+	t.Run("Error_normal_suppressed", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+
+		gormLogger := NewSlogLogger(logger, GormLoggerConfig{LogLevel: LevelInfo})
+		errorLogger := gormLogger.LogMode(2) // 2 = Error
+
+		// 普通查询应被抑制
+		errorLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "SELECT 1", 1
+		}, nil)
+
+		if buf.String() != "" {
+			t.Errorf("LogMode(Error) 不应输出普通查询")
+		}
+
+		// 错误查询应产生输出
+		errorLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "INSERT INTO users", 0
+		}, errors.New("test error"))
+
+		output := buf.String()
+		if !strings.Contains(output, "level=ERROR") {
+			t.Errorf("LogMode(Error) 应输出错误, got: %s", output)
+		}
+	})
+
+	t.Run("Warn_slow_query", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+
+		gormLogger := NewSlogLogger(logger, GormLoggerConfig{
+			LogLevel:      LevelInfo,
+			SlowThreshold: 50,
+		})
+		warnLogger := gormLogger.LogMode(3) // 3 = Warn
+
+		// 普通查询应被抑制
+		warnLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "SELECT 1", 1
+		}, nil)
+
+		if buf.String() != "" {
+			t.Errorf("LogMode(Warn) 不应输出普通查询")
+		}
+
+		// 慢查询应输出 WARN
+		begin := time.Now().Add(-100 * time.Millisecond)
+		warnLogger.Trace(context.Background(), begin, func() (string, int64) {
+			return "SELECT * FROM big_table", 1000
+		}, nil)
+
+		output := buf.String()
+		if !strings.Contains(output, "level=WARN") {
+			t.Errorf("LogMode(Warn) 应输出慢查询 WARN, got: %s", output)
+		}
+	})
+
+	t.Run("Info", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+
+		gormLogger := NewSlogLogger(logger, GormLoggerConfig{LogLevel: LevelWarn})
+		infoLogger := gormLogger.LogMode(4) // 4 = Info
+
+		infoLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "SELECT * FROM users", 10
+		}, nil)
+
+		output := buf.String()
+		if !strings.Contains(output, "level=INFO") {
+			t.Errorf("LogMode(Info) 应输出 INFO 级别, got: %s", output)
+		}
+	})
+
+	t.Run("Unknown_fallback_to_Warn", func(t *testing.T) {
+		var buf bytes.Buffer
+		handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+		logger := slog.New(handler)
+
+		gormLogger := NewSlogLogger(logger, GormLoggerConfig{LogLevel: LevelInfo})
+		unknownLogger := gormLogger.LogMode(999)
+
+		// 普通查询应被抑制（Warn 行为 = 无普通 SQL 输出）
+		unknownLogger.Trace(context.Background(), time.Now(), func() (string, int64) {
+			return "SELECT 1", 1
+		}, nil)
+
+		if buf.String() != "" {
+			t.Errorf("LogMode(Unknown) 应回退到 Warn 行为，不应输出普通查询")
+		}
+	})
 }
 
 // TestSlogLogger_SQLAttributes 测试 SQL 属性输出

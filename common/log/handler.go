@@ -13,8 +13,27 @@ import (
 	"time"
 
 	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/gin-gonic/gin"
 )
+
+// LogContextExtractor 日志 context 追踪 ID 提取器接口
+//
+// 允许上层框架（如 Gin、gRPC）注入自身的追踪 ID 提取逻辑，
+// 使日志模块不再直接依赖具体 Web 框架。
+type LogContextExtractor interface {
+	// ExtractTraceID 从 context 中提取 trace ID
+	ExtractTraceID(ctx context.Context) string
+}
+
+// globalLogExtractor 全局日志 context 提取器
+var globalLogExtractor LogContextExtractor
+
+// SetLogContextExtractor 注册全局日志 context 提取器
+//
+// 参数说明:
+//   - e: 实现 LogContextExtractor 接口的提取器实例
+func SetLogContextExtractor(e LogContextExtractor) {
+	globalLogExtractor = e
+}
 
 // LogHandler 自定义 slog Handler，支持彩色控制台输出和 JSON 文件输出
 type LogHandler struct {
@@ -123,32 +142,20 @@ func (h *LogHandler) WithGroup(name string) slog.Handler {
 
 // extractContextUUID 从 context 中提取 trace ID
 //
-// 支持的 context 类型:
-//   - gin.Context: 从 Gin 请求上下文中提取
-//   - gorm.DB context: 从 GORM 数据库操作上下文中提取
-//   - 标准 context.Context: 从任意标准 context 中提取
+// 优先使用已注册的 LogContextExtractor，未注册时回退到标准 context.Value 提取。
 func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
 
-	// 1. 尝试从 gin.Context 指针中提取 (HTTP 请求场景)
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		// 先尝试从 gin.Context 自身的存储中获取
-		if contextUUID, exists := ginCtx.Get(string(xConsts.RequestKey)); exists {
-			if traceStr, ok := contextUUID.(string); ok {
-				return traceStr
-			}
-		}
-		// 再尝试从 Request.Context() 中获取
-		if contextUUID := ginCtx.Request.Context().Value(xConsts.RequestKey); contextUUID != nil {
-			if traceStr, ok := contextUUID.(string); ok {
-				return traceStr
-			}
+	// 1. 如果上层框架注册了提取器，优先使用（如 Gin、gRPC 请求场景）
+	if globalLogExtractor != nil {
+		if traceID := globalLogExtractor.ExtractTraceID(ctx); traceID != "" {
+			return traceID
 		}
 	}
 
-	// 2. 从标准 context.Context 中提取 (包括 GORM 数据库操作场景)
+	// 2. 从标准 context.Context 中提取（包括 GORM 数据库操作场景）
 	// GORM 使用标准 context，通过 db.WithContext(ctx) 传递
 	// context.Value() 会自动沿着 context 链向上查找
 	if contextUUID := ctx.Value(xConsts.RequestKey); contextUUID != nil {

@@ -2,9 +2,6 @@ package xVaild
 
 import (
 	"testing"
-
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 )
 
 // 自定义浮点数类型
@@ -20,7 +17,7 @@ type EnumFloatTestStruct struct {
 
 // Test_ValidateEnumFloat_ValidValues 测试合法枚举值
 func Test_ValidateEnumFloat_ValidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name     string
@@ -56,7 +53,6 @@ func Test_ValidateEnumFloat_ValidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,7 +69,7 @@ func Test_ValidateEnumFloat_ValidValues(t *testing.T) {
 
 // Test_ValidateEnumFloat_InvalidValues 测试非法枚举值
 func Test_ValidateEnumFloat_InvalidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name          string
@@ -109,7 +105,6 @@ func Test_ValidateEnumFloat_InvalidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -131,7 +126,7 @@ func Test_ValidateEnumFloat_InvalidValues(t *testing.T) {
 
 // Test_ValidateEnumFloat_ErrorMessages 测试错误消息翻译
 func Test_ValidateEnumFloat_ErrorMessages(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	invalidInput := EnumFloatTestStruct{
 		Rating:      99.9,
@@ -139,7 +134,6 @@ func Test_ValidateEnumFloat_ErrorMessages(t *testing.T) {
 		Discount:    0.2,
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 	err := v.Struct(invalidInput)
 
 	if err == nil {

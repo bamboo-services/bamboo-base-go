@@ -1,7 +1,5 @@
-github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605032001 h1:0ChFfLfDQBpSPGoMuu8YJcgNzhsNubtXEcVOCB4PbDc=
-github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605032001/go.mod h1:1XeYxIOi5GEIAasic++N+MxZMWVrSqGPoUTAfLghLLc=
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605032001 h1:F2W0Po1xf18VAlhX+Xc6jUKB4EsCF9+WFJLkoIG1trU=
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605032001/go.mod h1:Fj/8AK4UEAMeAsfKK3ngIW1Dor1tuiW3Wi+L5EoLOkQ=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605310541 h1:T21jUfwtBsU9K6lgSuH/7Iri1jGKbaFJeS6AP1hOrfE=
+github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605310541 h1:0nBOJOZyY9yP36/3SCfBvESpurb17yPhUka1Fvb9jxs=
 github.com/bamboo-services/bamboo-base-go/plugins/email v1.0.0-202605032001 h1:L/IRbQQu+NkkYZ0hofRGoSRUQ/bF9Q2KfBo9Kamb1eM=
 github.com/bamboo-services/bamboo-base-go/plugins/email v1.0.0-202605032001/go.mod h1:b3nDKsdB36VhWmrdMWzEl47dCKy4x6PdqRoQfHONFms=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

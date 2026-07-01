@@ -4,8 +4,7 @@ import (
 	"context"
 
 	xSnowflake "github.com/bamboo-services/bamboo-base-go/common/snowflake"
-	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/gin-gonic/gin"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 )
 
 // GetSnowflakeNode 从上下文获取雪花算法节点
@@ -19,12 +18,14 @@ import (
 // 返回值:
 //   - *xSnowflake.Node: 雪花算法节点
 func GetSnowflakeNode(ctx context.Context) *xSnowflake.Node {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.SnowflakeNodeKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.SnowflakeNodeKey); component != nil {
 				if node, ok := component.(*xSnowflake.Node); ok {
 					return node
 				}
@@ -32,7 +33,7 @@ func GetSnowflakeNode(ctx context.Context) *xSnowflake.Node {
 		}
 	}
 
-	value := ctx.Value(xCtx2.SnowflakeNodeKey)
+	value := stdCtx.Value(xCtx.SnowflakeNodeKey)
 	if value != nil {
 		if node, ok := value.(*xSnowflake.Node); ok {
 			return node

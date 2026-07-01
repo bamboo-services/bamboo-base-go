@@ -1,4 +1,4 @@
-package xLog
+package log
 
 import (
 	"bytes"

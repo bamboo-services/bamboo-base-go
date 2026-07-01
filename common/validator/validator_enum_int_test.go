@@ -3,7 +3,6 @@ package xVaild
 import (
 	"testing"
 
-	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -21,21 +20,21 @@ type EnumTestStruct struct {
 	UnsignedInt uint8       `json:"unsigned_int" binding:"enum_int=0 1 2" label:"无符号整数"`
 }
 
-// 初始化验证器
-func initValidator(t *testing.T) {
-	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		if err := RegisterCustomValidators(v); err != nil {
-			t.Fatalf("注册自定义验证器失败: %v", err)
-		}
-		if err := RegisterTranslator(v); err != nil {
-			t.Fatalf("注册翻译器失败: %v", err)
-		}
+func initValidator(t *testing.T) *validator.Validate {
+	v := validator.New()
+	v.SetTagName("binding")
+	if err := RegisterCustomValidators(v); err != nil {
+		t.Fatalf("注册自定义验证器失败: %v", err)
 	}
+	if err := RegisterTranslator(v); err != nil {
+		t.Fatalf("注册翻译器失败: %v", err)
+	}
+	return v
 }
 
 // Test_ValidateEnumInt_ValidValues 测试合法枚举值
 func Test_ValidateEnumInt_ValidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name     string
@@ -77,8 +76,6 @@ func Test_ValidateEnumInt_ValidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := v.Struct(tc.input)
@@ -94,7 +91,7 @@ func Test_ValidateEnumInt_ValidValues(t *testing.T) {
 
 // Test_ValidateEnumInt_InvalidValues 测试非法枚举值
 func Test_ValidateEnumInt_InvalidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name          string
@@ -147,8 +144,6 @@ func Test_ValidateEnumInt_InvalidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := v.Struct(tc.input)
@@ -170,7 +165,7 @@ func Test_ValidateEnumInt_InvalidValues(t *testing.T) {
 
 // Test_ValidateEnumInt_ErrorMessages 测试错误消息翻译
 func Test_ValidateEnumInt_ErrorMessages(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	invalidInput := EnumTestStruct{
 		Gender:      99,
@@ -180,7 +175,6 @@ func Test_ValidateEnumInt_ErrorMessages(t *testing.T) {
 		UnsignedInt: 0,
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 	err := v.Struct(invalidInput)
 
 	if err == nil {

@@ -2,9 +2,6 @@ package xVaild
 
 import (
 	"testing"
-
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 )
 
 // 自定义字符串类型
@@ -19,7 +16,7 @@ type SnowflakeTestStruct struct {
 
 // Test_ValidateSnowflake_ValidValues 测试合法的 Snowflake ID
 func Test_ValidateSnowflake_ValidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name     string
@@ -78,7 +75,6 @@ func Test_ValidateSnowflake_ValidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -95,7 +91,7 @@ func Test_ValidateSnowflake_ValidValues(t *testing.T) {
 
 // Test_ValidateSnowflake_InvalidValues 测试非法的 Snowflake ID
 func Test_ValidateSnowflake_InvalidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name          string
@@ -168,7 +164,6 @@ func Test_ValidateSnowflake_InvalidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,14 +185,13 @@ func Test_ValidateSnowflake_InvalidValues(t *testing.T) {
 
 // Test_ValidateSnowflake_ErrorMessages 测试错误消息翻译
 func Test_ValidateSnowflake_ErrorMessages(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	invalidInput := SnowflakeTestStruct{
 		ID:     "invalid_id_123",
 		GeneID: "987654321",
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 	err := v.Struct(invalidInput)
 
 	if err == nil {

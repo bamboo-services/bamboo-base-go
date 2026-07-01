@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/locales/zh"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -13,6 +12,25 @@ import (
 )
 
 var trans ut.Translator
+
+// ValidateProvider 验证器引擎提供者接口
+//
+// 用于解耦 common/validator 与 HTTP 框架，调用方可以提供自身使用的 *validator.Validate 实例。
+type ValidateProvider interface {
+	GetValidate() *validator.Validate
+}
+
+// globalValidateProvider 全局验证器提供者
+//
+// 当翻译器未初始化且发生验证错误时，TranslateError 会从此提供者获取 *validator.Validate 引擎。
+var globalValidateProvider ValidateProvider
+
+// SetValidateProvider 设置全局验证器提供者
+//
+// major 层应在初始化阶段注入 GinValidateProvider 或其他 HTTP 框架对应的实现。
+func SetValidateProvider(provider ValidateProvider) {
+	globalValidateProvider = provider
+}
 
 // RegisterTranslator 注册中文翻译器
 //
@@ -164,19 +182,28 @@ func GetTranslator() ut.Translator {
 func TranslateError(err error) map[string]string {
 	result := make(map[string]string)
 
-	// 如果翻译器未初始化，尝试从 binding 获取
+	// 如果翻译器未初始化，尝试从全局提供者获取验证器引擎
 	if trans == nil {
-		if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-			if err := RegisterTranslator(v); err != nil {
-				// 翻译器初始化失败，返回原始错误
-				var validationErrors validator.ValidationErrors
-				if errors.As(err, &validationErrors) {
-					for _, fe := range validationErrors {
-						result[fe.Field()] = fe.Error()
-					}
+		if globalValidateProvider == nil {
+			// 没有提供者，只能返回原始错误
+			var validationErrors validator.ValidationErrors
+			if errors.As(err, &validationErrors) {
+				for _, fe := range validationErrors {
+					result[fe.Field()] = fe.Error()
 				}
-				return result
 			}
+			return result
+		}
+		v := globalValidateProvider.GetValidate()
+		if err := RegisterTranslator(v); err != nil {
+			// 翻译器初始化失败，返回原始错误
+			var validationErrors validator.ValidationErrors
+			if errors.As(err, &validationErrors) {
+				for _, fe := range validationErrors {
+					result[fe.Field()] = fe.Error()
+				}
+			}
+			return result
 		}
 	}
 

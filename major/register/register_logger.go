@@ -7,6 +7,7 @@ import (
 
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
+	xMajorLog "github.com/bamboo-services/bamboo-base-go/major/log"
 )
 
 // loggerInit 初始化并设置全局日志记录器。
@@ -43,4 +44,8 @@ func (r *Reg) loggerInit() {
 	// 设置为全局默认 logger
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
+	// 注册 Gin 日志 context 提取器
+	// 使 common/log 的 LogHandler 能从 gin.Context 中提取 trace ID，无需 common 层依赖 gin
+	xLog.SetLogContextExtractor(&xMajorLog.GinLogExtractor{})
 }

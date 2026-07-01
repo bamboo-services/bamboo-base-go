@@ -3,10 +3,9 @@ package xCtxUtil
 import (
 	"context"
 
-	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
-	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/gin-gonic/gin"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -20,12 +19,14 @@ import (
 // 返回值:
 //   - *redis.Client: Redis 客户端实例
 func MustGetRDB(ctx context.Context) *redis.Client {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.RedisClientKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
 				if rdb, ok := component.(*redis.Client); ok {
 					return rdb
 				}
@@ -33,7 +34,7 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 		}
 	}
 
-	value := ctx.Value(xCtx2.RedisClientKey)
+	value := stdCtx.Value(xCtx.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb
@@ -53,13 +54,15 @@ func MustGetRDB(ctx context.Context) *redis.Client {
 // 返回值:
 //   - *redis.Client: Redis 客户端实例
 //   - *xError.Error: 错误信息，成功时为 nil
-func GetRDB(ctx context.Context) (*redis.Client, *error2.Error) {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+func GetRDB(ctx context.Context) (*redis.Client, *xError.Error) {
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.RedisClientKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.RedisClientKey); component != nil {
 				if rdb, ok := component.(*redis.Client); ok {
 					return rdb, nil
 				}
@@ -67,14 +70,14 @@ func GetRDB(ctx context.Context) (*redis.Client, *error2.Error) {
 		}
 	}
 
-	value := ctx.Value(xCtx2.RedisClientKey)
+	value := stdCtx.Value(xCtx.RedisClientKey)
 	if value != nil {
 		if rdb, ok := value.(*redis.Client); ok {
 			return rdb, nil
 		}
 	}
-	return nil, &error2.Error{
-		ErrorCode:    error2.CacheError,
+	return nil, &xError.Error{
+		ErrorCode:    xError.CacheError,
 		ErrorMessage: "在上下文中找不到 Redis 客户端",
 	}
 }

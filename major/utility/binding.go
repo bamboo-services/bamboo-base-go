@@ -1,10 +1,13 @@
-package pack
+package utility
 
 import (
-	xVaild "github.com/bamboo-services/bamboo-base-go/common/validator"
+	xMajorValidator "github.com/bamboo-services/bamboo-base-go/major/validator"
 	"github.com/gin-gonic/gin"
 )
 
+// Binding 是请求绑定工具结构体，提供 JSON Body、Query、URI、Header 等多种绑定方式。
+//
+// 泛型参数 T 为目标结构体类型，绑定失败时自动处理验证错误并中断请求。
 type Binding[T any] struct {
 	Context *gin.Context // 上下文
 	GetData *T           // 转化的数据
@@ -26,7 +29,7 @@ type Binding[T any] struct {
 func (u *Binding[T]) Data() *T {
 	bindErr := u.Context.ShouldBindBodyWithJSON(&u.GetData)
 	if bindErr != nil {
-		xVaild.HandleValidationError(u.Context, bindErr)
+		xMajorValidator.HandleValidationError(u.Context, bindErr)
 		u.Context.Abort()
 		return nil
 	}
@@ -47,7 +50,7 @@ func (u *Binding[T]) Data() *T {
 func (u *Binding[T]) Query() *T {
 	bindErr := u.Context.ShouldBindQuery(u.GetData)
 	if bindErr != nil {
-		xVaild.HandleValidationError(u.Context, bindErr)
+		xMajorValidator.HandleValidationError(u.Context, bindErr)
 		u.Context.Abort()
 		return nil
 	}
@@ -68,7 +71,7 @@ func (u *Binding[T]) Query() *T {
 func (u *Binding[T]) URI() *T {
 	bindErr := u.Context.ShouldBindUri(u.GetData)
 	if bindErr != nil {
-		xVaild.HandleValidationError(u.Context, bindErr)
+		xMajorValidator.HandleValidationError(u.Context, bindErr)
 		u.Context.Abort()
 		return nil
 	}
@@ -89,7 +92,7 @@ func (u *Binding[T]) URI() *T {
 func (u *Binding[T]) Header() *T {
 	bindErr := u.Context.ShouldBindHeader(u.GetData)
 	if bindErr != nil {
-		xVaild.HandleValidationError(u.Context, bindErr)
+		xMajorValidator.HandleValidationError(u.Context, bindErr)
 		u.Context.Abort()
 		return nil
 	}

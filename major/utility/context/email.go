@@ -3,11 +3,10 @@ package xCtxUtil
 import (
 	"context"
 
-	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
-	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xEmail "github.com/bamboo-services/bamboo-base-go/plugins/email"
-	"github.com/gin-gonic/gin"
 )
 
 // MustGetEmailClient 从上下文中获取邮件客户端实例（panic 版本）。
@@ -20,12 +19,14 @@ import (
 // 返回值:
 //   - *xEmail.EmailClient: 邮件客户端实例
 func MustGetEmailClient(ctx context.Context) *xEmail.EmailClient {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.EmailClientKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.EmailClientKey); component != nil {
 				if client, ok := component.(*xEmail.EmailClient); ok {
 					return client
 				}
@@ -33,7 +34,7 @@ func MustGetEmailClient(ctx context.Context) *xEmail.EmailClient {
 		}
 	}
 
-	value := ctx.Value(xCtx2.EmailClientKey)
+	value := stdCtx.Value(xCtx.EmailClientKey)
 	if value != nil {
 		if client, ok := value.(*xEmail.EmailClient); ok {
 			return client
@@ -53,13 +54,15 @@ func MustGetEmailClient(ctx context.Context) *xEmail.EmailClient {
 // 返回值:
 //   - *xEmail.EmailClient: 邮件客户端实例
 //   - *xError.Error: 错误信息，成功时为 nil
-func GetEmailClient(ctx context.Context) (*xEmail.EmailClient, *error2.Error) {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+func GetEmailClient(ctx context.Context) (*xEmail.EmailClient, *xError.Error) {
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.EmailClientKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.EmailClientKey); component != nil {
 				if client, ok := component.(*xEmail.EmailClient); ok {
 					return client, nil
 				}
@@ -67,14 +70,14 @@ func GetEmailClient(ctx context.Context) (*xEmail.EmailClient, *error2.Error) {
 		}
 	}
 
-	value := ctx.Value(xCtx2.EmailClientKey)
+	value := stdCtx.Value(xCtx.EmailClientKey)
 	if value != nil {
 		if client, ok := value.(*xEmail.EmailClient); ok {
 			return client, nil
 		}
 	}
-	return nil, &error2.Error{
-		ErrorCode:    error2.EmailError,
+	return nil, &xError.Error{
+		ErrorCode:    xError.EmailError,
 		ErrorMessage: "在上下文中找不到邮件客户端",
 	}
 }

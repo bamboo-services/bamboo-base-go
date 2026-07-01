@@ -3,10 +3,9 @@ package xCtxUtil
 import (
 	"context"
 
-	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
-	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/gin-gonic/gin"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	"gorm.io/gorm"
 )
 
@@ -24,21 +23,23 @@ import (
 // 返回值:
 //   - *gorm.DB: 数据库连接实例
 func MustGetDB(ctx context.Context) *gorm.DB {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.DatabaseKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
 				if db, ok := component.(*gorm.DB); ok {
-					return db.WithContext(ctx)
+					return db.WithContext(stdCtx)
 				}
 			}
 		}
 	}
-	if value := ctx.Value(xCtx2.DatabaseKey); value != nil {
+	if value := stdCtx.Value(xCtx.DatabaseKey); value != nil {
 		if db, ok := value.(*gorm.DB); ok {
-			return db.WithContext(ctx)
+			return db.WithContext(stdCtx)
 		}
 	}
 	xLog.WithName(xLog.NamedUTIL).Error(ctx, "在上下文中找不到数据库，真的注入成功了吗？")
@@ -56,28 +57,30 @@ func MustGetDB(ctx context.Context) *gorm.DB {
 // 返回值:
 //   - *gorm.DB: 数据库连接实例
 //   - *xError.Error: 错误信息，成功时为 nil
-func GetDB(ctx context.Context) (*gorm.DB, *error2.Error) {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+func GetDB(ctx context.Context) (*gorm.DB, *xError.Error) {
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if value := ctx.Value(xCtx2.RegNodeKey); value != nil {
-		if nodeList, ok := value.(xCtx2.ContextNodeList); ok {
-			if component := nodeList.Get(xCtx2.DatabaseKey); component != nil {
+	if value := stdCtx.Value(xCtx.RegNodeKey); value != nil {
+		if nodeList, ok := value.(xCtx.ContextNodeList); ok {
+			if component := nodeList.Get(xCtx.DatabaseKey); component != nil {
 				if db, ok := component.(*gorm.DB); ok {
-					return db.WithContext(ctx), nil
+					return db.WithContext(stdCtx), nil
 				}
 			}
 		}
 	}
 
-	value := ctx.Value(xCtx2.DatabaseKey)
+	value := stdCtx.Value(xCtx.DatabaseKey)
 	if value != nil {
 		if db, ok := value.(*gorm.DB); ok {
-			return db.WithContext(ctx), nil
+			return db.WithContext(stdCtx), nil
 		}
 	}
-	return nil, &error2.Error{
-		ErrorCode:    error2.DatabaseError,
+	return nil, &xError.Error{
+		ErrorCode:    xError.DatabaseError,
 		ErrorMessage: "在上下文中找不到数据库",
 	}
 }

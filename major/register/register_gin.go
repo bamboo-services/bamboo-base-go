@@ -5,6 +5,8 @@ import (
 	xCtxUtil "github.com/bamboo-services/bamboo-base-go/common/utility/context"
 	xVaild "github.com/bamboo-services/bamboo-base-go/common/validator"
 	xHelper "github.com/bamboo-services/bamboo-base-go/major/helper"
+	xMajorCtxUtil "github.com/bamboo-services/bamboo-base-go/major/utility/context"
+	xMajorValidator "github.com/bamboo-services/bamboo-base-go/major/validator"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -24,6 +26,12 @@ func (r *Reg) engineInit() {
 	if !xCtxUtil.IsDebugMode() {
 		gin.SetMode(gin.ReleaseMode)
 	}
+
+	// 注入验证器提供者（必须在翻译器注册之前，确保 TranslateError fallback 可用）
+	xVaild.SetValidateProvider(&xMajorValidator.GinValidateProvider{})
+
+	// 注册 major 层 ContextExtractor（使 GetDB/GetRDB 等能从 gin.Context 提取标准 context）
+	xMajorCtxUtil.SetContextExtractor(xMajorCtxUtil.NewGinContextExtractor())
 
 	// 注册自定义验证器和翻译器
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {

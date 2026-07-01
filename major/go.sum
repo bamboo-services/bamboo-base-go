@@ -1,7 +1,7 @@
-github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605032001 h1:0ChFfLfDQBpSPGoMuu8YJcgNzhsNubtXEcVOCB4PbDc=
-github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605032001/go.mod h1:1XeYxIOi5GEIAasic++N+MxZMWVrSqGPoUTAfLghLLc=
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605032001 h1:F2W0Po1xf18VAlhX+Xc6jUKB4EsCF9+WFJLkoIG1trU=
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605032001/go.mod h1:Fj/8AK4UEAMeAsfKK3ngIW1Dor1tuiW3Wi+L5EoLOkQ=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605310541 h1:T21jUfwtBsU9K6lgSuH/7Iri1jGKbaFJeS6AP1hOrfE=
+github.com/bamboo-services/bamboo-base-go/common v1.0.0-202605310541/go.mod h1:DgB+FEGjjWuaeuMXlwbMw/Q+Tq+KtddaVLu/D9eccGU=
+github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605310541 h1:0nBOJOZyY9yP36/3SCfBvESpurb17yPhUka1Fvb9jxs=
+github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202605310541/go.mod h1:ek8hbiQX7Zdd39NDtA521FHICv0A8Fkl3ZN/GIKtXYg=
 github.com/bamboo-services/bamboo-base-go/plugins/email v1.0.0-202605032001 h1:L/IRbQQu+NkkYZ0hofRGoSRUQ/bF9Q2KfBo9Kamb1eM=
 github.com/bamboo-services/bamboo-base-go/plugins/email v1.0.0-202605032001/go.mod h1:b3nDKsdB36VhWmrdMWzEl47dCKy4x6PdqRoQfHONFms=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
@@ -88,8 +88,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.3.1 h1:waO7eEiFDwidsBN6agj1vJQ4AG7lh2yqXyOXqhgQuyY=
 github.com/ugorji/go/codec v1.3.1/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
-github.com/wneessen/go-mail v0.7.2 h1:xxPnhZ6IZLSgxShebmZ6DPKh1b6OJcoHfzy7UjOkzS8=
-github.com/wneessen/go-mail v0.7.2/go.mod h1:+TkW6QP3EVkgTEqHtVmnAE/1MRhmzb8Y9/W3pweuS+k=
+github.com/wneessen/go-mail v0.7.3 h1:g3DravXC5SMlVdboFrQA8Jx95A8sOzoBeS5F+vzNRK0=
+github.com/wneessen/go-mail v0.7.3/go.mod h1:QGhBX0yNbc1J+Mkjcu7z2rpj4B4l+BmDY8gYznPC9sk=
 github.com/zeebo/xxh3 v1.1.0 h1:s7DLGDK45Dyfg7++yxI0khrfwq9661w9EN78eP/UZVs=
 github.com/zeebo/xxh3 v1.1.0/go.mod h1:IisAie1LELR4xhVinxWS5+zf1lA4p0MW4T+w+W07F5s=
 go.mongodb.org/mongo-driver/v2 v2.6.0 h1:b9sJOYrkmt4l8bY43ZenFBcPlhYIjaOfYHLtbB/5qi8=

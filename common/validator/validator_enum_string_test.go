@@ -2,9 +2,6 @@ package xVaild
 
 import (
 	"testing"
-
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
 )
 
 // 自定义字符串类型
@@ -20,7 +17,7 @@ type EnumStringTestStruct struct {
 
 // Test_ValidateEnumString_ValidValues 测试合法枚举值
 func Test_ValidateEnumString_ValidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name     string
@@ -47,7 +44,6 @@ func Test_ValidateEnumString_ValidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -64,7 +60,7 @@ func Test_ValidateEnumString_ValidValues(t *testing.T) {
 
 // Test_ValidateEnumString_InvalidValues 测试非法枚举值
 func Test_ValidateEnumString_InvalidValues(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	testCases := []struct {
 		name          string
@@ -100,7 +96,6 @@ func Test_ValidateEnumString_InvalidValues(t *testing.T) {
 		},
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,7 +117,7 @@ func Test_ValidateEnumString_InvalidValues(t *testing.T) {
 
 // Test_ValidateEnumString_ErrorMessages 测试错误消息翻译
 func Test_ValidateEnumString_ErrorMessages(t *testing.T) {
-	initValidator(t)
+	v := initValidator(t)
 
 	invalidInput := EnumStringTestStruct{
 		Role:   "invalid_role",
@@ -130,7 +125,6 @@ func Test_ValidateEnumString_ErrorMessages(t *testing.T) {
 		Type:   "A",
 	}
 
-	v := binding.Validator.Engine().(*validator.Validate)
 	err := v.Struct(invalidInput)
 
 	if err == nil {

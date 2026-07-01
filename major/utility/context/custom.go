@@ -4,20 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	error2 "github.com/bamboo-services/bamboo-base-go/common/error"
-	xCtx2 "github.com/bamboo-services/bamboo-base-go/defined/context"
-	"github.com/gin-gonic/gin"
+	xError "github.com/bamboo-services/bamboo-base-go/common/error"
+	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 )
 
 // MustGet 是一个通用的组件获取函数
 // T: 想要获取的组件类型
 // key: 注册时使用的 ContextKey
-func MustGet[T any](ctx context.Context, key xCtx2.ContextKey) T {
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+func MustGet[T any](ctx context.Context, key xCtx.ContextKey) T {
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if val := ctx.Value(xCtx2.RegNodeKey); val != nil {
-		if nodeList, ok := val.(xCtx2.ContextNodeList); ok {
+	if val := stdCtx.Value(xCtx.RegNodeKey); val != nil {
+		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
 			if component := nodeList.Get(key); component != nil {
 				if typed, ok := component.(T); ok {
 					return typed
@@ -25,7 +26,7 @@ func MustGet[T any](ctx context.Context, key xCtx2.ContextKey) T {
 			}
 		}
 	}
-	if val := ctx.Value(key); val != nil {
+	if val := stdCtx.Value(key); val != nil {
 		if typed, ok := val.(T); ok {
 			return typed
 		}
@@ -48,14 +49,16 @@ func MustGet[T any](ctx context.Context, key xCtx2.ContextKey) T {
 // 返回值:
 //   - T: 组件实例（失败时为零值）
 //   - *xError.Error: 错误信息，成功时为 nil
-func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *error2.Error) {
+func Get[T any](ctx context.Context, key xCtx.ContextKey) (T, *xError.Error) {
 	var zero T
 
-	if ginCtx, ok := ctx.(*gin.Context); ok {
-		ctx = ginCtx.Request.Context()
+	// 使用 ContextExtractor 提取标准 context
+	stdCtx := ctx
+	if globalContextExtractor != nil {
+		stdCtx = globalContextExtractor.ExtractRequestContext(ctx)
 	}
-	if val := ctx.Value(xCtx2.RegNodeKey); val != nil {
-		if nodeList, ok := val.(xCtx2.ContextNodeList); ok {
+	if val := stdCtx.Value(xCtx.RegNodeKey); val != nil {
+		if nodeList, ok := val.(xCtx.ContextNodeList); ok {
 			if component := nodeList.Get(key); component != nil {
 				if typed, ok := component.(T); ok {
 					return typed, nil
@@ -64,14 +67,14 @@ func Get[T any](ctx context.Context, key xCtx2.ContextKey) (T, *error2.Error) {
 		}
 	}
 
-	if val := ctx.Value(key); val != nil {
+	if val := stdCtx.Value(key); val != nil {
 		if typed, ok := val.(T); ok {
 			return typed, nil
 		}
 	}
 
-	return zero, &error2.Error{
-		ErrorCode:    error2.ServerInternalError,
-		ErrorMessage: error2.ErrMessage(fmt.Sprintf("SDK 组件缺失: 无法在上下文中找到 Key 为 [%v] 的组件", key)),
+	return zero, &xError.Error{
+		ErrorCode:    xError.ServerInternalError,
+		ErrorMessage: xError.ErrMessage(fmt.Sprintf("SDK 组件缺失: 无法在上下文中找到 Key 为 [%v] 的组件", key)),
 	}
 }

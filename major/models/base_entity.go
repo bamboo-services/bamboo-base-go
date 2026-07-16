@@ -35,7 +35,7 @@ import (
 //	}
 type BaseEntity struct {
 	ID        xSnowflake.SnowflakeID `json:"id" gorm:"type:bigint;primaryKey;comment:主键"`
-	CreatedAt time.Time              `json:"-" gorm:"not null;type:timestamptz;autoCreateTime:milli;comment:创建时间"`
+	CreatedAt time.Time              `json:"created_at" gorm:"not null;type:timestamptz;autoCreateTime:milli;comment:创建时间"`
 	UpdatedAt time.Time              `json:"updated_at" gorm:"not null;type:timestamptz;autoUpdateTime:milli;comment:更新时间"`
 }
 

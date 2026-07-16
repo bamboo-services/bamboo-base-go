@@ -67,7 +67,7 @@ major/
 - **ErrorCode.Code 前 3 位 = HTTP 状态码**：`xResult.Error()` 中 `int(errorCode.Code/100)` 决定 HTTP 响应码。
 - **实体基类二选一**：`BaseEntity`（无软删除）或 `BaseEntityWithSoftDelete`（带软删除），不要自行定义 ID/CreatedAt/UpdatedAt 字段。
 - **ID 自动生成**：`BeforeCreate` 钩子在实体 ID 为零值时自动调用 `xSnowflake.GenerateID(gene)`，不要手动设置 ID。
-- **`CreatedAt` 不序列化到 JSON**（`json:"-"`），`UpdatedAt` 序列化为 `updated_at`。
+- **`CreatedAt` 序列化为 `created_at`**，`UpdatedAt` 序列化为 `updated_at`，均会输出到 JSON 响应中。
 - **分页默认值**：页码从 1 开始，默认每页 20 条，最大 200 条。可通过覆盖 `DefaultPageConfig` 全局调整。
 - **HttpLogger 自动脱敏**：password / token / secret / cookie 等敏感字段在调试日志中自动脱敏，不会泄露。
 

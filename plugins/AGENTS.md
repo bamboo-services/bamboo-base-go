@@ -47,7 +47,7 @@ plugins/
 | 异步执行函数 | `async/async.go` → `Async(parentCtx, fn, options...)` | 返回 `*Task` |
 | 等待异步完成 | `async/task.go` → `Wait(task)` | 阻塞至任务完成 |
 | 取消异步任务 | `async/task.go` → `Cancel(task)` | 非阻塞发送取消信号 |
-| 发送邮件 | `email/client.go` → `EmailClient` | 通过 `xCtxUtil.GetEmailClient()` 获取实例 |
+| 发送邮件 | `email/client.go` → `EmailClient` | 通过 `xCtxUtil.MustGetEmailClient()` 获取实例 |
 | 渲染邮件模板 | `email/template.go` → `TemplateManager.Render()` | 内置模板或外部目录覆盖 |
 | 注册邮件节点 | `email/client.go` → `InitClient()` | 传入 `reg.Init.Use(xCtx.EmailClientKey, xEmail.InitClient)` |
 
@@ -60,6 +60,7 @@ plugins/
 - **定时任务函数签名灵活**：通过反射适配，支持 `func()` 和 `func(context.Context)` 两种签名。
 - **邮件模板支持覆盖**：内置 `embed` 模板，同名外部模板文件会覆盖内置版本（`EMAIL_TEMPLATE_DIR` 配置）。
 - **邮件客户端通过注册节点初始化**：`InitClient` 是标准 `xRegNode.Node` 签名，注册到 `xCtx.EmailClientKey`。
+- **统一版本号方案**：所有插件与主项目共享同一 `vX.Y.Z` 版本号，不再使用独立的 `version` 文件。发布通过 `make release VERSION=vX.Y.Z` 统一管理。
 
 ## 反模式
 
@@ -68,6 +69,7 @@ plugins/
 - **禁止跳过 `Async` 的 panic 恢复** — 内部 `defer recover()` 保证任务 panic 不会崩溃整个进程。
 - **禁止手动创建 `EmailClient`** — 应通过注册节点 `InitClient` 初始化，从 context 获取。
 - **禁止在 cron job 中执行长时间阻塞操作而不检查 ctx** — `Runner` 发出取消信号后，job 应及时退出。
+- **禁止手动管理插件版本号** — 使用统一的 `make release` 流程。
 
 ## 调试路径
 
@@ -76,6 +78,13 @@ plugins/
 3. 定时任务不执行 — 检查 cron 表达式语法（`WithSeconds` 默认 false，6 段式表达式需要开启）。
 4. 邮件发送失败 — 检查 SMTP 配置（`EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_TLS`），TLS 策略需匹配服务端。
 5. 邮件模板渲染失败 — 确认模板名称不含 `.html` 后缀（`Render("welcome", data)` 而非 `Render("welcome.html", data)`）。
+
+## 依赖关系
+
+- `plugins/grpc` 依赖 `defined` + `common`
+- `plugins/cron` 依赖 `common`
+- `plugins/async` 依赖 `common`
+- `plugins/email` 依赖 `defined` + `common`
 
 ## 引用
 

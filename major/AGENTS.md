@@ -2,25 +2,28 @@
 
 ## 概述
 
-核心层模块（`github.com/bamboo-services/bamboo-base-go/major`），构建于 `common` 和 `defined` 之上，提供应用启动框架（注册系统 + Runner）、HTTP 中间件链、统一响应处理、数据模型基类与辅助工具。是下游业务应用直接交互的最高层 SDK。
+核心层模块（`github.com/bamboo-services/bamboo-base-go/major`），构建于 `common` 和 `defined` 之上，提供应用启动框架（注册系统 + Runner）、HTTP 中间件链、统一响应处理、数据模型基类、泛型缓存系统、声明式选项配置与上下文提取工具。是下游业务应用直接交互的最高层 SDK。**major 层负责解耦框架依赖（gin），使 common 层保持干净、无 HTTP 框架依赖。**
 
 ## 目录结构
 
 ```text
 major/
 ├── main/
-│   └── runner.go              # Runner() — HTTP 服务启动 + 信号监听 + 优雅关闭 + 附加协程
+│   ├── runner.go              # Runner() — HTTP 启动 + 信号 + 优雅关闭 + 附加协程
+│   ├── web.go                 # WebServer 配置
+│   ├── goroutine.go           # goroutineFunc 管理
+│   └── option.go              # Runner 内部选项
 ├── register/                  # 节点化注册系统（详见 register/AGENTS.md）
 │   ├── register.go            #   Register() 入口
 │   ├── register_config.go     #   .env 加载
-│   ├── register_logger.go     #   全局 slog 初始化
-│   ├── register_gin.go        #   Gin 引擎 + 中间件 + 验证器注册
-│   ├── node/                  #   节点队列管理
-│   └── init/                  #   内置初始化节点
+│   ├── register_logger.go     #   全局 slog 初始化 + GinLogExtractor 注入
+│   ├── register_gin.go        #   Gin 引擎 + 中间件 + 验证器 + ContextExtractor 注入
+│   ├── node/                  #   节点队列管理（Use / Exec / UseAfterExec）
+│   └── init/                  #   内置初始化节点（雪花/缓存/数据库）
 ├── middleware/
 │   ├── response.go            # ResponseMiddleware — 统一响应兜底中间件
 │   ├── cors.go                # ReleaseAllCors — 全量 CORS 中间件
-│   └── option.go              # 中间件选项
+│   └── option_request.go      # OPTIONS 请求处理
 ├── result/
 │   └── result.go              # Success / SuccessHasData / Error / AbortError
 ├── models/
@@ -35,19 +38,34 @@ major/
 ├── route/
 │   ├── no_route.go            # NoRoute — 404 统一处理
 │   └── no_method.go           # NoMethod — 405 统一处理
-├── cache/
-│   ├── interface.go           # KeyCache / HashCache 泛型缓存接口
-│   └── struct.go              # 缓存结构体定义
-├── option/
-│   ├── option.go              # Option 类型 + Config 聚合体 + Apply
-│   ├── option_database.go     # WithDatabase / WithMySQL / WithDatabaseFromEnv 桥接层
-│   ├── cache.go               # WithRedis / WithMemory 缓存后端选项
-│   ├── database/               # 数据库配置子包（不依赖 option 父包，避免循环依赖）
-│   │   ├── database.go         #   通用类型 + FromEnv + CommonOptions + 二级选项
-│   │   ├── mysql.go            #   MySQL() + MySQLFromEnv() DSN 拼装
-│   │   ├── postgres.go         #   Postgres() + PostgresFromEnv() DSN 拼装
-│   │   └── sqlite.go           #   SQLite() + SQLiteFromEnv() DSN 拼装
-│   └── router.go              # WithRoute / WithRouteGroup 路由注册选项
+├── cache/                     # 泛型缓存系统（详见 cache/AGENTS.md）
+│   ├── manager.go             #   Manager 门面 + 泛型工厂方法
+│   ├── driver/                #   缓存接口（KeyCache / HashCache / SetCache / ListCache）
+│   ├── memory/                #   内存后端（分片 + TTL + janitor）
+│   └── redis/                 #   Redis 后端
+├── option/                    # 声明式配置层（详见 option/AGENTS.md）
+│   ├── option.go              #   Option 类型 + Config 聚合体 + Apply
+│   ├── cache.go               #   CacheConfig + Redis/Memory 选项
+│   ├── database.go            #   数据库选项桥接层
+│   ├── router.go              #   RouteRegistrar + WithRoute
+│   └── database/              #   数据库配置子包
+├── utility/                   # HTTP 请求绑定与上下文提取工具
+│   ├── bind.go                #   Bind[T]() — 请求参数绑定入口
+│   ├── binding.go             #   Binding[T].Data()/Query()/URI()/Header()
+│   └── context/               #   上下文组件提取（GetDB / GetRDB / GetCacheManager 等）
+│       ├── gin_extractor_impl.go # ContextExtractor 接口 + gin 实现
+│       ├── custom.go          #     MustGet[T] / Get[T] — 通用泛型组件提取
+│       ├── database.go        #     MustGetDB / GetDB
+│       ├── nosql.go           #     MustGetRDB / GetRDB
+│       ├── cache.go           #     MustGetCacheManager / GetCacheManager
+│       ├── email.go           #     MustGetEmailClient / GetEmailClient
+│       └── snowflake.go       #     GetSnowflakeNode / GenerateSnowflakeID
+├── validator/                 # 验证错误处理（从 common 迁移来，解耦 gin 依赖）
+│   ├── gin_validate_provider.go # ValidateProvider 实现（从 gin binding 获取引擎）
+│   └── response.go            #   HandleValidationError — 友好中文验证错误响应
+├── log/                       # 日志提取器（桥接 gin 与 common/log）
+│   ├── gin_extractor.go       # GinLogExtractor — 从 gin.Context 提取 trace ID
+│   └── gorm.go                # GORM 日志适配器（从 common/log 迁移来）
 ├── hook/
 │   └── redis.go               # Redis 钩子
 └── go.mod                     # 独立模块定义
@@ -56,21 +74,28 @@ major/
 > **Runner 装配链路**：`opts []xOption.Option` → `option.Apply()` → `DatabaseInit`/`CacheInit` 工厂 → `RegNode.UseAfterExec()` → context 注入。
 > 业务侧原先在 `startup.Init()` 中手写的 db/redis 节点，现可由 `WithMySQL/WithPostgres/WithSQLite/WithRedis` 一行替代；仍需自定义初始化逻辑（如 AutoMigrate、种子数据）时，继续走 `Register(ctx, nodeList)` 注册自定义节点。
 
+> **架构变更说明**：`HandleValidationError`、`Bind` 绑定工具、`GetDB/GetRDB` 等上下文提取函数已从 `common` 层迁移到 `major` 层，并通过 `ContextExtractor` 接口解耦 gin 依赖。common 层现在完全不依赖 gin，保持纯 Go 依赖。
+
 ## 导航指南
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
 | 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, logger, opts, ...goroutineFunc)` |
-| 配置选项 | `option/` → `WithRedis` / `WithMySQL` / `WithRoute` | 声明式选择缓存后端、数据库驱动、路由注册 |
-| 环境变量装配 | `option/` → `WithDatabaseFromEnv` | 从 `.env` 的 `DATABASE_DRIVER` + 分项配置自动拼装 DSN |
-| 内置装配 | `register/init/` → `DatabaseInit` / `CacheInit` | Runner 据 opts 自动装配 db/cache 到 context |
+| 配置缓存后端 | `option/cache.go` → `WithRedis` / `WithMemory` | 声明式选择 Redis 或内存缓存 |
+| 配置数据库 | `option/database.go` → `WithMySQL` / `WithPostgres` / `WithSQLite` | 一行指定驱动，Runner 自动装配 |
+| 从环境变量装配数据库 | `option/database.go` → `WithDatabaseFromEnv` | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
+| 注册 HTTP 路由 | `option/router.go` → `WithRoute` / `WithRouteGroup` | 可叠加多个，支持插件自带路由 |
+| 使用缓存 | 从 context 获取 `*xCache.Manager` → `xCache.KeyCacheOf(mgr)` 等 | 泛型缓存接口，自动按后端分发 |
 | 返回成功响应 | `result/result.go` → `Success()` / `SuccessHasData()` | 自动注入 context / code / overhead |
 | 返回错误响应 | `result/result.go` → `Error()` / `AbortError()` | 传入 `xError.ErrorCode` |
 | 定义数据库实体 | `models/base_entity.go` → `BaseEntity` | 嵌入即可获得 ID + CreatedAt + UpdatedAt |
 | 定义带软删除的实体 | `models/base_entity_soft_delete.go` | 嵌入 `BaseEntityWithSoftDelete` |
 | 为实体指定基因 | `models/provider.go` → `GeneProvider` | 实现 `GetGene()` 方法 |
 | 分页查询 | `models/page.go` → `PageRequest` / `PageResponse[T]` | 泛型分页，支持规范化 |
-| 绑定请求参数 | 通过 `xUtil.Bind(ctx, &req)` 调用 | 实现在 `common/utility/` 中 |
+| 绑定请求参数 | `utility/bind.go` → `Bind(ctx, &req)` | `.Data()` / `.Query()` / `.URI()` / `.Header()` |
+| 从 context 获取 DB | `utility/context/database.go` → `GetDB(ctx)` | 返回 `*gorm.DB, *xError.Error` |
+| 从 context 获取 Redis | `utility/context/nosql.go` → `GetRDB(ctx)` | 返回 `*redis.Client, *xError.Error` |
+| 从 context 获取缓存管理器 | `utility/context/cache.go` → `GetCacheManager(ctx)` | 返回 `*xCache.Manager, *xError.Error` |
 | 处理 404 | `route/no_route.go` → `NoRoute()` | 绑定到 `router.NoRoute` |
 | 添加 CORS | `middleware/cors.go` → `ReleaseAllCors()` | 全量放行，按需使用 |
 | 响应兜底 | `middleware/response.go` → `ResponseMiddleware()` | 检查未写入响应的请求 |
@@ -87,6 +112,7 @@ major/
 - **`CreatedAt` 序列化为 `created_at`**，`UpdatedAt` 序列化为 `updated_at`，均会输出到 JSON 响应中。
 - **分页默认值**：页码从 1 开始，默认每页 20 条，最大 200 条。可通过覆盖 `DefaultPageConfig` 全局调整。
 - **HttpLogger 自动脱敏**：password / token / secret / cookie 等敏感字段在调试日志中自动脱敏，不会泄露。
+- **ContextExtractor 解耦**：`major/utility/context` 中的 `GetDB/GetRDB` 等函数通过 `ContextExtractor` 接口解耦 gin 依赖，在 `register_gin.go` 初始化时注入 gin 实现。common 层不再依赖 gin。
 
 ## 反模式
 
@@ -96,6 +122,8 @@ major/
 - **禁止跳过 `ResponseMiddleware`** — 它是未写入响应和 panic 恢复后的最后一道防线。
 - **禁止用 `gin.Default()` 或 `gin.New()` 替代 SDK 引擎** — 会丢失所有中间件和验证器注册。
 - **禁止在 `goroutineFunc` 中忽略 ctx 取消** — `Runner` 在收到信号后会 cancel ctx，附加协程应监听 `ctx.Done()` 及时退出。
+- **禁止在 common 层直接依赖 gin** — 使用 major 层的 ContextExtractor 提取上下文，common 层保持纯 Go 依赖。
+- **禁止直接使用 common/utility/context 中的 context 提取函数** — 这些函数已从 common 移出（或变为空壳），应使用 `major/utility/context` 中的函数。
 
 ## 调试路径
 
@@ -105,7 +133,11 @@ major/
 4. 分页参数不生效 — 确认调用了 `PageRequest.Normalize()` 或使用 `NewPageFromRequest()`。
 5. 实体 ID 全为 0 — 确认嵌入的是 `BaseEntity` / `BaseEntityWithSoftDelete` 而非自定义字段，且 `BeforeCreate` 钩子未被覆盖。
 6. 日志中敏感信息泄露 — 确认 HttpLogger 的脱敏字段列表覆盖了你的场景（检查 `sanitizeHeaders` / `sanitizeJSONBody`）。
+7. `GetDB/GetRDB` 取不到实例 — 确认 `ContextExtractor` 已通过 `register_gin.go` 注入，且对应 ContextKey 在 init 阶段已注册。
 
 ## 引用
 
 - [register/](./register/AGENTS.md) — 节点化注册系统与初始化流程
+- [cache/](./cache/AGENTS.md) — 泛型缓存系统（Key/Hash/Set/List）
+- [option/](./option/AGENTS.md) — 声明式配置层
+- [register/init/](./register/init/AGENTS.md) — 内置初始化节点（雪花/缓存/数据库）

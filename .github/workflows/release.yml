@@ -1,0 +1,168 @@
+name: Release Modules
+
+# 触发条件：GitHub Release 发布（make release VERSION=vX.Y.Z 创建的 Release）
+# 流程：
+#   1. 从 release tag 检出代码
+#   2. 解析 release tag name → 提取版本号 vX.Y.Z
+#   3. 在所有子模块 go.mod 中将 bamboo-base-go/<subpkg> 的依赖版本替换为 vX.Y.Z
+#   4. 提交 bump commit
+#   5. 按 defined → common → major → plugins/* 顺序打子模块 tag
+#   6. 推送 commit 和 tags 到默认分支
+#
+# 结果：每个子模块获得一个 <path>/vX.Y.Z tag（如 common/v1.2.0），可被
+#       下游业务通过 `go get github.com/bamboo-services/bamboo-base-go/<path>@vX.Y.Z` 引用。
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag all submodules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+
+      - name: Extract version from release tag
+        id: ver
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          # 仅接受 vX.Y.Z 格式
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "❌ 非法 tag 格式: $TAG (期望 vX.Y.Z)"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG"        >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Release Tag: $TAG  |  Version: $VERSION"
+
+      - name: Bump submodule dependencies in go.mod
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          # 所有需要打 tag 的子模块路径
+          SUBMODULES=(
+            "defined"
+            "common"
+            "major"
+            "plugins/cron"
+            "plugins/grpc"
+            "plugins/async"
+            "plugins/email"
+          )
+          # 遍历所有 go.mod，把 base-go 的子模块依赖版本号统一替换为 vX.Y.Z
+          # 正则匹配：github.com/bamboo-services/bamboo-base-go/<subpkg> v<major>.<minor>.<patch>[-<suffix>]
+          find . -name "go.mod" -type f | while read -r modfile; do
+            for sub in "${SUBMODULES[@]}"; do
+              # 把 path 中的 / 转义（用于 sed 模式）
+              sub_esc="${sub//\//\\/}"
+              sed -i -E \
+                "s|(github\.com/bamboo-services/bamboo-base-go/${sub_esc}) v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?|\1 v${VERSION}|g" \
+                "$modfile"
+            done
+          done
+          echo "✅ 已 bump 所有子模块依赖到 v${VERSION}"
+
+      - name: Verify go.mod syntax
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # 校验每个 go.mod 仍能被 go 解析
+          for mod in defined common major plugins/cron plugins/grpc plugins/async plugins/email; do
+            echo "🔍 校验 $mod/go.mod"
+            (cd "$mod" && go mod validate)
+          done
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit bumped dependencies
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          # 暂存所有 go.mod / go.sum 变更
+          find . -name "go.mod" -exec git add {} +
+          find . -name "go.sum" -exec git add {} + 2>/dev/null || true
+          git add go.work go.work.sum 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "ℹ️  无依赖变更需要提交（可能子模块版本已是 $TAG）"
+          else
+            git commit -m "chore(release): bump submodule dependencies to ${TAG}"
+            echo "✅ 已提交 bump commit"
+          fi
+
+      - name: Create sub-module tags
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          # 按依赖顺序打 tag（同 commit，顺序仅为可读性）
+          for mod in defined common major plugins/cron plugins/grpc plugins/async plugins/email; do
+            sub_tag="${mod}/${TAG}"
+            if git rev-parse -q --verify "refs/tags/${sub_tag}" >/dev/null; then
+              echo "⚠️  Tag ${sub_tag} 已存在，跳过"
+            else
+              git tag -a "${sub_tag}" -m "Release ${sub_tag}"
+              echo "✅ 已打 tag: ${sub_tag}"
+            fi
+          done
+
+      - name: Push commit and tags to default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -e
+          # fast-forward 推送 bump commit 到默认分支
+          # 若默认分支已前进（release tag 基于旧 commit），推送会失败，需人工处理
+          if git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" \
+             "HEAD:refs/heads/${DEFAULT_BRANCH}"; then
+            echo "✅ 已推送 bump commit 到 ${DEFAULT_BRANCH}"
+          else
+            echo "⚠️  推送 ${DEFAULT_BRANCH} 失败：release tag 可能基于旧 commit"
+            echo "    请手动将 bump commit 合并到 ${DEFAULT_BRANCH}"
+            exit 1
+          fi
+          # 推送所有新建的子模块 tag
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" --tags
+          echo "✅ 已推送所有子模块 tag"
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          {
+            echo "## 🎉 Release ${TAG} 完成"
+            echo ""
+            echo "### 子模块 Tag"
+            echo ""
+            echo "| 模块 | Tag |"
+            echo "|------|-----|"
+            echo "| defined | \`defined/${TAG}\` |"
+            echo "| common | \`common/${TAG}\` |"
+            echo "| major | \`major/${TAG}\` |"
+            echo "| plugins/cron | \`plugins/cron/${TAG}\` |"
+            echo "| plugins/grpc | \`plugins/grpc/${TAG}\` |"
+            echo "| plugins/async | \`plugins/async/${TAG}\` |"
+            echo "| plugins/email | \`plugins/email/${TAG}\` |"
+            echo ""
+            echo "下游业务可通过以下方式升级："
+            echo '```bash'
+            echo "go get github.com/bamboo-services/bamboo-base-go/major@${TAG}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

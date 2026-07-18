@@ -1,21 +1,15 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto tidy test release release-plugins release-all vet
+.PHONY: help proto tidy test vet release
 
 # ============================================================
 # 基础变量
 # ============================================================
 
-# 根版本号（去除 v 前缀，如 v1 → 1）
-ROOT_VERSION := $(shell cat version | sed 's/^v//')
-
-# 时间戳（格式：YYYYMMDDHHMM）
-TIMESTAMP := $(shell date +"%Y%m%d%H%M")
-
-# 内部模块列表（非 plugins）
+# 内部模块列表（非 plugins，用于 vet 遍历）
 PACKAGES := major common defined
 
-# 插件列表
+# 插件列表（用于 vet 遍历）
 PLUGINS := cron grpc async email
 
 # ============================================================
@@ -29,20 +23,21 @@ help:
 	@echo "  make proto                    - 使用 buf 生成 gRPC 代码"
 	@echo "  make tidy                     - 整理 Go 模块依赖"
 	@echo "  make test                     - 测试代码"
+	@echo "  make vet                      - go vet 检查所有模块"
 	@echo ""
 	@echo "发布命令:"
-	@echo "  make release PKG=<name>       - 发布指定模块 (major|common|defined)"
-	@echo "  make release-plugins PLG=<name> - 发布指定插件 (cron|grpc)"
-	@echo "  make release-all              - 按依赖顺序发布全部模块和插件"
+	@echo "  make release VERSION=<tag>    - 创建 GitHub Release (触发 Action 给子模块打 tag)"
 	@echo ""
-	@echo "依赖顺序: defined → common → major, plugins/cron, plugins/grpc"
-	@echo "版本格式: v{version}-{YYYYMMDDHHMM}"
-	@echo "  根版本号:   $(ROOT_VERSION)  (来自 ./version)"
-	@echo "  时间戳:     $(TIMESTAMP)"
+	@echo "发布流程:"
+	@echo "  1. make release VERSION=vX.Y.Z"
+	@echo "     → 调用 gh release create --generate-notes 自动生成 What's Changed"
+	@echo "  2. GitHub Action 监听 release published 事件"
+	@echo "     → 自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z"
+	@echo "     → 按 defined → common → major → plugins/* 顺序打子 tag"
+	@echo "     → 推送 commit 和 tags 到默认分支"
 	@echo ""
 	@echo "示例:"
-	@echo "  make release PKG=major        → major/v$(ROOT_VERSION).x.x-$(TIMESTAMP)"
-	@echo "  make release-plugins PLG=grpc → plugins/grpc/v$(ROOT_VERSION).x.x-$(TIMESTAMP)"
+	@echo "  make release VERSION=v1.2.0"
 
 # ============================================================
 # 开发命令
@@ -59,144 +54,39 @@ tidy:
 
 vet:
 	@for pkg in $(PACKAGES); do \
-		tag="$$pkg"; \
-		go vet ./$$tag/...; \
+		go vet ./$$pkg/...; \
 	done
 	@for plg in $(PLUGINS); do \
-		tag="plugins/$$plg"; \
-		go vet ./$$tag/...; \
+		go vet ./plugins/$$plg/...; \
 	done
 
 # ============================================================
 # 发布命令
 # ============================================================
 
-# 构建 tag 名称的函数
-# $(1): 模块目录路径 (如 major, plugins/cron)
-# 返回: <path>/v<ROOT_VERSION>.<SUB_VERSION>-<TIMESTAMP>
-define build_tag
-$(strip $(1))/v$(ROOT_VERSION).$(shell cat $(1)/version)-$(TIMESTAMP)
-endef
-
-# 更新下游模块依赖的函数
-# $(1): 已发布的模块名 (如 defined, common)
-# $(2): 新版本 tag (如 defined/v1.0.0-202603081200)
-define update_dep
-	@echo "   🔄 更新下游模块的 $(1) 依赖版本..."
-	@if [ "$(1)" = "defined" ]; then \
-		for mod in common major plugins/grpc plugins/async plugins/email; do \
-			if [ -f "$$mod/go.mod" ]; then \
-				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/defined v[0-9].*|github.com/bamboo-services/bamboo-base-go/defined $(notdir $(2))|g' $$mod/go.mod; \
-				echo "      ✅ $$mod/go.mod"; \
-			fi; \
-		done; \
-	elif [ "$(1)" = "common" ]; then \
-		for mod in major plugins/cron plugins/grpc plugins/async plugins/email; do \
-			if [ -f "$$mod/go.mod" ]; then \
-				sed -i '' 's|github.com/bamboo-services/bamboo-base-go/common v[0-9].*|github.com/bamboo-services/bamboo-base-go/common $(notdir $(2))|g' $$mod/go.mod; \
-				echo "      ✅ $$mod/go.mod"; \
-			fi; \
-		done; \
-	fi
-endef
-
-# --- make release PKG=<name> ---
-# 发布指定模块（major / common / defined）
+# --- make release VERSION=vX.Y.Z ---
+# 在 GitHub 上创建 Release，触发 .github/workflows/release.yml
+# Action 会自动为每个子模块打 <path>/vX.Y.Z tag 并更新下游 go.mod 依赖
 release:
-ifndef PKG
-	$(error 请指定模块名称: make release PKG=<major|common|defined>)
+ifndef VERSION
+	$(error 请指定版本号: make release VERSION=vX.Y.Z)
 endif
-ifeq ($(filter $(PKG),$(PACKAGES)),)
-	$(error 无效的模块名称 "$(PKG)",可选值: $(PACKAGES))
-endif
-	@$(eval TAG := $(call build_tag,$(PKG)))
-	@echo "📦 发布模块: $(PKG)"
-	@echo "   tag: $(TAG)"
-	@git tag -a "$(TAG)" -m "Release $(TAG)"
-	@git push origin "$(TAG)"
-	@echo "✅ $(PKG) 发布完成: $(TAG)"
-
-# --- make release-plugins PLG=<name> ---
-# 发布指定插件（cron / grpc）
-release-plugins:
-ifndef PLG
-	$(error 请指定插件名称: make release-plugins PLG=<cron|grpc>)
-endif
-ifeq ($(filter $(PLG),$(PLUGINS)),)
-	$(error 无效的插件名称 "$(PLG)",可选值: $(PLUGINS))
-endif
-	@$(eval TAG := $(call build_tag,plugins/$(PLG)))
-	@echo "🔌 发布插件: $(PLG)"
-	@echo "   tag: $(TAG)"
-	@git tag -a "$(TAG)" -m "Release $(TAG)"
-	@git push origin "$(TAG)"
-	@echo "✅ plugins/$(PLG) 发布完成: $(TAG)"
-
-# --- make release-all ---
-# 按依赖顺序发布全部模块和插件，并自动更新下游依赖
-# 依赖链: defined → common → major, plugins/cron → common, plugins/grpc → defined + common
-# 发布顺序: defined → common → major → plugins/cron → plugins/grpc
-release-all:
-	@echo "🚀 按依赖顺序发布全部模块和插件"
-	@echo "   时间戳: $(TIMESTAMP)"
-	@echo "   顺序: defined → common → major → plugins/cron → plugins/grpc → plugins/async → plugins/email"
-	@echo ""
-	@# 1. 发布 defined (无依赖，最底层)
-	@$(eval TAG_DEFINED := $(call build_tag,defined))
-	@echo "📦 [1/7] 发布 defined"
-	@echo "   tag: $(TAG_DEFINED)"
-	@git tag -a "$(TAG_DEFINED)" -m "Release $(TAG_DEFINED)"
-	@git push origin "$(TAG_DEFINED)"
-	@echo "   ✅ defined 发布完成"
-	$(call update_dep,defined,$(TAG_DEFINED))
-	@echo ""
-	@# 2. 发布 common (依赖 defined)
-	@$(eval TAG_COMMON := $(call build_tag,common))
-	@echo "📦 [2/7] 发布 common"
-	@echo "   tag: $(TAG_COMMON)"
-	@git tag -a "$(TAG_COMMON)" -m "Release $(TAG_COMMON)"
-	@git push origin "$(TAG_COMMON)"
-	@echo "   ✅ common 发布完成"
-	$(call update_dep,common,$(TAG_COMMON))
-	@echo ""
-	@# 3. 发布 major (依赖 common, defined)
-	@$(eval TAG_MAJOR := $(call build_tag,major))
-	@echo "📦 [3/7] 发布 major"
-	@echo "   tag: $(TAG_MAJOR)"
-	@git tag -a "$(TAG_MAJOR)" -m "Release $(TAG_MAJOR)"
-	@git push origin "$(TAG_MAJOR)"
-	@echo "   ✅ major 发布完成"
-	@echo ""
-	@# 4. 发布 plugins/cron (依赖 common)
-	@$(eval TAG_CRON := $(call build_tag,plugins/cron))
-	@echo "🔌 [4/7] 发布 plugins/cron"
-	@echo "   tag: $(TAG_CRON)"
-	@git tag -a "$(TAG_CRON)" -m "Release $(TAG_CRON)"
-	@git push origin "$(TAG_CRON)"
-	@echo "   ✅ plugins/cron 发布完成"
-	@echo ""
-	@# 5. 发布 plugins/grpc (依赖 defined + common)
-	@$(eval TAG_GRPC := $(call build_tag,plugins/grpc))
-	@echo "🔌 [5/7] 发布 plugins/grpc"
-	@echo "   tag: $(TAG_GRPC)"
-	@git tag -a "$(TAG_GRPC)" -m "Release $(TAG_GRPC)"
-	@git push origin "$(TAG_GRPC)"
-	@echo "   ✅ plugins/grpc 发布完成"
-	@echo ""
-	@# 6. 发布 plugins/async (依赖 defined + common)
-	@$(eval TAG_ASYNC := $(call build_tag,plugins/async))
-	@echo "🔌 [6/7] 发布 plugins/async"
-	@echo "   tag: $(TAG_ASYNC)"
-	@git tag -a "$(TAG_ASYNC)" -m "Release $(TAG_ASYNC)"
-	@git push origin "$(TAG_ASYNC)"
-	@echo "   ✅ plugins/async 发布完成"
-	@echo ""
-	@# 7. 发布 plugins/email (依赖 defined + common)
-	@$(eval TAG_EMAIL := $(call build_tag,plugins/email))
-	@echo "🔌 [7/7] 发布 plugins/email"
-	@echo "   tag: $(TAG_EMAIL)"
-	@git tag -a "$(TAG_EMAIL)" -m "Release $(TAG_EMAIL)"
-	@git push origin "$(TAG_EMAIL)"
-	@echo "   ✅ plugins/email 发布完成"
-	@echo ""
-	@echo "🎉 全部发布完成！"
+	@echo "🚀 创建 GitHub Release: $(VERSION)"
+	@command -v gh >/dev/null 2>&1 || { echo "❌ 未找到 gh CLI,请先安装: https://cli.github.com/"; exit 1; }
+	@# 获取上一个 tag 作为 notes 起始点（用于生成 What's Changed）
+	@$(eval PREV_TAG := $(shell git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo ""))
+	@if [ -n "$(PREV_TAG)" ]; then \
+		echo "   📝 生成 Release Notes 范围: $(PREV_TAG)...$(VERSION)"; \
+		gh release create "$(VERSION)" \
+			--title "$(VERSION)" \
+			--generate-notes \
+			--notes-start-tag "$(PREV_TAG)"; \
+	else \
+		echo "   📝 首个 Release,生成全部 Release Notes"; \
+		gh release create "$(VERSION)" \
+			--title "$(VERSION)" \
+			--generate-notes; \
+	fi
+	@echo "✅ Release $(VERSION) 已创建"
+	@echo "   👀 查看: https://github.com/bamboo-services/bamboo-base-go/releases/tag/$(VERSION)"
+	@echo "   ⏳ GitHub Action 将自动为子模块打 tag (defined/common/major/plugins/*/$(VERSION))"

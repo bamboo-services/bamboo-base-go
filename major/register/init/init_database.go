@@ -9,7 +9,7 @@ import (
 	xGormLog "github.com/bamboo-services/bamboo-base-go/major/log"
 	xOptionDB "github.com/bamboo-services/bamboo-base-go/major/option/database"
 	xRegNode "github.com/bamboo-services/bamboo-base-go/major/register/node"
-	"github.com/glebarez/sqlite"
+	"github.com/libtnb/sqlite"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

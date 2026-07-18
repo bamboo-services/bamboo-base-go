@@ -177,18 +177,15 @@ make proto                   # 使用 buf 生成 gRPC 代码
 make tidy                    # 整理 Go 模块依赖
 make vet                     # go vet 检查所有模块
 
-# 发布（单模块）
-make release PKG=major       # 发布 major 模块
-make release PKG=common      # 发布 common 模块
-make release PKG=defined     # 发布 defined 模块
-make release-plugins PLG=grpc  # 发布 gRPC 插件
-make release-plugins PLG=cron  # 发布 cron 插件
-make release-plugins PLG=async # 发布 async 插件
-make release-plugins PLG=email # 发布 email 插件
-
-# 发布（全部，按依赖顺序）
-make release-all             # defined → common → major → cron → grpc → async → email
+# 发布（统一版本号 vX.Y.Z）
+make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给所有子模块打 tag
+                             # 子 tag: defined/vX.Y.Z, common/vX.Y.Z, major/vX.Y.Z,
+                             #         plugins/{cron,grpc,async,email}/vX.Y.Z
+                             # Action 同时自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z
 ```
+
+> 旧的多版本号方案（每个模块独立 `version` 文件 + `make release PKG=` / `make release-all`）
+> 已废弃。所有模块统一使用 release 的版本号，由 `.github/workflows/release.yml` 自动处理。
 
 ## 备注
 

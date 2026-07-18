@@ -26,5 +26,4 @@ go.work.sum
 *.test.binary.gz.*
 
 ### AI ###
-.sisyphus/
 .omo/

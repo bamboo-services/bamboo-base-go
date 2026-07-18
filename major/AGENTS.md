@@ -38,16 +38,32 @@ major/
 ├── cache/
 │   ├── interface.go           # KeyCache / HashCache 泛型缓存接口
 │   └── struct.go              # 缓存结构体定义
+├── option/
+│   ├── option.go              # Option 类型 + Config 聚合体 + Apply
+│   ├── option_database.go     # WithDatabase / WithMySQL / WithDatabaseFromEnv 桥接层
+│   ├── cache.go               # WithRedis / WithMemory 缓存后端选项
+│   ├── database/               # 数据库配置子包（不依赖 option 父包，避免循环依赖）
+│   │   ├── database.go         #   通用类型 + FromEnv + CommonOptions + 二级选项
+│   │   ├── mysql.go            #   MySQL() + MySQLFromEnv() DSN 拼装
+│   │   ├── postgres.go         #   Postgres() + PostgresFromEnv() DSN 拼装
+│   │   └── sqlite.go           #   SQLite() + SQLiteFromEnv() DSN 拼装
+│   └── router.go              # WithRoute / WithRouteGroup 路由注册选项
 ├── hook/
 │   └── redis.go               # Redis 钩子
 └── go.mod                     # 独立模块定义
 ```
 
+> **Runner 装配链路**：`opts []xOption.Option` → `option.Apply()` → `DatabaseInit`/`CacheInit` 工厂 → `RegNode.UseAfterExec()` → context 注入。
+> 业务侧原先在 `startup.Init()` 中手写的 db/redis 节点，现可由 `WithMySQL/WithPostgres/WithSQLite/WithRedis` 一行替代；仍需自定义初始化逻辑（如 AutoMigrate、种子数据）时，继续走 `Register(ctx, nodeList)` 注册自定义节点。
+
 ## 导航指南
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, logger, routeFunc, ...goroutineFunc)` |
+| 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, logger, opts, ...goroutineFunc)` |
+| 配置选项 | `option/` → `WithRedis` / `WithMySQL` / `WithRoute` | 声明式选择缓存后端、数据库驱动、路由注册 |
+| 环境变量装配 | `option/` → `WithDatabaseFromEnv` | 从 `.env` 的 `DATABASE_DRIVER` + 分项配置自动拼装 DSN |
+| 内置装配 | `register/init/` → `DatabaseInit` / `CacheInit` | Runner 据 opts 自动装配 db/cache 到 context |
 | 返回成功响应 | `result/result.go` → `Success()` / `SuccessHasData()` | 自动注入 context / code / overhead |
 | 返回错误响应 | `result/result.go` → `Error()` / `AbortError()` | 传入 `xError.ErrorCode` |
 | 定义数据库实体 | `models/base_entity.go` → `BaseEntity` | 嵌入即可获得 ID + CreatedAt + UpdatedAt |
@@ -61,7 +77,8 @@ major/
 
 ## 约定
 
-- **Runner 签名固定**：`Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, routeFunc func(reg *xReg.Reg), goroutineFunc ...func(ctx context.Context, option ...any))`。
+- **Runner 签名固定**：`Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, opts []xOption.Option, goroutineFunc ...func(ctx context.Context, extra ...any))`。
+- **路由通过 Option 注册**：使用 `xOption.WithRoute` / `xOption.WithRouteGroup` 声明路由，可叠加多个注册器并按调用顺序执行；插件可直接暴露 `RouteRegistrar` 供业务侧 `WithRoute` 导入，实现「插件自带路由、一行接入」。
 - **Gin 中间件链顺序固定**：`RequestContext → PanicRecovery → HttpLogger → InjectContext`，由 `register_gin.go` 的 `engineInit()` 自动挂载，业务侧不需要手动添加。
 - **响应必须通过 `xResult.*` 函数**：不要直接调用 `ctx.JSON()`，否则 `ResponseMiddleware` 兜底逻辑可能将其视为"开发者错误"。
 - **ErrorCode.Code 前 3 位 = HTTP 状态码**：`xResult.Error()` 中 `int(errorCode.Code/100)` 决定 HTTP 响应码。

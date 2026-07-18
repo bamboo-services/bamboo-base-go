@@ -14,6 +14,7 @@ const (
 	RedisClientKey   ContextKey = "context_redis_client"    // 上下文 Redis 客户端
 	SnowflakeNodeKey ContextKey = "context_snowflake_node"  // 上下文雪花算法节点
 	EmailClientKey   ContextKey = "context_email_client"    // 上下文邮件客户端
+	CacheManagerKey  ContextKey = "context_cache_manager"   // 上下文缓存管理器
 )
 
 // String 返回 ContextKey 的字符串表示形式。

@@ -169,6 +169,50 @@ func GetRegNodeList(ctx context.Context) xCtx.ContextNodeList {
 	return nil
 }
 
+// UseAfterExec 在 Exec() 完成后追加执行单个节点，并将结果立即写入上下文。
+//
+// 该方法用于 Runner 阶段根据 [option.Option] 装配框架内置组件（如数据库、缓存），
+// 绕过 Use() 的「Exec 前注册」限制。若在 Exec() 之前调用，等价于 [Use]。
+//
+// 执行流程:
+//  1. 若 list 未清空（仍处于 Exec 前阶段），委托给 [Use] 走常规注册路径
+//  2. 校验 ctxKey 非空、非 Exec 特殊键、registerFunc 非空
+//  3. 校验 ctxKey 未被现有节点占用（避免覆盖已装配的组件）
+//  4. 立即执行 registerFunc(rn.Ctx)，将返回值通过 value.Append 与 context.WithValue 写入上下文
+//  5. 同步刷新 ctx 中 RegNodeKey 关联的 slice header，确保 [GetRegNodeList] 能取到新装配的项
+//
+// Panic 条件:
+//   - registerFunc 为 nil
+//   - ctxKey 已被注册过（重复装配）
+//   - registerFunc 返回非 nil 错误
+func (rn *RegNode) UseAfterExec(ctxKey xCtx.ContextKey, registerFunc Node) {
+	if rn.list != nil {
+		rn.Use(ctxKey, registerFunc)
+		return
+	}
+	if ctxKey.IsNil() || ctxKey.IsExec() {
+		return
+	}
+	if registerFunc == nil {
+		panic("UseAfterExec: registerFunc 不能为空")
+	}
+	for _, n := range rn.value.GetList() {
+		if n.Key == ctxKey {
+			panic("UseAfterExec: 重复注册 ContextKey: " + ctxKey.String())
+		}
+	}
+
+	log := xLog.WithName(xLog.NamedINIT)
+	log.Info(rn.Ctx, "UseAfterExec 执行节点: "+ctxKey.String())
+	val, err := registerFunc(rn.Ctx)
+	if err != nil {
+		panic(fmt.Sprintf("UseAfterExec 执行失败: Key=%v err=%v", ctxKey, err))
+	}
+	rn.value.Append(ctxKey, val)
+	rn.Ctx = context.WithValue(rn.Ctx, ctxKey, val)
+	rn.Ctx = context.WithValue(rn.Ctx, xCtx.RegNodeKey, rn.value)
+}
+
 // InjectContext 返回一个 Gin 中间件，用于将外部上下文注入到请求的上下文中。
 //
 // 该中间件将传入的 context.Context 设置为请求的上下文，确保在后续的处理流程中，

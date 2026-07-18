@@ -37,8 +37,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	xLog "github.com/bamboo-services/bamboo-base-go/major/log"
+	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xMain "github.com/bamboo-services/bamboo-base-go/major/main"
+	xOption "github.com/bamboo-services/bamboo-base-go/major/option"
 	xReg "github.com/bamboo-services/bamboo-base-go/major/register"
 )
 
@@ -46,10 +47,12 @@ func main() {
 	reg := xReg.Register(context.Background(), nil)
 	logger := xLog.WithName(xLog.NamedMAIN)
 
-	xMain.Runner(reg, logger, func(r *xReg.Reg) {
-		r.Serve.GET("/ping", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "pong"})
-		})
+	xMain.Runner(reg, logger, []xOption.Option{
+		xOption.WithRoute(func(serve *gin.Engine) {
+			serve.GET("/ping", func(c *gin.Context) {
+				c.JSON(200, gin.H{"message": "pong"})
+			})
+		}),
 	})
 }
 ```
@@ -65,7 +68,11 @@ grpcTask := xGrpcRunner.New(
 	}),
 )
 
-xMain.Runner(reg, logger, routeFunc, grpcTask)
+xMain.Runner(reg, logger, []xOption.Option{
+	xOption.WithRoute(func(serve *gin.Engine) {
+		// 在这里注册你的 HTTP 路由
+	}),
+}, grpcTask)
 ```
 
 `xMain.Runner` 会在收到 `SIGINT/SIGTERM` 时统一触发 HTTP 与附加协程（例如 gRPC）的优雅退出。

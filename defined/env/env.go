@@ -22,6 +22,8 @@ const (
 // ============================== 数据库配置 ==============================
 
 const (
+	DatabaseDriver   EnvKey = "DATABASE_DRIVER"   // 数据库驱动 (mysql/postgres/sqlite)
+	DatabaseDSN      EnvKey = "DATABASE_DSN"      // 数据库完整连接串（设置后忽略下方分项配置）
 	DatabaseHost     EnvKey = "DATABASE_HOST"     // 数据库主机地址
 	DatabasePort     EnvKey = "DATABASE_PORT"     // 数据库端口
 	DatabaseUser     EnvKey = "DATABASE_USER"     // 数据库用户名
@@ -30,6 +32,7 @@ const (
 	DatabaseCharset  EnvKey = "DATABASE_CHARSET"  // 数据库字符集
 	DatabaseTimezone EnvKey = "DATABASE_TIMEZONE" // 数据库时区
 	DatabasePrefix   EnvKey = "DATABASE_PREFIX"   // 数据库表前缀
+	DatabasePath     EnvKey = "DATABASE_PATH"     // SQLite 数据库文件路径（仅 sqlite 驱动有效）
 )
 
 // ============================== Redis 配置 ==============================

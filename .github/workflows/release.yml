@@ -82,10 +82,10 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          # 校验每个 go.mod 仍能被 go 解析
+          # 校验每个 go.mod 仍能被 go 解析（go list -m 仅解析模块路径，不下载）
           for mod in defined common major plugins/cron plugins/grpc plugins/async plugins/email; do
             echo "🔍 校验 $mod/go.mod"
-            (cd "$mod" && go mod validate)
+            (cd "$mod" && go list -m > /dev/null)
           done
 
       - name: Configure git

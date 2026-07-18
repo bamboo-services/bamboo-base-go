@@ -1,32 +1,34 @@
-package xCache
+package xCacheMemory
 
 import (
 	"context"
 	"time"
+
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
 )
 
-// memorySetCache [SetCache] 的内存实现。
+// SetCache [xCacheDriver.SetCache] 的内存实现。
 //
 // 内存中以 map[string]struct{} 存储成员（序列化后的 string 作为 key），
-// 整体作为 [memoryEntry.Value] 存入 [memoryStore]。
-type memorySetCache[K any, V any] struct {
-	store *memoryStore
-	codec Codec
-	enc   KeyEncoder
+// 整体作为 [memoryEntry.Value] 存入 [Store]。
+type SetCache[K any, V any] struct {
+	store *Store
+	codec xCacheDriver.Codec
+	enc   xCacheDriver.KeyEncoder
 	ttl   time.Duration
 }
 
-// NewMemorySetCache 构造一个基于内存的 [SetCache] 实现。
-func NewMemorySetCache[K any, V any](store *memoryStore, codec Codec, enc KeyEncoder, ttl time.Duration) SetCache[K, V] {
+// NewSetCache 构造一个基于内存的 [xCacheDriver.SetCache] 实现。
+func NewSetCache[K any, V any](store *Store, codec xCacheDriver.Codec, enc xCacheDriver.KeyEncoder, ttl time.Duration) xCacheDriver.SetCache[K, V] {
 	if codec == nil {
-		codec = JSONCodec{}
+		codec = xCacheDriver.JSONCodec{}
 	}
-	return &memorySetCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
+	return &SetCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
-// loadOrCreate 仅用于 Get/Count/IsMember 等只读路径。写路径走 [memoryStore.Update]。
-func (c *memorySetCache[K, V]) loadOrCreate(key K) (map[string]struct{}, bool) {
-	k := EncodeKey(c.enc, key)
+// loadOrCreate 仅用于 Get/Count/IsMember 等只读路径。写路径走 [Store.Update]。
+func (c *SetCache[K, V]) loadOrCreate(key K) (map[string]struct{}, bool) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	if value, ok := c.store.Get(k); ok {
 		if m, ok := value.(map[string]struct{}); ok {
 			return m, false
@@ -36,7 +38,7 @@ func (c *memorySetCache[K, V]) loadOrCreate(key K) (map[string]struct{}, bool) {
 }
 
 // encodeMember 把成员序列化为 string key。
-func (c *memorySetCache[K, V]) encodeMember(member V) (string, error) {
+func (c *SetCache[K, V]) encodeMember(member V) (string, error) {
 	data, err := c.codec.Marshal(member)
 	if err != nil {
 		return "", err
@@ -46,8 +48,8 @@ func (c *memorySetCache[K, V]) encodeMember(member V) (string, error) {
 
 // Add 将一个或多个成员添加到集合中，已存在的成员会被忽略。
 //
-// 通过 [memoryStore.Update] 在单把锁内完成读-改-写，避免并发 panic。
-func (c *memorySetCache[K, V]) Add(ctx context.Context, key K, members ...V) error {
+// 通过 [Store.Update] 在单把锁内完成读-改-写，避免并发 panic。
+func (c *SetCache[K, V]) Add(ctx context.Context, key K, members ...V) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -60,7 +62,7 @@ func (c *memorySetCache[K, V]) Add(ctx context.Context, key K, members ...V) err
 		}
 		encoded = append(encoded, string(data))
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		set, _ := old.(map[string]struct{})
 		if set == nil {
@@ -75,8 +77,8 @@ func (c *memorySetCache[K, V]) Add(ctx context.Context, key K, members ...V) err
 }
 
 // Members 获取集合中的所有成员。
-func (c *memorySetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
-	k := EncodeKey(c.enc, key)
+func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return nil, nil
@@ -97,8 +99,8 @@ func (c *memorySetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) 
 }
 
 // IsMember 检查指定成员是否存在于集合中。
-func (c *memorySetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, error) {
-	k := EncodeKey(c.enc, key)
+func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return false, nil
@@ -116,8 +118,8 @@ func (c *memorySetCache[K, V]) IsMember(ctx context.Context, key K, member V) (b
 }
 
 // Count 获取集合中的成员数量。
-func (c *memorySetCache[K, V]) Count(ctx context.Context, key K) (int64, error) {
-	k := EncodeKey(c.enc, key)
+func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return 0, nil
@@ -131,8 +133,8 @@ func (c *memorySetCache[K, V]) Count(ctx context.Context, key K) (int64, error) 
 
 // Remove 从集合中移除指定的成员。
 //
-// 通过 [memoryStore.Update] 保证原子性。移除后若集合为空则整个 key 被删除。
-func (c *memorySetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error {
+// 通过 [Store.Update] 保证原子性。移除后若集合为空则整个 key 被删除。
+func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -144,7 +146,7 @@ func (c *memorySetCache[K, V]) Remove(ctx context.Context, key K, members ...V) 
 		}
 		encoded = append(encoded, string(data))
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		set, _ := old.(map[string]struct{})
 		if set == nil {
@@ -162,7 +164,7 @@ func (c *memorySetCache[K, V]) Remove(ctx context.Context, key K, members ...V) 
 }
 
 // Delete 删除整个集合。
-func (c *memorySetCache[K, V]) Delete(ctx context.Context, key K) error {
-	c.store.Delete(EncodeKey(c.enc, key))
+func (c *SetCache[K, V]) Delete(ctx context.Context, key K) error {
+	c.store.Delete(xCacheDriver.EncodeKey(c.enc, key))
 	return nil
 }

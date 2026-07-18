@@ -1,4 +1,4 @@
-package xCache
+package xCacheMemory
 
 import (
 	"container/list"
@@ -27,11 +27,11 @@ func (e *memoryEntry) expired(now time.Time) bool {
 	return !e.ExpireAt.IsZero() && now.After(e.ExpireAt)
 }
 
-// memoryStore 分片内存存储，作为所有内存缓存实现的底座。
+// Store 分片内存存储，作为所有内存缓存实现的底座。
 //
-// 通过 [NewMemoryStore] 构造，ShardCount/MaxEntries/DefaultTTL 零值时使用默认值。
-// 使用方应在应用退出时调用 [memoryStore.Close] 释放 janitor goroutine。
-type memoryStore struct {
+// 通过 [NewStore] 构造，ShardCount/MaxEntries/DefaultTTL 零值时使用默认值。
+// 使用方应在应用退出时调用 [Store.Close] 释放 janitor goroutine。
+type Store struct {
 	shards     []*memoryShard
 	shardMask  uint64
 	maxEntries int           // 0 表示无上限（每个分片独立计数）
@@ -60,7 +60,7 @@ type memoryJanitor struct {
 	running  atomic.Bool
 }
 
-// NewMemoryStore 构造一个内存存储实例。
+// NewStore 构造一个内存存储实例。
 //
 // 参数：
 //   - shardCount: 分片数，必须为 2 的幂；0 使用默认 16
@@ -68,8 +68,8 @@ type memoryJanitor struct {
 //     全局总容量约 = maxEntries × shardCount（分片间独立计数）
 //   - defaultTTL: 默认 TTL，0 表示永不过期
 //
-// janitor 默认每 30 秒清理一次过期项，可通过 [memoryStore.Close] 停止。
-func NewMemoryStore(shardCount, maxEntries int, defaultTTL time.Duration) *memoryStore {
+// janitor 默认每 30 秒清理一次过期项，可通过 [Store.Close] 停止。
+func NewStore(shardCount, maxEntries int, defaultTTL time.Duration) *Store {
 	if shardCount <= 0 {
 		shardCount = 16
 	}
@@ -79,7 +79,7 @@ func NewMemoryStore(shardCount, maxEntries int, defaultTTL time.Duration) *memor
 	}
 	shardCount = int(power)
 
-	s := &memoryStore{
+	s := &Store{
 		shards:     make([]*memoryShard, shardCount),
 		shardMask:  uint64(shardCount - 1),
 		maxEntries: maxEntries,
@@ -100,19 +100,19 @@ func NewMemoryStore(shardCount, maxEntries int, defaultTTL time.Duration) *memor
 }
 
 // DefaultTTL 返回构造时配置的默认 TTL。
-func (s *memoryStore) DefaultTTL() time.Duration { return s.defaultTTL }
+func (s *Store) DefaultTTL() time.Duration { return s.defaultTTL }
 
 // Close 停止后台 janitor，释放资源。
 //
 // 调用后 Store 仍可读写，但不再自动清理过期项。可安全多次调用。
-func (s *memoryStore) Close() {
+func (s *Store) Close() {
 	if s.janitor != nil && s.janitor.running.CompareAndSwap(true, false) {
 		close(s.janitor.stopCh)
 	}
 }
 
 // getShard 根据 key 的 FNV-1a hash 选取分片。
-func (s *memoryStore) getShard(key string) *memoryShard {
+func (s *Store) getShard(key string) *memoryShard {
 	// FNV-1a 64bit
 	var h uint64 = 14695981039346656037
 	for i := 0; i < len(key); i++ {
@@ -123,7 +123,7 @@ func (s *memoryStore) getShard(key string) *memoryShard {
 }
 
 // run janitor 主循环。
-func (j *memoryJanitor) run(s *memoryStore) {
+func (j *memoryJanitor) run(s *Store) {
 	ticker := time.NewTicker(j.interval)
 	defer ticker.Stop()
 	for {
@@ -137,7 +137,7 @@ func (j *memoryJanitor) run(s *memoryStore) {
 }
 
 // cleanup 遍历所有分片删除过期项。
-func (s *memoryStore) cleanup() {
+func (s *Store) cleanup() {
 	now := time.Now()
 	for _, sh := range s.shards {
 		sh.mu.Lock()
@@ -156,7 +156,7 @@ func (s *memoryStore) cleanup() {
 // 返回的是 Value 字段在锁内读取的引用（any），调用方不再持有 *memoryEntry，
 // 因此与并发的 [Set]/[Update]（替换整个 Value 字段）不会产生 data race。
 // 若 Value 是切片/map 类型，调用方应只读不写；如需修改请走 [Update] 闭包。
-func (s *memoryStore) Get(key string) (any, bool) {
+func (s *Store) Get(key string) (any, bool) {
 	sh := s.getShard(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
@@ -177,7 +177,7 @@ func (s *memoryStore) Get(key string) (any, bool) {
 //
 // ttl 为 0 时使用 Store 的 defaultTTL；若 defaultTTL 也为 0 则永不过期。
 // 达到 maxEntries 时淘汰最久未访问项。
-func (s *memoryStore) Set(key string, value any, ttl time.Duration) {
+func (s *Store) Set(key string, value any, ttl time.Duration) {
 	expireAt := time.Time{}
 	if ttl > 0 {
 		expireAt = time.Now().Add(ttl)
@@ -206,7 +206,7 @@ func (s *memoryStore) Set(key string, value any, ttl time.Duration) {
 }
 
 // evict 淘汰最久未访问项。调用方需持有 sh.mu 写锁。
-func (s *memoryStore) evict(sh *memoryShard) {
+func (s *Store) evict(sh *memoryShard) {
 	back := sh.order.Back()
 	if back == nil {
 		return
@@ -223,7 +223,7 @@ type memoryEntryLRU struct {
 }
 
 // Delete 删除条目，返回是否曾存在（且未过期）。
-func (s *memoryStore) Delete(key string) bool {
+func (s *Store) Delete(key string) bool {
 	sh := s.getShard(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
@@ -237,7 +237,7 @@ func (s *memoryStore) Delete(key string) bool {
 }
 
 // Exists 判断键是否存在且未过期。不更新 LRU 顺序。
-func (s *memoryStore) Exists(key string) bool {
+func (s *Store) Exists(key string) bool {
 	sh := s.getShard(key)
 	sh.mu.RLock()
 	defer sh.mu.RUnlock()
@@ -249,7 +249,7 @@ func (s *memoryStore) Exists(key string) bool {
 }
 
 // Len 返回未过期条目总数。仅供监控/调试使用。
-func (s *memoryStore) Len() int {
+func (s *Store) Len() int {
 	now := time.Now()
 	n := 0
 	for _, sh := range s.shards {
@@ -276,7 +276,7 @@ func (s *memoryStore) Len() int {
 //
 // ttl 为本次写入的过期时间，0 回退到 store.defaultTTL。
 // fn 内部禁止执行阻塞 I/O 或长时间计算，否则会拖累整个分片的吞吐。
-func (s *memoryStore) Update(key string, ttl time.Duration, fn func(old any) any) {
+func (s *Store) Update(key string, ttl time.Duration, fn func(old any) any) {
 	sh := s.getShard(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()

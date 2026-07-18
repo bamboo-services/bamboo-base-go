@@ -8,6 +8,7 @@ import (
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xCache "github.com/bamboo-services/bamboo-base-go/major/cache"
+	xCacheMemory "github.com/bamboo-services/bamboo-base-go/major/cache/memory"
 	xOption "github.com/bamboo-services/bamboo-base-go/major/option"
 	xRegNode "github.com/bamboo-services/bamboo-base-go/major/register/node"
 	"github.com/redis/go-redis/v9"
@@ -17,7 +18,7 @@ import (
 //
 // 返回的 Node 会根据 [CacheConfig.Type] 选择对应后端：
 //   - CacheTypeRedis：使用 go-redis 构造 *redis.Client 并 Ping 验证，封装进 [*xCache.Manager]
-//   - CacheTypeMemory：构造 [*xCacheMem.Store]（含分片 + TTL + janitor），封装进 [*xCache.Manager]
+//   - CacheTypeMemory：构造 [*xCacheMemory.Store]（含分片 + TTL + janitor），封装进 [*xCache.Manager]
 //
 // 返回值统一为 [*xCache.Manager]，由调用方注册到 [xCtx.CacheManagerKey]。
 // 若 Type 为 CacheTypeNone，调用方应跳过此工厂。
@@ -74,7 +75,7 @@ func initRedisCache(ctx context.Context, rOpts xOption.RedisOptions, log *xLog.L
 
 // initMemoryCache 构造内存存储实例并封装进 [*xCache.Manager]。
 func initMemoryCache(mOpts xOption.MemoryOptions, log *xLog.LogNamedLogger) *xCache.Manager {
-	store := xCache.NewMemoryStore(mOpts.ShardCount, mOpts.MaxEntries, mOpts.DefaultTTL)
+	store := xCacheMemory.NewStore(mOpts.ShardCount, mOpts.MaxEntries, mOpts.DefaultTTL)
 	return xCache.NewManager(xCache.CacheTypeMemory,
 		xCache.WithMemoryStore(store),
 		xCache.WithManagerTTL(mOpts.DefaultTTL),

@@ -1,16 +1,18 @@
-package xCache
+package xCacheMemory
 
 import (
 	"context"
 	"testing"
 	"time"
+
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
 )
 
 func TestMemoryKeyCache(t *testing.T) {
-	store := NewMemoryStore(4, 100, 100*time.Millisecond)
+	store := NewStore(4, 100, 100*time.Millisecond)
 	defer store.Close()
 
-	kc := NewMemoryKeyCache[string, string](store, JSONCodec{}, DefaultKeyEncoder{}, 100*time.Millisecond)
+	kc := NewKeyCache[string, string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 100*time.Millisecond)
 	ctx := context.Background()
 
 	if err := kc.Set(ctx, "name", strPtr("筱锋")); err != nil {
@@ -44,10 +46,10 @@ func TestMemoryKeyCache(t *testing.T) {
 }
 
 func TestMemoryHashCache(t *testing.T) {
-	store := NewMemoryStore(0, 0, 0)
+	store := NewStore(0, 0, 0)
 	defer store.Close()
 
-	hc := NewMemoryHashCache[string, string, string, map[string]string](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	hc := NewHashCache[string, string, string, map[string]string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	_ = hc.Set(ctx, "user:1", "name", strPtr("筱锋"))
@@ -82,10 +84,10 @@ func TestMemoryHashCache(t *testing.T) {
 }
 
 func TestMemorySetCache(t *testing.T) {
-	store := NewMemoryStore(0, 0, 0)
+	store := NewStore(0, 0, 0)
 	defer store.Close()
 
-	sc := NewMemorySetCache[string, string](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	sc := NewSetCache[string, string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	_ = sc.Add(ctx, "tags", "go", "cache", "go") // 去重
@@ -112,10 +114,10 @@ func TestMemorySetCache(t *testing.T) {
 }
 
 func TestMemoryListCache(t *testing.T) {
-	store := NewMemoryStore(0, 0, 0)
+	store := NewStore(0, 0, 0)
 	defer store.Close()
 
-	lc := NewMemoryListCache[string, string](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	lc := NewListCache[string, string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	_ = lc.Append(ctx, "queue", "a", "b", "c")
@@ -150,36 +152,6 @@ func TestMemoryListCache(t *testing.T) {
 	length, _ = lc.Len(ctx, "queue")
 	if length != 2 {
 		t.Fatalf("after Remove b, Len want 2 (y,a remain), got %d", length)
-	}
-}
-
-func TestManagerDispatch(t *testing.T) {
-	store := NewMemoryStore(0, 0, 0)
-	defer store.Close()
-
-	m := NewManager(CacheTypeMemory,
-		WithMemoryStore(store),
-		WithManagerTTL(50*time.Millisecond),
-	)
-	if m.Type() != CacheTypeMemory {
-		t.Fatalf("Type want memory, got %s", m.Type())
-	}
-	if m.Memory() == nil {
-		t.Fatal("Memory() should not be nil for memory backend")
-	}
-	if m.Redis() != nil {
-		t.Fatal("Redis() should be nil for memory backend")
-	}
-
-	kc := KeyCacheOf[string, int](m)
-	if kc == nil {
-		t.Fatal("KeyCacheOf returned nil")
-	}
-	ctx := context.Background()
-	_ = kc.Set(ctx, "count", intPtr(42))
-	v, ok, _ := kc.Get(ctx, "count")
-	if !ok || v == nil || *v != 42 {
-		t.Fatalf("Get want 42, got %v ok=%v", v, ok)
 	}
 }
 

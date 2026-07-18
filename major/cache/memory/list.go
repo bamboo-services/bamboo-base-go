@@ -1,31 +1,33 @@
-package xCache
+package xCacheMemory
 
 import (
 	"context"
 	"time"
+
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
 )
 
-// memoryListCache [ListCache] 的内存实现。
+// ListCache [xCacheDriver.ListCache] 的内存实现。
 //
-// 内存中以 [][]byte 存储有序元素切片，整体作为 [memoryEntry.Value] 存入 [memoryStore]。
-type memoryListCache[K any, V any] struct {
-	store *memoryStore
-	codec Codec
-	enc   KeyEncoder
+// 内存中以 [][]byte 存储有序元素切片，整体作为 [memoryEntry.Value] 存入 [Store]。
+type ListCache[K any, V any] struct {
+	store *Store
+	codec xCacheDriver.Codec
+	enc   xCacheDriver.KeyEncoder
 	ttl   time.Duration
 }
 
-// NewMemoryListCache 构造一个基于内存的 [ListCache] 实现。
-func NewMemoryListCache[K any, V any](store *memoryStore, codec Codec, enc KeyEncoder, ttl time.Duration) ListCache[K, V] {
+// NewListCache 构造一个基于内存的 [xCacheDriver.ListCache] 实现。
+func NewListCache[K any, V any](store *Store, codec xCacheDriver.Codec, enc xCacheDriver.KeyEncoder, ttl time.Duration) xCacheDriver.ListCache[K, V] {
 	if codec == nil {
-		codec = JSONCodec{}
+		codec = xCacheDriver.JSONCodec{}
 	}
-	return &memoryListCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
+	return &ListCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
-// loadOrCreate 仅用于 Get 路径（只读）。写路径必须走 [memoryStore.Update] 保证原子性。
-func (c *memoryListCache[K, V]) loadOrCreate(key K) ([][]byte, bool) {
-	k := EncodeKey(c.enc, key)
+// loadOrCreate 仅用于 Get 路径（只读）。写路径必须走 [Store.Update] 保证原子性。
+func (c *ListCache[K, V]) loadOrCreate(key K) ([][]byte, bool) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	if value, ok := c.store.Get(k); ok {
 		if l, ok := value.([][]byte); ok {
 			return l, false
@@ -51,8 +53,8 @@ func normalizeIndex(idx int64, length int) (int, bool) {
 //
 // Prepend(k, a, b, c) 后列表头部为 [a, b, c, ...原元素]。
 // Memory 后端直接操作切片，无需像 Redis LPUSH 那样反转参数。
-// 通过 [memoryStore.Update] 在单把锁内完成读-改-写，避免 append 共享底层数组的并发污染。
-func (c *memoryListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error {
+// 通过 [Store.Update] 在单把锁内完成读-改-写，避免 append 共享底层数组的并发污染。
+func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -64,7 +66,7 @@ func (c *memoryListCache[K, V]) Prepend(ctx context.Context, key K, values ...V)
 		}
 		encoded = append(encoded, data)
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
 		// 必须新建切片，避免在共享底层数组上写
@@ -78,8 +80,8 @@ func (c *memoryListCache[K, V]) Prepend(ctx context.Context, key K, values ...V)
 
 // Append 将一个或多个值追加到列表尾部（右侧）。
 //
-// 通过 [memoryStore.Update] 保证原子性。新建切片避免共享底层数组污染。
-func (c *memoryListCache[K, V]) Append(ctx context.Context, key K, values ...V) error {
+// 通过 [Store.Update] 保证原子性。新建切片避免共享底层数组污染。
+func (c *ListCache[K, V]) Append(ctx context.Context, key K, values ...V) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -91,7 +93,7 @@ func (c *memoryListCache[K, V]) Append(ctx context.Context, key K, values ...V) 
 		}
 		encoded = append(encoded, data)
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
 		newList := make([][]byte, 0, len(encoded)+len(l))
@@ -103,8 +105,8 @@ func (c *memoryListCache[K, V]) Append(ctx context.Context, key K, values ...V) 
 }
 
 // Range 按索引范围获取列表元素，支持负数索引（-1 表示最后一个元素）。
-func (c *memoryListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, error) {
-	k := EncodeKey(c.enc, key)
+func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return nil, nil
@@ -131,8 +133,8 @@ func (c *memoryListCache[K, V]) Range(ctx context.Context, key K, start int64, e
 }
 
 // Index 获取指定索引位置的元素，支持负数索引。越界时返回 nil, nil。
-func (c *memoryListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, error) {
-	k := EncodeKey(c.enc, key)
+func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return nil, nil
@@ -153,8 +155,8 @@ func (c *memoryListCache[K, V]) Index(ctx context.Context, key K, index int64) (
 }
 
 // Len 获取列表的长度。
-func (c *memoryListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
-	k := EncodeKey(c.enc, key)
+func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return 0, nil
@@ -168,9 +170,9 @@ func (c *memoryListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
 
 // Pop 从列表头部弹出一个元素并返回。列表为空时返回 nil, nil。
 //
-// 通过 [memoryStore.Update] 保证读-改-写原子性。
-func (c *memoryListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
-	k := EncodeKey(c.enc, key)
+// 通过 [Store.Update] 保证读-改-写原子性。
+func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	var result *V
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
@@ -199,9 +201,9 @@ func (c *memoryListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
 
 // PopLast 从列表尾部弹出一个元素并返回。列表为空时返回 nil, nil。
 //
-// 通过 [memoryStore.Update] 保证读-改-写原子性。
-func (c *memoryListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
-	k := EncodeKey(c.enc, key)
+// 通过 [Store.Update] 保证读-改-写原子性。
+func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	var result *V
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
@@ -228,13 +230,13 @@ func (c *memoryListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) 
 // Remove 从列表中移除指定数量的匹配元素。
 //
 // count > 0 从头部开始移除最多 count 个；count < 0 从尾部开始；count = 0 移除全部。
-// 通过 [memoryStore.Update] 保证原子性。
-func (c *memoryListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) error {
+// 通过 [Store.Update] 保证原子性。
+func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) error {
 	target, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
 		if len(l) == 0 {
@@ -274,7 +276,7 @@ func (c *memoryListCache[K, V]) Remove(ctx context.Context, key K, count int64, 
 }
 
 // Delete 删除整个列表。
-func (c *memoryListCache[K, V]) Delete(ctx context.Context, key K) error {
-	c.store.Delete(EncodeKey(c.enc, key))
+func (c *ListCache[K, V]) Delete(ctx context.Context, key K) error {
+	c.store.Delete(xCacheDriver.EncodeKey(c.enc, key))
 	return nil
 }

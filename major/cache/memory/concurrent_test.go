@@ -1,4 +1,4 @@
-package xCache
+package xCacheMemory
 
 import (
 	"context"
@@ -6,17 +6,19 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
 )
 
 // TestConcurrentHashCacheWrite 验证 hash cache 在高并发写同一 key 下不会 panic 或丢失字段。
 //
 // 修复前：loadOrCreate → mutate → Set 模式会触发 `concurrent map writes` panic。
-// 修复后：所有写操作走 [memoryStore.Update]，单把分片锁保证原子性。
+// 修复后：所有写操作走 [Store.Update]，单把分片锁保证原子性。
 func TestConcurrentHashCacheWrite(t *testing.T) {
-	store := NewMemoryStore(4, 0, 0)
+	store := NewStore(4, 0, 0)
 	defer store.Close()
 
-	hc := NewMemoryHashCache[string, string, int, map[string]int](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	hc := NewHashCache[string, string, int, map[string]int](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	const goroutines = 50
@@ -50,10 +52,10 @@ func TestConcurrentHashCacheWrite(t *testing.T) {
 
 // TestConcurrentSetCacheAdd 验证 set cache 并发 Add 同一 key 不丢成员。
 func TestConcurrentSetCacheAdd(t *testing.T) {
-	store := NewMemoryStore(4, 0, 0)
+	store := NewStore(4, 0, 0)
 	defer store.Close()
 
-	sc := NewMemorySetCache[string, int](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	sc := NewSetCache[string, int](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	const goroutines = 50
@@ -83,10 +85,10 @@ func TestConcurrentSetCacheAdd(t *testing.T) {
 
 // TestConcurrentListCacheAppend 验证 list cache 并发 Append 同一 key 不丢元素。
 func TestConcurrentListCacheAppend(t *testing.T) {
-	store := NewMemoryStore(4, 0, 0)
+	store := NewStore(4, 0, 0)
 	defer store.Close()
 
-	lc := NewMemoryListCache[string, int](store, JSONCodec{}, DefaultKeyEncoder{}, 0)
+	lc := NewListCache[string, int](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
 	const goroutines = 50
@@ -116,10 +118,10 @@ func TestConcurrentListCacheAppend(t *testing.T) {
 
 // TestConcurrentKeyCacheGetSet 验证 key cache 并发 Get/Set/Delete 混合操作稳定。
 func TestConcurrentKeyCacheGetSet(t *testing.T) {
-	store := NewMemoryStore(4, 0, 100*time.Millisecond)
+	store := NewStore(4, 0, 100*time.Millisecond)
 	defer store.Close()
 
-	kc := NewMemoryKeyCache[string, int](store, JSONCodec{}, DefaultKeyEncoder{}, 100*time.Millisecond)
+	kc := NewKeyCache[string, int](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 100*time.Millisecond)
 	ctx := context.Background()
 
 	const goroutines = 30

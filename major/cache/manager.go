@@ -5,13 +5,52 @@ import (
 	"time"
 
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
+	xCacheMemory "github.com/bamboo-services/bamboo-base-go/major/cache/memory"
+	xCacheRedis "github.com/bamboo-services/bamboo-base-go/major/cache/redis"
 	"github.com/redis/go-redis/v9"
 )
 
+// 对外 API 兼容层：通过 type alias 把 driver 包的类型重新导出到 xCache 命名空间，
+// 业务侧无需直接 import cache/driver，继续使用 xCache.KeyCache / xCache.JSONCodec 等历史路径。
+type (
+	// KeyCache 等价于 [xCacheDriver.KeyCache]。
+	KeyCache[K any, V any] = xCacheDriver.KeyCache[K, V]
+	// HashCache 等价于 [xCacheDriver.HashCache]。
+	HashCache[K any, F comparable, V any, S any] = xCacheDriver.HashCache[K, F, V, S]
+	// SetCache 等价于 [xCacheDriver.SetCache]。
+	SetCache[K any, V any] = xCacheDriver.SetCache[K, V]
+	// ListCache 等价于 [xCacheDriver.ListCache]。
+	ListCache[K any, V any] = xCacheDriver.ListCache[K, V]
+	// Codec 等价于 [xCacheDriver.Codec]。
+	Codec = xCacheDriver.Codec
+	// JSONCodec 等价于 [xCacheDriver.JSONCodec]。
+	JSONCodec = xCacheDriver.JSONCodec
+	// KeyEncoder 等价于 [xCacheDriver.KeyEncoder]。
+	KeyEncoder = xCacheDriver.KeyEncoder
+	// DefaultKeyEncoder 等价于 [xCacheDriver.DefaultKeyEncoder]。
+	DefaultKeyEncoder = xCacheDriver.DefaultKeyEncoder
+	// CacheType 等价于 [xCacheDriver.CacheType]。
+	CacheType = xCacheDriver.CacheType
+)
+
+// 常量与函数别名：const 可直接引用 driver 包常量（底层类型一致即兼容）。
+const (
+	// CacheTypeRedis 使用 Redis 作为缓存后端，适用于分布式与跨进程共享场景。
+	CacheTypeRedis = xCacheDriver.CacheTypeRedis
+	// CacheTypeMemory 使用程序内内存作为缓存后端，适用于单实例或可接受最终一致性的场景。
+	CacheTypeMemory = xCacheDriver.CacheTypeMemory
+	// CacheTypeNone 不启用内置缓存实现，业务侧可自行通过 Register 注册缓存节点。
+	CacheTypeNone = xCacheDriver.CacheTypeNone
+)
+
+// EncodeKey 等价于 [xCacheDriver.EncodeKey]，保留 xCache.EncodeKey 历史调用路径。
+func EncodeKey(enc KeyEncoder, key any) string { return xCacheDriver.EncodeKey(enc, key) }
+
 // Manager 缓存统一管理器，作为业务侧访问缓存能力的唯一入口。
 //
-// 根据 [CacheType] 持有对应的底层后端实例（Redis *redis.Client 或 Memory *memory.Store），
-// 通过泛型工厂方法 [KeyCache] / [HashCache] / [SetCache] / [ListCache] 返回对应后端的
+// 根据 [CacheType] 持有对应的底层后端实例（Redis *redis.Client 或 Memory *xCacheMemory.Store），
+// 通过泛型工厂方法 [KeyCacheOf] / [HashCacheOf] / [SetCacheOf] / [ListCacheOf] 返回对应后端的
 // 接口实现。业务侧无需感知后端差异，切换后端只需更换 [option.WithRedis] / [option.WithMemory]。
 //
 // 同时暴露 [Redis] / [Memory] 直接返回底层实例，供需要后端特有能力的场景使用
@@ -22,7 +61,7 @@ import (
 type Manager struct {
 	kind  CacheType
 	rdb   *redis.Client
-	mem   *memoryStore
+	mem   *xCacheMemory.Store
 	codec Codec
 	enc   KeyEncoder
 	ttl   time.Duration
@@ -45,7 +84,7 @@ func WithRedisClient(rdb *redis.Client) ManagerOption {
 }
 
 // WithMemoryStore 注入内存存储实例，并将 kind 置为 [CacheTypeMemory]。
-func WithMemoryStore(store *memoryStore) ManagerOption {
+func WithMemoryStore(store *xCacheMemory.Store) ManagerOption {
 	return func(m *Manager) {
 		m.mem = store
 		m.kind = CacheTypeMemory
@@ -83,7 +122,7 @@ func WithLogger(log *xLog.LogNamedLogger) ManagerOption {
 //	    xCache.WithRedisClient(rdb),
 //	    xCache.WithManagerTTL(30*time.Minute),
 //	)
-//	kc := m.KeyCache[string, User]()
+//	kc := xCache.KeyCacheOf[string, User](m)
 func NewManager(kind CacheType, opts ...ManagerOption) *Manager {
 	m := &Manager{
 		kind:  kind,
@@ -110,7 +149,7 @@ func (m *Manager) Redis() *redis.Client { return m.rdb }
 //
 // 仅当 Type 为 [CacheTypeMemory] 时返回非 nil；其他类型返回 nil。
 // 业务侧可通过此方法访问 Store 的监控方法（如 Len、Close）。
-func (m *Manager) Memory() *memoryStore { return m.mem }
+func (m *Manager) Memory() *xCacheMemory.Store { return m.mem }
 
 // Codec 返回当前使用的序列化器。
 func (m *Manager) Codec() Codec { return m.codec }
@@ -125,7 +164,7 @@ func (m *Manager) Logger() *xLog.LogNamedLogger { return m.log }
 //
 // Go 1.18+ 禁止接口/方法带类型参数，故采用包级泛型函数而非 Manager 方法，
 // 这是 GORM Dialector 模式在 Go 泛型限制下的编译期类型安全版本：
-// Manager 作为统一门面持有底层 driver（Redis *redis.Client 或 Memory *memoryStore），
+// Manager 作为统一门面持有底层 driver（Redis *redis.Client 或 Memory *xCacheMemory.Store），
 // 本函数按 [Manager.Type] 分发到对应实现。
 //
 // 泛型参数：
@@ -148,12 +187,12 @@ func KeyCacheOf[K any, V any](m *Manager) KeyCache[K, V] {
 		if m.rdb == nil {
 			return nil
 		}
-		return NewRedisKeyCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
+		return xCacheRedis.NewKeyCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
 	case CacheTypeMemory:
 		if m.mem == nil {
 			return nil
 		}
-		return NewMemoryKeyCache[K, V](m.mem, m.codec, m.enc, m.ttl)
+		return xCacheMemory.NewKeyCache[K, V](m.mem, m.codec, m.enc, m.ttl)
 	default:
 		return nil
 	}
@@ -175,12 +214,12 @@ func HashCacheOf[K any, F comparable, V any, S any](m *Manager) HashCache[K, F, 
 		if m.rdb == nil {
 			return nil
 		}
-		return NewRedisHashCache[K, F, V, S](m.rdb, m.codec, m.enc, m.ttl)
+		return xCacheRedis.NewHashCache[K, F, V, S](m.rdb, m.codec, m.enc, m.ttl)
 	case CacheTypeMemory:
 		if m.mem == nil {
 			return nil
 		}
-		return NewMemoryHashCache[K, F, V, S](m.mem, m.codec, m.enc, m.ttl)
+		return xCacheMemory.NewHashCache[K, F, V, S](m.mem, m.codec, m.enc, m.ttl)
 	default:
 		return nil
 	}
@@ -196,12 +235,12 @@ func SetCacheOf[K any, V any](m *Manager) SetCache[K, V] {
 		if m.rdb == nil {
 			return nil
 		}
-		return NewRedisSetCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
+		return xCacheRedis.NewSetCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
 	case CacheTypeMemory:
 		if m.mem == nil {
 			return nil
 		}
-		return NewMemorySetCache[K, V](m.mem, m.codec, m.enc, m.ttl)
+		return xCacheMemory.NewSetCache[K, V](m.mem, m.codec, m.enc, m.ttl)
 	default:
 		return nil
 	}
@@ -217,12 +256,12 @@ func ListCacheOf[K any, V any](m *Manager) ListCache[K, V] {
 		if m.rdb == nil {
 			return nil
 		}
-		return NewRedisListCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
+		return xCacheRedis.NewListCache[K, V](m.rdb, m.codec, m.enc, m.ttl)
 	case CacheTypeMemory:
 		if m.mem == nil {
 			return nil
 		}
-		return NewMemoryListCache[K, V](m.mem, m.codec, m.enc, m.ttl)
+		return xCacheMemory.NewListCache[K, V](m.mem, m.codec, m.enc, m.ttl)
 	default:
 		return nil
 	}

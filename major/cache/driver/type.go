@@ -1,4 +1,4 @@
-package xCache
+package xCacheDriver
 
 // CacheType 标识缓存后端的实现类型。
 //

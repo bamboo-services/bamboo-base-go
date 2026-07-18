@@ -1,36 +1,38 @@
-package xCache
+package xCacheMemory
 
 import (
 	"context"
 	"time"
+
+	xCacheDriver "github.com/bamboo-services/bamboo-base-go/major/cache/driver"
 )
 
-// memoryHashCache [HashCache] 的内存实现。
+// HashCache [xCacheDriver.HashCache] 的内存实现。
 //
 // 内存中以 map[F][]byte 存储字段（field → 已序列化的 value），整体作为 [memoryEntry.Value]
-// 存入 [memoryStore]，复用 Store 的 TTL / LRU 能力。F 声明为 comparable，可直接作为
+// 存入 [Store]，复用 Store 的 TTL / LRU 能力。F 声明为 comparable，可直接作为
 // 运行时 map key，无需转换为 string。
 //
-// GetAllStruct / SetAllStruct 依赖 [Codec] 在 struct 与 map[F]V 之间的转换能力
+// GetAllStruct / SetAllStruct 依赖 [xCacheDriver.Codec] 在 struct 与 map[F]V 之间的转换能力
 // （JSONCodec 原生支持）。
-type memoryHashCache[K any, F comparable, V any, S any] struct {
-	store *memoryStore
-	codec Codec
-	enc   KeyEncoder
+type HashCache[K any, F comparable, V any, S any] struct {
+	store *Store
+	codec xCacheDriver.Codec
+	enc   xCacheDriver.KeyEncoder
 	ttl   time.Duration
 }
 
-// NewMemoryHashCache 构造一个基于内存的 [HashCache] 实现。
-func NewMemoryHashCache[K any, F comparable, V any, S any](store *memoryStore, codec Codec, enc KeyEncoder, ttl time.Duration) HashCache[K, F, V, S] {
+// NewHashCache 构造一个基于内存的 [xCacheDriver.HashCache] 实现。
+func NewHashCache[K any, F comparable, V any, S any](store *Store, codec xCacheDriver.Codec, enc xCacheDriver.KeyEncoder, ttl time.Duration) xCacheDriver.HashCache[K, F, V, S] {
 	if codec == nil {
-		codec = JSONCodec{}
+		codec = xCacheDriver.JSONCodec{}
 	}
-	return &memoryHashCache[K, F, V, S]{store: store, codec: codec, enc: enc, ttl: ttl}
+	return &HashCache[K, F, V, S]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
-// loadOrCreate 仅用于 Get 路径（只读）。写路径必须走 [memoryStore.Update] 保证原子性。
-func (c *memoryHashCache[K, F, V, S]) loadOrCreate(key K) (map[F][]byte, bool) {
-	k := EncodeKey(c.enc, key)
+// loadOrCreate 仅用于 Get 路径（只读）。写路径必须走 [Store.Update] 保证原子性。
+func (c *HashCache[K, F, V, S]) loadOrCreate(key K) (map[F][]byte, bool) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	if value, ok := c.store.Get(k); ok {
 		if m, ok := value.(map[F][]byte); ok {
 			return m, false
@@ -40,8 +42,8 @@ func (c *memoryHashCache[K, F, V, S]) loadOrCreate(key K) (map[F][]byte, bool) {
 }
 
 // Get 获取单个字段的值。
-func (c *memoryHashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, error) {
-	k := EncodeKey(c.enc, key)
+func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return nil, false, nil
@@ -63,9 +65,9 @@ func (c *memoryHashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (
 
 // Set 设置单个字段的值。
 //
-// value 为 nil 时等价于 [Remove] 该 field，与 [KeyCache.Set] 的 nil 删除语义对齐。
-// 通过 [memoryStore.Update] 在单把锁内完成读-改-写，避免并发 panic。
-func (c *memoryHashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V) error {
+// value 为 nil 时等价于 [Remove] 该 field，与 KeyCache.Set 的 nil 删除语义对齐。
+// 通过 [Store.Update] 在单把锁内完成读-改-写，避免并发 panic。
+func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V) error {
 	if value == nil {
 		return c.Remove(ctx, key, field)
 	}
@@ -73,7 +75,7 @@ func (c *memoryHashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, v
 	if err != nil {
 		return err
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		m, _ := old.(map[F][]byte)
 		if m == nil {
@@ -86,9 +88,9 @@ func (c *memoryHashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, v
 }
 
 // GetAll 获取所有字段及值，以 map[F]V 形式返回。
-func (c *memoryHashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, error) {
+func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, error) {
 	result := make(map[F]V)
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return result, nil
@@ -110,7 +112,7 @@ func (c *memoryHashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]
 // GetAllStruct 获取所有字段到结构体 S。
 //
 // 先通过 [GetAll] 拿到 map[F]V，再用 codec 把 map 序列化后反序列化为 S。
-func (c *memoryHashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, error) {
+func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, error) {
 	var s S
 	m, err := c.GetAll(ctx, key)
 	if err != nil {
@@ -128,9 +130,9 @@ func (c *memoryHashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (
 
 // SetAll 批量设置字段。
 //
-// 通过 [memoryStore.Update] 保证原子性。value 为 nil 的 field 会被删除。
+// 通过 [Store.Update] 保证原子性。value 为 nil 的 field 会被删除。
 // 修改后若 map 为空则整个 hash 被删除。
-func (c *memoryHashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V) error {
+func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -148,7 +150,7 @@ func (c *memoryHashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields 
 		}
 		encoded[f] = data
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		m, _ := old.(map[F][]byte)
 		if m == nil {
@@ -169,7 +171,7 @@ func (c *memoryHashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields 
 }
 
 // SetAllStruct 用结构体批量设置字段。
-func (c *memoryHashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S) error {
+func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S) error {
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -187,8 +189,8 @@ func (c *memoryHashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, v
 }
 
 // Exists 判断字段是否存在。
-func (c *memoryHashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, error) {
-	k := EncodeKey(c.enc, key)
+func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, error) {
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
 		return false, nil
@@ -203,12 +205,12 @@ func (c *memoryHashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F
 
 // Remove 移除指定字段。
 //
-// 通过 [memoryStore.Update] 保证原子性。移除后若 map 为空则整个 hash 被删除。
-func (c *memoryHashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) error {
+// 通过 [Store.Update] 保证原子性。移除后若 map 为空则整个 hash 被删除。
+func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	k := EncodeKey(c.enc, key)
+	k := xCacheDriver.EncodeKey(c.enc, key)
 	c.store.Update(k, c.ttl, func(old any) any {
 		m, _ := old.(map[F][]byte)
 		if m == nil {
@@ -226,7 +228,7 @@ func (c *memoryHashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields 
 }
 
 // Delete 删除整个 hash。
-func (c *memoryHashCache[K, F, V, S]) Delete(ctx context.Context, key K) error {
-	c.store.Delete(EncodeKey(c.enc, key))
+func (c *HashCache[K, F, V, S]) Delete(ctx context.Context, key K) error {
+	c.store.Delete(xCacheDriver.EncodeKey(c.enc, key))
 	return nil
 }

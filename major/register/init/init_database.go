@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// DatabaseInit 根据传入的 [xOptionDB.Config] 构造数据库初始化节点。
+// DatabaseInit 根据传入的 [xOptionDB.DatabaseConfig] 构造数据库初始化节点。
 //
 // 返回的 [xRegNode.Node] 会根据 Config.Driver 选择对应的 GORM 驱动
 // （mysql / postgres / sqlite），用项目自带的 [xGormLog.SlogLogger] 作为 GORM
@@ -24,7 +24,7 @@ import (
 //
 // 调用方：Runner 在 UseAfterExec 阶段按 option 决定是否装配此节点。
 // 若 Driver 为 DriverNone，调用方应跳过此工厂。
-func DatabaseInit(cfg xOptionDB.Config) xRegNode.Node {
+func DatabaseInit(cfg xOptionDB.DatabaseConfig) xRegNode.Node {
 	return func(ctx context.Context) (any, error) {
 		log := xLog.WithName(xLog.NamedINIT)
 		log.Debug(ctx, "正在连接数据库", slog.String("driver", string(cfg.Driver())))
@@ -51,13 +51,27 @@ func DatabaseInit(cfg xOptionDB.Config) xRegNode.Node {
 			return nil, fmt.Errorf("配置数据库连接池失败: %w", err)
 		}
 
+		// AutoMigrate：声明的表自动建表
+		if tables := cfg.AutoMigrateTables(); len(tables) > 0 {
+			if err := db.AutoMigrate(tables...); err != nil {
+				return nil, fmt.Errorf("数据库表自动迁移失败: %w", err)
+			}
+			log.Debug(ctx, "数据库表自动迁移完成", slog.Int("tables", len(tables)))
+		}
+		// Prepare：建表后数据初始化，按注册顺序执行
+		for i, fn := range cfg.Prepares() {
+			if err := fn(ctx, db); err != nil {
+				return nil, fmt.Errorf("数据初始化失败(第%d个): %w", i+1, err)
+			}
+		}
+
 		log.Info(ctx, "数据库连接成功", slog.String("driver", string(cfg.Driver())))
 		return db, nil
 	}
 }
 
 // openByDriver 按 DatabaseConfig.Driver 选择对应的 GORM 驱动打开连接。
-func openByDriver(cfg xOptionDB.Config, gormCfg *gorm.Config) (*gorm.DB, error) {
+func openByDriver(cfg xOptionDB.DatabaseConfig, gormCfg *gorm.Config) (*gorm.DB, error) {
 	dsn := cfg.DSN()
 	switch cfg.Driver() {
 	case xOptionDB.DriverMySQL:

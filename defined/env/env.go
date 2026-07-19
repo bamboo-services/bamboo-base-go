@@ -35,15 +35,21 @@ const (
 	DatabasePath     EnvKey = "DATABASE_PATH"     // SQLite 数据库文件路径（仅 sqlite 驱动有效）
 )
 
-// ============================== Redis 配置 ==============================
+// ============================== Redis/缓存配置 ==============================
 
 const (
-	NoSqlHost     EnvKey = "NOSQL_HOST"      // NoSQL 主机地址
-	NoSqlPort     EnvKey = "NOSQL_PORT"      // NoSQL 端口
-	NoSqlPass     EnvKey = "NOSQL_PASS"      // NoSQL 密码
-	NoSqlDatabase EnvKey = "NOSQL_DATABASE"  // NoSQL 数据库索引
-	NoSqlPoolSize EnvKey = "NOSQL_POOL_SIZE" // NoSQL 连接池大小
-	NoSqlPrefix   EnvKey = "NOSQL_PREFIX"    // NoSQL 连接池大小
+	NoSqlDriver   EnvKey = "NOSQL_DRIVER"    // 缓存驱动类型 (redis/memory/none)
+	NoSqlHost     EnvKey = "NOSQL_HOST"      // Redis 主机地址
+	NoSqlPort     EnvKey = "NOSQL_PORT"      // Redis 端口
+	NoSqlUser     EnvKey = "NOSQL_USER"      // Redis 用户名 (ACL 模式)
+	NoSqlPass     EnvKey = "NOSQL_PASS"      // Redis 密码
+	NoSqlDatabase EnvKey = "NOSQL_DATABASE"  // Redis 数据库索引 (0-15)
+	NoSqlPoolSize EnvKey = "NOSQL_POOL_SIZE" // Redis 连接池大小
+	NoSqlPrefix   EnvKey = "NOSQL_PREFIX"    // Redis 键前缀
+
+	NoSqlMemoryDefaultTTL EnvKey = "NOSQL_MEMORY_DEFAULT_TTL" // NOSQL_DRIVER=memory时生效 内存缓存默认过期时间（Go Duration 字符串，如 30m/1h，0=永不过期）
+	NoSqlMemoryMaxEntries EnvKey = "NOSQL_MEMORY_MAX_ENTRIES" // NOSQL_DRIVER=memory时生效 内存缓存最大条目数（0=无上限）
+	NoSqlMemoryShardCount EnvKey = "NOSQL_MEMORY_SHARD_COUNT" // NOSQL_DRIVER=memory时生效 内存缓存分片数（0=使用默认分片）
 )
 
 // ============================== 雪花算法配置 ==============================

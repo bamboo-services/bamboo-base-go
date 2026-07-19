@@ -51,7 +51,7 @@ func EncodeKey(enc KeyEncoder, key any) string { return xCacheDriver.EncodeKey(e
 //
 // 根据 [CacheType] 持有对应的底层后端实例（Redis *redis.Client 或 Memory *xCacheMemory.Store），
 // 通过泛型工厂方法 [KeyCacheOf] / [HashCacheOf] / [SetCacheOf] / [ListCacheOf] 返回对应后端的
-// 接口实现。业务侧无需感知后端差异，切换后端只需更换 [option.WithRedis] / [option.WithMemory]。
+// 接口实现。业务侧无需感知后端差异，切换后端只需更换 [option.WithCache]([option.WithRedis]) / [option.WithCache]([option.WithMemory])。
 //
 // 同时暴露 [Redis] / [Memory] 直接返回底层实例，供需要后端特有能力的场景使用
 // （如 Redis 的 Pub/Sub、Pipeline；Memory 的 Len/Close 监控）。

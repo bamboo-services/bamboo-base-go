@@ -19,7 +19,7 @@ init/
 |------|------|------|
 | 雪花算法初始化 | `init_snowflake.go` → `SnowflakeInit()` | 注册到 `SnowflakeNodeKey`，生成测试 ID 验证可用性 |
 | 缓存管理器初始化 | `init_cache.go` → `CacheInit(cfg)` | 根据 `CacheConfig.Type()` 选择 Redis/Memory 后端，返回 `*xCache.Manager` |
-| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 根据 `Config.Driver()` 选择 MySQL/Postgres/SQLite 驱动，返回 `*gorm.DB` |
+| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 根据 `DatabaseConfig.Driver()` 选择 MySQL/Postgres/SQLite 驱动；建连成功后自动执行 AutoMigrate（若声明）与 Prepare 回调（若注册）；返回 `*gorm.DB` |
 | Redis 兼容性桥接 | `init_cache.go` → `RedisClientFromManager()` | 从 Manager 提取 `*redis.Client` 补注册到 `RedisClientKey`，兼容历史代码 |
 | 添加新的内置节点 | 在此目录新建文件，遵循 `XxxInit(...)` 签名 | 然后在 `register.go` 的 `Register()` 中通过 `reg.Init.Use()` 注册 |
 

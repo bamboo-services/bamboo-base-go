@@ -6,7 +6,7 @@ import (
 	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
-// Postgres 构造 PostgreSQL 的 [Config]。
+// Postgres 构造 PostgreSQL 的 [DatabaseOption]。
 //
 // dsn 为完整的 PostgreSQL 连接串，格式如：
 //
@@ -14,13 +14,12 @@ import (
 //
 // 如需从环境变量自动拼装，改用 [FromEnv] 并设置 DATABASE_DRIVER=postgres。
 // 如需调整连接池参数，配合 [WithMaxOpenConns] 等二级选项使用。
-func Postgres(dsn string, opts ...CommonOption) Config {
-	cfg := Config{
-		driver: DriverPostgres,
-		dsn:    dsn,
+func Postgres(dsn string, opts ...DatabaseOption) DatabaseOption {
+	return func(c *DatabaseConfig) {
+		c.driver = DriverPostgres
+		c.dsn = dsn
+		applyDatabase(c, opts...)
 	}
-	applyCommon(&cfg.common, opts...)
-	return cfg
 }
 
 // PostgresFromEnv 从环境变量拼装 PostgreSQL DSN。

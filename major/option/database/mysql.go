@@ -6,7 +6,7 @@ import (
 	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
-// MySQL 构造 MySQL 的 [Config]。
+// MySQL 构造 MySQL 的 [DatabaseOption]。
 //
 // dsn 为完整的 MySQL 连接串，格式如：
 //
@@ -14,13 +14,12 @@ import (
 //
 // 如需从环境变量自动拼装，改用 [FromEnv] 并设置 DATABASE_DRIVER=mysql。
 // 如需调整连接池参数，配合 [WithMaxOpenConns] 等二级选项使用。
-func MySQL(dsn string, opts ...CommonOption) Config {
-	cfg := Config{
-		driver: DriverMySQL,
-		dsn:    dsn,
+func MySQL(dsn string, opts ...DatabaseOption) DatabaseOption {
+	return func(c *DatabaseConfig) {
+		c.driver = DriverMySQL
+		c.dsn = dsn
+		applyDatabase(c, opts...)
 	}
-	applyCommon(&cfg.common, opts...)
-	return cfg
 }
 
 // MySQLFromEnv 从环境变量拼装 MySQL DSN。

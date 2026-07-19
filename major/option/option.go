@@ -14,8 +14,11 @@ import (
 // 使用示例：
 //
 //	cfg := option.Apply(
-//	    option.WithRedis("localhost:6379", option.WithRedisPassword("xxx")),
-//	    option.WithMySQL(dsn),
+//	    option.WithCache(xOptionCache.WithRedis("localhost:6379", xOptionCache.WithRedisPassword("xxx"))),
+//	    option.WithDatabase(
+//	        xOptionDB.FromEnv(),
+//	        xOptionDB.WithAutoMigrate(&entity.Role{}, &entity.User{}),
+//	    ),
 //	)
 type Option func(*Config)
 
@@ -25,7 +28,7 @@ type Option func(*Config)
 // 在拿到 Config 后直接修改内部状态，保证配置在装配阶段的一致性。
 type Config struct {
 	cache    CacheConfig
-	database xOptionDB.Config
+	database xOptionDB.DatabaseConfig
 	routes   []RouteRegistrar
 }
 
@@ -47,7 +50,7 @@ func Apply(opts ...Option) *Config {
 func (c *Config) Cache() CacheConfig { return c.cache }
 
 // Database 返回数据库配置的只读视图。
-func (c *Config) Database() xOptionDB.Config { return c.database }
+func (c *Config) Database() xOptionDB.DatabaseConfig { return c.database }
 
 // Routes 返回路由注册器列表，按 WithRoute / WithRouteGroup 的调用顺序排列。
 //

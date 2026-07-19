@@ -34,8 +34,8 @@ option/
 | 启用 Postgres | `WithDatabase(xOptionDB.Postgres(dsn, opts...))` | Runner 自动装配 Postgres + GORM |
 | 启用 SQLite | `WithDatabase(xOptionDB.SQLite(dsn, opts...))` | Runner 自动装配 SQLite + GORM |
 | 从环境变量装配数据库 | `WithDatabase(xOptionDB.FromEnv(opts...))` | 自动读取 `DATABASE_DRIVER` + DSN 拼装 |
-| 注册 HTTP 路由 | `router.go` → `WithRoute(func(serve *gin.Engine))` | 可叠加多个注册器，按顺序执行 |
-| 注册路由组 | `router.go` → `WithRouteGroup(prefix, func(*gin.RouterGroup))` | `WithRoute` 的语法糖 |
+| 注册 HTTP 路由 | `router.go` → `WithRoute(func(ctx, serve))` | 注册器接收已装配依赖的 ctx 与 Gin 引擎，按顺序执行 |
+| 注册路由组 | `router.go` → `WithRouteGroup(prefix, func(*gin.RouterGroup))` | `WithRoute` 的语法糖，闭包内通过 gin.Context 取依赖 |
 
 ## 核心类型
 

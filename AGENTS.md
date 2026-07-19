@@ -66,7 +66,7 @@ bamboo-base/
 | 配置数据库 | `major/option` → `WithDatabase(xOptionDB.MySQL())` / `WithDatabase(xOptionDB.Postgres())` / `WithDatabase(xOptionDB.SQLite())` | 声明式双层配置 |
 | 从环境变量装配数据库 | `major/option` → `WithDatabase(xOptionDB.FromEnv())` | 自动读取 DATABASE_DRIVER 等 |
 | 配置缓存后端 | `major/option` → `WithCache(xOptionCache.WithRedis())` / `WithCache(xOptionCache.WithMemory())` | 声明式双层选择 Redis 或内存缓存 |
-| 注册 HTTP 路由 | `major/option` → `WithRoute()` / `WithRouteGroup()` | 支持多个注册器叠加 |
+| 注册 HTTP 路由 | `major/option` → `WithRoute()` / `WithRouteGroup()` | 支持多个注册器叠加；注册器接收已装配依赖的 ctx 与 Gin 引擎 |
 | 返回成功响应 | `major/result` → `Success()` / `SuccessHasData()` | |
 | 返回错误响应 | `major/result` → `Error()` / `AbortError()` | |
 | 绑定请求参数 | `major/utility` → `Bind(ctx, &req)` | `.Data()` / `.Query()` / `.URI()` / `.Header()` |

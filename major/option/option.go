@@ -54,5 +54,6 @@ func (c *Config) Database() xOptionDB.DatabaseConfig { return c.database }
 
 // Routes 返回路由注册器列表，按 WithRoute / WithRouteGroup 的调用顺序排列。
 //
-// Runner 会在启动 HTTP 前按此顺序逐个执行。返回 nil 表示无路由需注册。
+// Runner 会在启动 HTTP 前按此顺序逐个执行，每个 [RouteRegistrar] 接收
+// 已装配依赖的 reg.Init.Ctx（含 DB/缓存等组件）与 Gin 引擎。返回 nil 表示无路由需注册。
 func (c *Config) Routes() []RouteRegistrar { return c.routes }

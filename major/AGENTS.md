@@ -104,7 +104,7 @@ major/
 ## 约定
 
 - **Runner 签名固定**：`Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, opts []xOption.Option, goroutineFunc ...func(ctx context.Context, extra ...any))`。
-- **路由通过 Option 注册**：使用 `xOption.WithRoute` / `xOption.WithRouteGroup` 声明路由，可叠加多个注册器并按调用顺序执行；插件可直接暴露 `RouteRegistrar` 供业务侧 `WithRoute` 导入，实现「插件自带路由、一行接入」。
+- **路由通过 Option 注册**：使用 `xOption.WithRoute` / `xOption.WithRouteGroup` 声明路由，可叠加多个注册器并按调用顺序执行。注册器签名 `RouteRegistrar = func(ctx context.Context, serve *gin.Engine)`，Runner 在 DB/缓存装配完成后调用，把已含依赖的 `reg.Init.Ctx` 直接传入，业务侧无需自行从 `reg` 取 ctx（避免 context 值语义的「装配前捕获」陷阱）；插件可直接暴露 `RouteRegistrar` 供业务侧 `WithRoute` 导入。
 - **Gin 中间件链顺序固定**：`RequestContext → PanicRecovery → HttpLogger → InjectContext`，由 `register_gin.go` 的 `engineInit()` 自动挂载，业务侧不需要手动添加。
 - **响应必须通过 `xResult.*` 函数**：不要直接调用 `ctx.JSON()`，否则 `ResponseMiddleware` 兜底逻辑可能将其视为"开发者错误"。
 - **ErrorCode.Code 前 3 位 = HTTP 状态码**：`xResult.Error()` 中 `int(errorCode.Code/100)` 决定 HTTP 响应码。

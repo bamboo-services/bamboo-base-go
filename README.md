@@ -48,7 +48,7 @@ func main() {
 	logger := xLog.WithName(xLog.NamedMAIN)
 
 	xMain.Runner(reg, logger, []xOption.Option{
-		xOption.WithRoute(func(serve *gin.Engine) {
+		xOption.WithRoute(func(ctx context.Context, serve *gin.Engine) {
 			serve.GET("/ping", func(c *gin.Context) {
 				c.JSON(200, gin.H{"message": "pong"})
 			})
@@ -69,7 +69,7 @@ grpcTask := xGrpcRunner.New(
 )
 
 xMain.Runner(reg, logger, []xOption.Option{
-	xOption.WithRoute(func(serve *gin.Engine) {
+	xOption.WithRoute(func(ctx context.Context, serve *gin.Engine) {
 		// 在这里注册你的 HTTP 路由
 	}),
 }, grpcTask)

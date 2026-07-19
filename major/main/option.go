@@ -16,7 +16,8 @@ import (
 //     - 通过 [xInit.CacheInit] 构造 [*xCache.Manager]，注册到 CacheManagerKey
 //     - 若为 Redis 后端，额外通过 [xInit.RedisClientFromManager] 把 *redis.Client
 //       补注册到 RedisClientKey，保持与历史代码兼容
-//  4. 按配置中的路由注册器列表顺序，逐个对 Gin 引擎挂载路由
+//  4. 按配置中的路由注册器列表顺序，逐个对 Gin 引擎挂载路由；每个注册器
+//     接收 reg.Init.Ctx（已含 database/cache 等装配结果）与 reg.Serve
 //
 // 装配顺序固定为 database → cache → routes，确保数据库与缓存先于路由可用。
 func (runner *mainRunner) initOption() {
@@ -34,6 +35,6 @@ func (runner *mainRunner) initOption() {
 	}
 
 	for _, registrar := range cfg.Routes() {
-		registrar(runner.reg.Serve)
+		registrar(runner.reg.Init.Ctx, runner.reg.Serve)
 	}
 }

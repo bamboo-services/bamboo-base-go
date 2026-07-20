@@ -82,9 +82,9 @@ major/
 | 任务 | 位置 | 说明 |
 |------|------|------|
 | 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, logger, opts, ...goroutineFunc)` |
-| 配置缓存后端 | `option/cache.go` → `WithCache(xOptionCache.WithRedis)` / `WithCache(xOptionCache.WithMemory)` | 声明式双层选择 Redis 或内存缓存 |
-| 配置数据库 | `option/database.go` → `WithDatabase(xOptionDB.MySQL)` / `WithDatabase(xOptionDB.Postgres)` / `WithDatabase(xOptionDB.SQLite)` | 双层指定驱动，Runner 自动装配 |
-| 从环境变量装配数据库 | `option/database.go` → `WithDatabase(xOptionDB.FromEnv)` | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
+| 配置缓存后端 | `option/cache.go` → `WithCache(xOptCache.WithRedis)` / `WithCache(xOptCache.WithMemory)` | 声明式双层选择 Redis 或内存缓存 |
+| 配置数据库 | `option/database.go` → `WithDatabase(xOptDatabase.MySQL)` / `WithDatabase(xOptDatabase.Postgres)` / `WithDatabase(xOptDatabase.SQLite)` | 双层指定驱动，Runner 自动装配 |
+| 从环境变量装配数据库 | `option/database.go` → `WithDatabase(xOptDatabase.FromEnv)` | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
 | 注册 HTTP 路由 | `option/router.go` → `WithRoute` / `WithRouteGroup` | 可叠加多个，支持插件自带路由 |
 | 使用缓存 | 从 context 获取 `*xCache.Manager` → `xCache.KeyCacheOf(mgr)` 等 | 泛型缓存接口，自动按后端分发 |
 | 返回成功响应 | `result/result.go` → `Success()` / `SuccessHasData()` | 自动注入 context / code / overhead |

@@ -22,17 +22,19 @@ const (
 // ============================== 数据库配置 ==============================
 
 const (
-	DatabaseDriver   EnvKey = "DATABASE_DRIVER"   // 数据库驱动 (mysql/postgres/sqlite)
-	DatabaseDSN      EnvKey = "DATABASE_DSN"      // 数据库完整连接串（设置后忽略下方分项配置）
-	DatabaseHost     EnvKey = "DATABASE_HOST"     // 数据库主机地址
-	DatabasePort     EnvKey = "DATABASE_PORT"     // 数据库端口
-	DatabaseUser     EnvKey = "DATABASE_USER"     // 数据库用户名
-	DatabasePass     EnvKey = "DATABASE_PASS"     // 数据库密码
-	DatabaseName     EnvKey = "DATABASE_NAME"     // 数据库名称
-	DatabaseCharset  EnvKey = "DATABASE_CHARSET"  // 数据库字符集
-	DatabaseTimezone EnvKey = "DATABASE_TIMEZONE" // 数据库时区
-	DatabasePrefix   EnvKey = "DATABASE_PREFIX"   // 数据库表前缀
-	DatabasePath     EnvKey = "DATABASE_PATH"     // SQLite 数据库文件路径（仅 sqlite 驱动有效）
+	DatabaseDriver      EnvKey = "DATABASE_DRIVER"       // 数据库驱动 (mysql/postgres/sqlite/oracle/sqlserver)
+	DatabaseDSN         EnvKey = "DATABASE_DSN"          // 数据库完整连接串（设置后忽略下方分项配置）
+	DatabaseHost        EnvKey = "DATABASE_HOST"         // 数据库主机地址
+	DatabasePort        EnvKey = "DATABASE_PORT"         // 数据库端口
+	DatabaseUser        EnvKey = "DATABASE_USER"         // 数据库用户名
+	DatabasePass        EnvKey = "DATABASE_PASS"         // 数据库密码
+	DatabaseName        EnvKey = "DATABASE_NAME"         // 数据库名称
+	DatabaseCharset     EnvKey = "DATABASE_CHARSET"      // 数据库字符集
+	DatabaseTimezone    EnvKey = "DATABASE_TIMEZONE"     // 数据库时区
+	DatabasePrefix      EnvKey = "DATABASE_PREFIX"       // 数据库表前缀
+	DatabasePath        EnvKey = "DATABASE_PATH"         // SQLite 数据库文件路径（仅 sqlite 驱动有效）
+	DatabaseServiceName EnvKey = "DATABASE_SERVICE_NAME" // Oracle 服务名（仅 oracle 驱动有效）
+	DatabaseLibDir      EnvKey = "DATABASE_LIB_DIR"      // Oracle Instant Client 目录（macOS/Windows 有效，Linux 需用 ldconfig 配置系统库搜索路径）
 )
 
 // ============================== Redis/缓存配置 ==============================

@@ -1,7 +1,7 @@
 package option
 
 import (
-	xOptionDB "github.com/bamboo-services/bamboo-base-go/major/option/database"
+	xOptDatabase "github.com/bamboo-services/bamboo-base-go/major/option/database"
 )
 
 // Option 定义应用级配置选项，采用函数式选项模式（functional options）。
@@ -14,10 +14,10 @@ import (
 // 使用示例：
 //
 //	cfg := option.Apply(
-//	    option.WithCache(xOptionCache.WithRedis("localhost:6379", xOptionCache.WithRedisPassword("xxx"))),
+//	    option.WithCache(xOptCache.WithRedis("localhost:6379", xOptCache.WithRedisPassword("xxx"))),
 //	    option.WithDatabase(
-//	        xOptionDB.FromEnv(),
-//	        xOptionDB.WithAutoMigrate(&entity.Role{}, &entity.User{}),
+//	        xOptDatabase.FromEnv(),
+//	        xOptDatabase.WithAutoMigrate(&entity.Role{}, &entity.User{}),
 //	    ),
 //	)
 type Option func(*Config)
@@ -28,7 +28,7 @@ type Option func(*Config)
 // 在拿到 Config 后直接修改内部状态，保证配置在装配阶段的一致性。
 type Config struct {
 	cache    CacheConfig
-	database xOptionDB.DatabaseConfig
+	database xOptDatabase.DatabaseConfig
 	routes   []RouteRegistrar
 }
 
@@ -50,7 +50,7 @@ func Apply(opts ...Option) *Config {
 func (c *Config) Cache() CacheConfig { return c.cache }
 
 // Database 返回数据库配置的只读视图。
-func (c *Config) Database() xOptionDB.DatabaseConfig { return c.database }
+func (c *Config) Database() xOptDatabase.DatabaseConfig { return c.database }
 
 // Routes 返回路由注册器列表，按 WithRoute / WithRouteGroup 的调用顺序排列。
 //

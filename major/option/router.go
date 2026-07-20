@@ -18,14 +18,17 @@ import (
 // 无需自行从 *xReg.Reg 读取，避免 context 值语义导致的「装配前捕获」陷阱。
 type RouteRegistrar func(ctx context.Context, serve *gin.Engine)
 
-// WithRoute 注册一个路由注册器到配置中。
+// WithRoute 注册一个或多个路由注册器到配置中。
 //
 // 多次调用可叠加多个注册器，执行顺序与调用顺序一致。nil 注册器会被跳过，
 // 确保条件构造（如 cond && WithRoute(r)）的安全性。
-func WithRoute(r RouteRegistrar) Option {
+// 支持一次传入多个注册器，底层循环追加到 routes 列表。
+func WithRoute(rs ...RouteRegistrar) Option {
 	return func(c *Config) {
-		if r != nil {
-			c.routes = append(c.routes, r)
+		for _, r := range rs {
+			if r != nil {
+				c.routes = append(c.routes, r)
+			}
 		}
 	}
 }

@@ -1,4 +1,4 @@
-package database
+package xOptDatabase
 
 import (
 	"context"
@@ -27,12 +27,18 @@ const (
 
 	// DriverSQLite 表示使用 SQLite 驱动（github.com/glebarez/sqlite）。
 	DriverSQLite Driver = "sqlite"
+
+	// DriverOracle 表示使用 Oracle 驱动（github.com/oracle-samples/gorm-oracle，底层 godror）。
+	DriverOracle Driver = "oracle"
+
+	// DriverSQLServer 表示使用 SQL Server 驱动（gorm.io/driver/sqlserver，底层 microsoft/go-mssqldb）。
+	DriverSQLServer Driver = "sqlserver"
 )
 
 // DatabaseConfig 数据库配置，描述驱动类型、DSN、连接池参数、表迁移及数据初始化。
 //
 // 字段均为小写，仅通过 getter 暴露只读视图，避免下游直接修改内部状态。
-// 构造请使用对应驱动的构造函数（[MySQL] / [Postgres] / [SQLite]）或 [FromEnv]。
+// 构造请使用对应驱动的构造函数（[MySQL] / [Postgres] / [SQLite] / [Oracle] / [SQLServer]）或 [FromEnv]。
 type DatabaseConfig struct {
 	driver         Driver
 	dsn            string
@@ -133,14 +139,17 @@ func WithAutoMigrate(tables ...interface{}) DatabaseOption {
 // 返回 error 会中断启动流程。
 type PrepareFunc func(ctx context.Context, db *gorm.DB) error
 
-// WithPrepare 注册建表后数据初始化回调。
+// WithPrepare 注册一个或多个建表后数据初始化回调。
 //
 // 可多次调用叠加，回调按注册顺序在 AutoMigrate 成功后依次执行。
 // 传入 nil 回调会被静默跳过。任一回调返回 error 会中断启动。
-func WithPrepare(fn PrepareFunc) DatabaseOption {
+// 支持一次传入多个回调，底层循环追加到 prepareFuncs 列表。
+func WithPrepare(fns ...PrepareFunc) DatabaseOption {
 	return func(c *DatabaseConfig) {
-		if fn != nil {
-			c.prepareFuncs = append(c.prepareFuncs, fn)
+		for _, fn := range fns {
+			if fn != nil {
+				c.prepareFuncs = append(c.prepareFuncs, fn)
+			}
 		}
 	}
 }
@@ -158,7 +167,7 @@ func applyDatabase(target *DatabaseConfig, opts ...DatabaseOption) {
 //
 // 读取顺序与优先级:
 //  1. 若设置了 DATABASE_DSN，则直接使用该完整连接串，驱动由 DATABASE_DRIVER 决定
-//  2. 否则按 DATABASE_DRIVER 调用对应驱动的 env DSN 拼装函数（见 mysql.go / postgres.go / sqlite.go）
+//  2. 否则按 DATABASE_DRIVER 调用对应驱动的 env DSN 拼装函数（见 mysql.go / postgres.go / sqlite.go / oracle.go / sqlserver.go）
 //  3. DATABASE_DRIVER 为空或 "none" 时返回 nil，表示不启用内置数据库
 //
 // DATABASE_PREFIX 若已设置，会同步写入 TablePrefix，由 DatabaseInit 应用到 GORM NamingStrategy。
@@ -201,6 +210,10 @@ func resolveDSNFromEnv(driver Driver) string {
 		return MySQLFromEnv()
 	case DriverPostgres:
 		return PostgresFromEnv()
+	case DriverOracle:
+		return OracleFromEnv()
+	case DriverSQLServer:
+		return SQLServerFromEnv()
 	case DriverSQLite:
 		return SQLiteFromEnv()
 	default:

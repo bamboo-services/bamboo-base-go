@@ -1,4 +1,4 @@
-// Package cache 缓存配置子包，定义 [CacheConfig] 与 [CacheOption] 及各后端构造策略。
+// Package xOptCache 缓存配置子包，定义 [CacheConfig] 与 [CacheOption] 及各后端构造策略。
 //
 // 与 [github.com/bamboo-services/bamboo-base-go/major/option/database] 子包对称：
 //   - 外层 [CacheConfig] 为数据载体，字段小写只读，仅通过 getter 暴露
@@ -6,7 +6,7 @@
 //   - [WithRedis] / [WithMemory] / [FromEnv] 均返回 [CacheOption]，由父包 [option.WithCache] 包裹为顶层 Option
 //
 // 该子包不 import option 父包，避免循环依赖。
-package cache
+package xOptCache
 
 import (
 	"time"

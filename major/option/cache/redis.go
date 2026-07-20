@@ -1,4 +1,4 @@
-package cache
+package xOptCache
 
 import "time"
 
@@ -9,7 +9,7 @@ import "time"
 //
 // 使用示例：
 //
-//	xOption.WithCache(xOptionCache.WithRedis("localhost:6379", xOptionCache.WithRedisPassword("xxx")))
+//	xOption.WithCache(xOptCache.WithRedis("localhost:6379", xOptCache.WithRedisPassword("xxx")))
 func WithRedis(addr string, opts ...RedisOption) CacheOption {
 	return func(c *CacheConfig) {
 		c.typeVal = CacheTypeRedis

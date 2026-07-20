@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	xOption "github.com/bamboo-services/bamboo-base-go/major/option"
-	xOptionDB "github.com/bamboo-services/bamboo-base-go/major/option/database"
+	xOptDatabase "github.com/bamboo-services/bamboo-base-go/major/option/database"
 	xInit "github.com/bamboo-services/bamboo-base-go/major/register/init"
 )
 
@@ -22,9 +22,9 @@ func TestDatabaseInit_AutoMigrateAndPrepare(t *testing.T) {
 	// SQLite 内存数据库 + 迁移 TestEntity 表 + 插入一条种子数据。
 	cfg := xOption.Apply(
 		xOption.WithDatabase(
-			xOptionDB.SQLite(":memory:"),
-			xOptionDB.WithAutoMigrate(&TestEntity{}),
-			xOptionDB.WithPrepare(xOptionDB.PrepareFunc(func(ctx context.Context, db *gorm.DB) error {
+			xOptDatabase.SQLite(":memory:"),
+			xOptDatabase.WithAutoMigrate(&TestEntity{}),
+			xOptDatabase.WithPrepare(xOptDatabase.PrepareFunc(func(ctx context.Context, db *gorm.DB) error {
 				return db.Create(&TestEntity{Name: "seed"}).Error
 			})),
 		),
@@ -56,4 +56,42 @@ func TestDatabaseInit_AutoMigrateAndPrepare(t *testing.T) {
 	}
 
 	t.Log("✅ AutoMigrate 建表 + Prepare 种子数据全部通过")
+}
+
+func TestDatabaseInit_MultiPrepare(t *testing.T) {
+	// 验证 WithPrepare 可变参数：一次传入多个回调，两条种子数据均应写入。
+	cfg := xOption.Apply(
+		xOption.WithDatabase(
+			xOptDatabase.SQLite(":memory:"),
+			xOptDatabase.WithAutoMigrate(&TestEntity{}),
+			xOptDatabase.WithPrepare(
+				xOptDatabase.PrepareFunc(func(ctx context.Context, db *gorm.DB) error {
+					return db.Create(&TestEntity{Name: "seed-a"}).Error
+				}),
+				xOptDatabase.PrepareFunc(func(ctx context.Context, db *gorm.DB) error {
+					return db.Create(&TestEntity{Name: "seed-b"}).Error
+				}),
+			),
+		),
+	).Database()
+
+	node := xInit.DatabaseInit(cfg)
+	result, err := node(context.Background())
+	if err != nil {
+		t.Fatalf("DatabaseInit 失败: %v", err)
+	}
+
+	db, ok := result.(*gorm.DB)
+	if !ok {
+		t.Fatalf("返回类型非 *gorm.DB: %T", result)
+	}
+
+	// 验证两条种子数据均已写入
+	var count int64
+	db.Model(&TestEntity{}).Where("name IN ?", []string{"seed-a", "seed-b"}).Count(&count)
+	if count != 2 {
+		t.Errorf("期望 2 条种子数据，实际 %d 条", count)
+	}
+
+	t.Log("✅ WithPrepare 可变参数多回调均生效")
 }

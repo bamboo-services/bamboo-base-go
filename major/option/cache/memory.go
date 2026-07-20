@@ -1,4 +1,4 @@
-package cache
+package xOptCache
 
 import "time"
 
@@ -8,7 +8,7 @@ import "time"
 //
 // 使用示例：
 //
-//	xOption.WithCache(xOptionCache.WithMemory(xOptionCache.WithMemoryDefaultTTL(30*time.Minute)))
+//	xOption.WithCache(xOptCache.WithMemory(xOptCache.WithMemoryDefaultTTL(30*time.Minute)))
 func WithMemory(opts ...MemoryOption) CacheOption {
 	return func(c *CacheConfig) {
 		c.typeVal = CacheTypeMemory

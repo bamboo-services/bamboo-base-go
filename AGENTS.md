@@ -63,9 +63,9 @@ bamboo-base/
 |------|------|------|
 | 快速启动 HTTP 服务 | `major/register` → `Register()` + `major/main` → `Runner()` | 最少 3 行代码启动 |
 | HTTP + gRPC 一体化启动 | `plugins/grpc/runner` → `New()` | 作为附加协程传入 Runner |
-| 配置数据库 | `major/option` → `WithDatabase(xOptionDB.MySQL())` / `WithDatabase(xOptionDB.Postgres())` / `WithDatabase(xOptionDB.SQLite())` | 声明式双层配置 |
-| 从环境变量装配数据库 | `major/option` → `WithDatabase(xOptionDB.FromEnv())` | 自动读取 DATABASE_DRIVER 等 |
-| 配置缓存后端 | `major/option` → `WithCache(xOptionCache.WithRedis())` / `WithCache(xOptionCache.WithMemory())` | 声明式双层选择 Redis 或内存缓存 |
+| 配置数据库 | `major/option` → `WithDatabase(xOptDatabase.MySQL())` / `WithDatabase(xOptDatabase.Postgres())` / `WithDatabase(xOptDatabase.SQLite())` / `WithDatabase(xOptDatabase.Oracle())` / `WithDatabase(xOptDatabase.SQLServer())` | 声明式双层配置 |
+| 从环境变量装配数据库 | `major/option` → `WithDatabase(xOptDatabase.FromEnv())` | 自动读取 DATABASE_DRIVER 等 |
+| 配置缓存后端 | `major/option` → `WithCache(xOptCache.WithRedis())` / `WithCache(xOptCache.WithMemory())` | 声明式双层选择 Redis 或内存缓存 |
 | 注册 HTTP 路由 | `major/option` → `WithRoute()` / `WithRouteGroup()` | 支持多个注册器叠加；注册器接收已装配依赖的 ctx 与 Gin 引擎 |
 | 返回成功响应 | `major/result` → `Success()` / `SuccessHasData()` | |
 | 返回错误响应 | `major/result` → `Error()` / `AbortError()` | |
@@ -118,8 +118,8 @@ bamboo-base/
 | `xOption.Option` | 类型 | `major/option/option.go` | 声明式选项类型 |
 | `xOption.WithCache` | 函数 | `major/option/cache.go` | 包裹 CacheOption 为顶层 Option |
 | `xOption.WithDatabase` | 函数 | `major/option/database.go` | 包裹 DatabaseOption 为顶层 Option |
-| `xOptionCache.WithRedis` | 函数 | `major/option/cache/redis.go` | 启用 Redis 缓存选项（返回 CacheOption） |
-| `xOptionDB.MySQL` | 函数 | `major/option/database/mysql.go` | 启用 MySQL 数据库选项（返回 DatabaseOption） |
+| `xOptCache.WithRedis` | 函数 | `major/option/cache/redis.go` | 启用 Redis 缓存选项（返回 CacheOption） |
+| `xOptDatabase.MySQL` | 函数 | `major/option/database/mysql.go` | 启用 MySQL 数据库选项（返回 DatabaseOption） |
 | `xInit.CacheInit` | 函数 | `major/register/init/init_cache.go` | 缓存管理器初始化工厂 |
 | `xInit.DatabaseInit` | 函数 | `major/register/init/init_database.go` | 数据库初始化工厂 |
 | `xCtxUtil.ContextExtractor` | 接口 | `major/utility/context/gin_extractor_impl.go` | 上下文提取器接口 |

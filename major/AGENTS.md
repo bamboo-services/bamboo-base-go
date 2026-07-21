@@ -9,10 +9,9 @@
 ```text
 major/
 ├── main/
-│   ├── runner.go              # Runner() — HTTP 启动 + 信号 + 优雅关闭 + 附加协程
-│   ├── web.go                 # WebServer 配置
-│   ├── goroutine.go           # goroutineFunc 管理
-│   └── option.go              # Runner 内部选项
+│   ├── runner.go              # Runner() — HTTP 启动 + 信号 + 优雅关闭 + 附加协程（mainRunner 结构体入口）
+│   ├── web.go                 # initWeb — HTTP 服务启动/监听/优雅关闭
+│   └── goroutine.go           # initGoroutine — 附加后台协程生命周期管理
 ├── register/                  # 节点化注册系统（详见 register/AGENTS.md）
 │   ├── register.go            #   Register() 入口
 │   ├── register_config.go     #   .env 加载
@@ -72,7 +71,7 @@ major/
 └── go.mod                     # 独立模块定义
 ```
 
-> **Runner 装配链路**：`opts []xOption.Option` → `option.Apply()` → `DatabaseInit`/`CacheInit` 工厂 → `RegNode.UseAfterExec()` → context 注入。
+> **Runner 装配链路**：`opts ...xOption.Option` → `Register` 内 `Apply()` → `DatabaseInit`/`CacheInit` 工厂 → `RegNode.Use()` → `Exec()` → context 注入。
 > 业务侧原先在 `startup.Init()` 中手写的 db/redis 节点，现可由 `WithMySQL/WithPostgres/WithSQLite/WithRedis` 一行替代；AutoMigrate 表声明和建表后数据初始化（种子数据）已纳入 `DatabaseOption`，通过 `WithAutoMigrate` / `WithPrepare` 声明式装配，由 `DatabaseInit` 在 DB 建连后自动执行，不再需要手写迁移节点或借道 `WithRoute` 回调。
 
 > **架构变更说明**：`HandleValidationError`、`Bind` 绑定工具、`GetDB/GetRDB` 等上下文提取函数已从 `common` 层迁移到 `major` 层，并通过 `ContextExtractor` 接口解耦 gin 依赖。common 层现在完全不依赖 gin，保持纯 Go 依赖。
@@ -81,7 +80,7 @@ major/
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, logger, opts, ...goroutineFunc)` |
+| 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, log, goroutineFunc...)` |
 | 配置缓存后端 | `option/cache.go` → `WithCache(xOptCache.WithRedis)` / `WithCache(xOptCache.WithMemory)` | 声明式双层选择 Redis 或内存缓存 |
 | 配置数据库 | `option/database.go` → `WithDatabase(xOptDatabase.MySQL)` / `WithDatabase(xOptDatabase.Postgres)` / `WithDatabase(xOptDatabase.SQLite)` | 双层指定驱动，Runner 自动装配 |
 | 从环境变量装配数据库 | `option/database.go` → `WithDatabase(xOptDatabase.FromEnv)` | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
@@ -103,8 +102,8 @@ major/
 
 ## 约定
 
-- **Runner 签名固定**：`Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, opts []xOption.Option, goroutineFunc ...func(ctx context.Context, extra ...any))`。
-- **路由通过 Option 注册**：使用 `xOption.WithRoute` / `xOption.WithRouteGroup` 声明路由，可叠加多个注册器并按调用顺序执行。注册器签名 `RouteRegistrar = func(ctx context.Context, serve *gin.Engine)`，Runner 在 DB/缓存装配完成后调用，把已含依赖的 `reg.Init.Ctx` 直接传入，业务侧无需自行从 `reg` 取 ctx（避免 context 值语义的「装配前捕获」陷阱）；插件可直接暴露 `RouteRegistrar` 供业务侧 `WithRoute` 导入。
+- **Runner 签名固定**：`Runner(reg *xReg.Reg, log *xLog.LogNamedLogger, goroutineFunc ...func(ctx context.Context, extra ...any))`。
+- **路由通过 Option 注册**：使用 `xOption.WithRoute` / `xOption.WithRouteGroup` 声明路由，可叠加多个注册器并按调用顺序执行。注册器签名 `RouteRegistrar = func(ctx context.Context, serve *gin.Engine)`，Register 在 Exec + engineInit 后调用，把已含依赖的 `reg.Init.Ctx` 直接传入，业务侧无需自行从 `reg` 取 ctx（避免 context 值语义的「装配前捕获」陷阱）；插件可直接暴露 `RouteRegistrar` 供业务侧 `WithRoute` 导入。
 - **Gin 中间件链顺序固定**：`RequestContext → PanicRecovery → HttpLogger → InjectContext`，由 `register_gin.go` 的 `engineInit()` 自动挂载，业务侧不需要手动添加。
 - **响应必须通过 `xResult.*` 函数**：不要直接调用 `ctx.JSON()`，否则 `ResponseMiddleware` 兜底逻辑可能将其视为"开发者错误"。
 - **ErrorCode.Code 前 3 位 = HTTP 状态码**：`xResult.Error()` 中 `int(errorCode.Code/100)` 决定 HTTP 响应码。

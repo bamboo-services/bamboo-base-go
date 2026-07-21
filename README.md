@@ -44,22 +44,28 @@ import (
 )
 
 func main() {
-	reg := xReg.Register(context.Background(), nil)
-	logger := xLog.WithName(xLog.NamedMAIN)
-
-	xMain.Runner(reg, logger, []xOption.Option{
+	reg := xReg.Register(context.Background(), nil,
 		xOption.WithRoute(func(ctx context.Context, serve *gin.Engine) {
 			serve.GET("/ping", func(c *gin.Context) {
 				c.JSON(200, gin.H{"message": "pong"})
 			})
 		}),
-	})
+	)
+	logger := xLog.WithName(xLog.NamedMAIN)
+
+	xMain.Runner(reg, logger)
 }
 ```
 
 ## HTTP + gRPC 一体化启动（可选）
 
 ```go
+reg := xReg.Register(context.Background(), nil,
+	xOption.WithRoute(func(ctx context.Context, serve *gin.Engine) {
+		// 在这里注册你的 HTTP 路由
+	}),
+)
+
 grpcTask := xGrpcRunner.New(
 	xGrpcRunner.WithLogger(xLog.WithName(xLog.NamedGRPC)),
 	xGrpcRunner.WithRegisterService(func(ctx context.Context, server grpc.ServiceRegistrar) {
@@ -68,11 +74,7 @@ grpcTask := xGrpcRunner.New(
 	}),
 )
 
-xMain.Runner(reg, logger, []xOption.Option{
-	xOption.WithRoute(func(ctx context.Context, serve *gin.Engine) {
-		// 在这里注册你的 HTTP 路由
-	}),
-}, grpcTask)
+xMain.Runner(reg, logger, grpcTask)
 ```
 
 `xMain.Runner` 会在收到 `SIGINT/SIGTERM` 时统一触发 HTTP 与附加协程（例如 gRPC）的优雅退出。

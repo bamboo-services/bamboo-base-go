@@ -2,7 +2,7 @@
 
 ## 概述
 
-内置初始化节点集合，存放 `Register()` 注册的系统级组件初始化函数。当前包含雪花算法、缓存（Redis/Memory）和数据库（MySQL/Postgres/SQLite）三种初始化节点。
+内置初始化节点集合，存放 `Register()` 注册的系统级组件初始化函数。当前包含雪花算法、缓存（Redis/Memory 双后端）和数据库（MySQL/Postgres/SQLite/Oracle/SQLServer 五驱动）三种初始化节点。
 
 ## 目录结构
 
@@ -10,7 +10,7 @@
 init/
 ├── init_snowflake.go    # SnowflakeInit() — 雪花算法默认节点初始化与验证
 ├── init_cache.go        # CacheInit() — 缓存管理器初始化（Redis/Memory 双后端）
-└── init_database.go     # DatabaseInit() — 数据库初始化（MySQL/Postgres/SQLite 三驱动）
+└── init_database.go     # DatabaseInit() — 数据库初始化（MySQL/Postgres/SQLite/Oracle/SQLServer 五驱动）
 ```
 
 ## 导航指南
@@ -19,7 +19,7 @@ init/
 |------|------|------|
 | 雪花算法初始化 | `init_snowflake.go` → `SnowflakeInit()` | 注册到 `SnowflakeNodeKey`，生成测试 ID 验证可用性 |
 | 缓存管理器初始化 | `init_cache.go` → `CacheInit(cfg)` | 根据 `CacheConfig.Type()` 选择 Redis/Memory 后端，返回 `*xCache.Manager` |
-| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 根据 `DatabaseConfig.Driver()` 选择 MySQL/Postgres/SQLite 驱动；建连成功后自动执行 AutoMigrate（若声明）与 Prepare 回调（若注册）；返回 `*gorm.DB` |
+| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 根据 `DatabaseConfig.Driver()` 选择 MySQL/Postgres/SQLite/Oracle/SQLServer 驱动；建连成功后自动执行 AutoMigrate（若声明）与 Prepare 回调（若注册）；返回 `*gorm.DB` |
 | Redis 兼容性桥接 | `init_cache.go` → `RedisClientFromManager()` | 从 Manager 提取 `*redis.Client` 补注册到 `RedisClientKey`，兼容历史代码 |
 | 添加新的内置节点 | 在此目录新建文件，遵循 `XxxInit(...)` 签名 | 然后在 `register.go` 的 `Register()` 中通过 `reg.Init.Use()` 注册 |
 
@@ -29,7 +29,7 @@ init/
 - **返回值会被存入 context**：返回的实例通过 `context.WithValue(ctx, key, val)` 供后续节点和请求中间件使用。
 - **初始化阶段用 `xLog.NamedINIT` 命名日志器**：`xLog.WithName(xLog.NamedINIT)`，日志会标记 `[INIT]` 前缀。
 - **验证后才返回**：雪花算法初始化时会生成测试 ID 验证节点可用性；Redis 初始化会 Ping 验证连通性，不验证直接返回可能掩盖问题。
-- **ContextKey 由调用方决定**：`CacheInit` / `DatabaseInit` 只返回实例，由 Runner 侧的 `UseAfterExec` 决定注册到哪个 `ContextKey`（`CacheManagerKey` / `DatabaseKey`）。
+- **ContextKey 由调用方决定**：`CacheInit` / `DatabaseInit` 只返回实例，由 Register 侧的 `Use` 决定注册到哪个 `ContextKey`（`CacheManagerKey` / `DatabaseKey`）。
 - **RedisClientFromManager 是兼容性节点**：仅供 Redis 后端用于把 `*redis.Client` 补注册到 `RedisClientKey`，保持 `GetRDB/MustGetRDB` 的兼容性。若 Manager 不存在或后端非 Redis，返回 nil。
 
 ## 反模式

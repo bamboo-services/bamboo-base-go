@@ -24,8 +24,8 @@ import (
 // （mysql / postgres / sqlite / oracle / sqlserver），用项目自带的 [xGormLog.SlogLogger] 作为 GORM
 // 日志适配器，并按 Common() 中的连接池参数配置底层 *sql.DB。
 //
-// 调用方：Runner 在 UseAfterExec 阶段按 option 决定是否装配此节点。
-// 若 Driver 为 DriverNone，调用方应跳过此工厂。
+// 调用方：Register 在 Use 阶段按 option 决定是否装配此节点。
+	// 若 Driver 为 DriverNone，调用方应跳过此工厂。
 func DatabaseInit(cfg xOptDatabase.DatabaseConfig) xRegNode.Node {
 	return func(ctx context.Context) (any, error) {
 		log := xLog.WithName(xLog.NamedINIT)

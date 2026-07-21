@@ -33,7 +33,7 @@ const (
 	CacheTypeNone   = xOptCache.CacheTypeNone
 )
 
-// WithCache 将 [xOptCache.CacheOption] 包裹为顶层 [Option]，供 Runner 使用。
+// WithCache 将 [xOptCache.CacheOption] 包裹为顶层 [Option]，供 Register 使用。
 //
 // 该函数对标 [WithDatabase]，是 cache 两层设计的顶层入口。
 // 内部逐个执行传入的 CacheOption 修改 [CacheConfig]，完成后写入聚合 Config。

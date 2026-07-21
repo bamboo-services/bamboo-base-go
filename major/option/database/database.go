@@ -16,7 +16,7 @@ import (
 type Driver string
 
 const (
-	// DriverNone 表示不启用内置数据库实现。Runner 会跳过数据库节点装配。
+	// DriverNone 表示不启用内置数据库实现。Register 会跳过数据库节点装配。
 	DriverNone Driver = "none"
 
 	// DriverMySQL 表示使用 MySQL 驱动（github.com/go-sql-driver/mysql）。
@@ -54,7 +54,7 @@ func (c DatabaseConfig) Driver() Driver { return c.driver }
 // Enabled 返回是否启用了内置数据库实现。
 //
 // 零值（未设置任何数据库选项）与显式声明 DriverNone 均视为未启用，
-// Runner 据此决定是否装配内置数据库节点。
+// Register 据此决定是否装配内置数据库节点。
 func (c DatabaseConfig) Enabled() bool {
 	return c.driver != "" && c.driver != DriverNone
 }

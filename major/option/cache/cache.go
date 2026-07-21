@@ -47,7 +47,7 @@ func (c CacheConfig) Type() CacheType { return c.typeVal }
 // Enabled 返回是否启用了内置缓存实现。
 //
 // 零值（未设置任何缓存选项）与显式声明 CacheTypeNone 均视为未启用，
-// Runner 据此决定是否装配内置缓存节点。
+// Register 据此决定是否装配内置缓存节点。
 func (c CacheConfig) Enabled() bool {
 	return c.typeVal != "" && c.typeVal != CacheTypeNone
 }
@@ -61,7 +61,7 @@ func (c CacheConfig) Memory() MemoryOptions { return c.memory }
 // RedisOptions Redis 缓存连接参数（[CacheConfig] 的 Redis 后端专属配置）。
 //
 // 字段语义与 github.com/redis/go-redis/v9 的 Options 对齐，
-// 由 Runner 内部据此构造 redis.Client。
+// 由 Register 内部据此构造 redis.Client。
 type RedisOptions struct {
 	Addr         string        // 主机地址，格式 host:port，如 "localhost:6379"
 	Username     string        // 用户名（Redis 6+ ACL），留空表示无

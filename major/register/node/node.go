@@ -171,7 +171,7 @@ func GetRegNodeList(ctx context.Context) xCtx.ContextNodeList {
 
 // UseAfterExec 在 Exec() 完成后追加执行单个节点，并将结果立即写入上下文。
 //
-// 该方法用于 Runner 阶段根据 [option.Option] 装配框架内置组件（如数据库、缓存），
+// 该方法保留供下游在 Exec 完成后手动补装配组件。框架内部已改用 [Use] 在 Exec 前装配内置组件（数据库、缓存等），不再调用此方法。
 // 绕过 Use() 的「Exec 前注册」限制。若在 Exec() 之前调用，等价于 [Use]。
 //
 // 执行流程:
@@ -185,6 +185,8 @@ func GetRegNodeList(ctx context.Context) xCtx.ContextNodeList {
 //   - registerFunc 为 nil
 //   - ctxKey 已被注册过（重复装配）
 //   - registerFunc 返回非 nil 错误
+//
+// **注意**：框架内置组件（DB/Cache/Redis）的装配已迁移至 [Register] 阶段通过 [Use] 完成，此方法仅作为公开 API 保留。
 func (rn *RegNode) UseAfterExec(ctxKey xCtx.ContextKey, registerFunc Node) {
 	if rn.list != nil {
 		rn.Use(ctxKey, registerFunc)

@@ -36,7 +36,7 @@ const (
 	DriverNone      = xOptDatabase.DriverNone
 )
 
-// WithDatabase 将 [xOptDatabase.DatabaseOption] 包裹为顶层 [Option]，供 Runner 使用。
+// WithDatabase 将 [xOptDatabase.DatabaseOption] 包裹为顶层 [Option]，供 Register 使用。
 //
 // 该函数对标 [WithCache]，是 database 两层设计的顶层入口。
 // 内部逐个执行传入的 DatabaseOption 修改 [DatabaseConfig]，完成后写入聚合 Config。

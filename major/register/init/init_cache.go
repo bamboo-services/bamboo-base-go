@@ -24,8 +24,8 @@ import (
 // 若 Type 为 CacheTypeNone，调用方应跳过此工厂。
 //
 // Redis 后端兼容性：为保持与历史代码（从 [xCtx.RedisClientKey] 取 *redis.Client）兼容，
-// 调用方应在装配 Manager 后，额外通过 [RedisClientFromManager] 把 *redis.Client
-// 补注册到 [xCtx.RedisClientKey]。
+// 调用方（Register）在装配 Manager 后，若后端为 Redis，额外通过 [RedisClientFromManager] 把 *redis.Client
+// 注册到 [xCtx.RedisClientKey]，保持与历史代码兼容。
 func CacheInit(cfg xOption.CacheConfig) xRegNode.Node {
 	return func(ctx context.Context) (any, error) {
 		log := xLog.WithName(xLog.NamedINIT)
@@ -86,7 +86,7 @@ func initMemoryCache(mOpts xOption.MemoryOptions, log *xLog.LogNamedLogger) *xCa
 // RedisClientFromManager 返回一个 Node，从已注册的 [xCtx.CacheManagerKey] 中
 // 提取 [*xCache.Manager]，再返回其持有的 *redis.Client。
 //
-// 仅供 Redis 后端使用，用于把 *redis.Client 补注册到 [xCtx.RedisClientKey]，
+// 仅供 Redis 后端使用，用于把 *redis.Client 注册到 [xCtx.RedisClientKey]，
 // 保持与历史代码（[xCtxUtil.MustGetRDB] / [xCtxUtil.GetRDB]）的兼容性。
 // 若 Manager 不存在或后端非 Redis，返回 nil。
 func RedisClientFromManager() xRegNode.Node {

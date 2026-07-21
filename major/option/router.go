@@ -8,11 +8,11 @@ import (
 
 // RouteRegistrar 路由注册器，接收已装配依赖的上下文与 Gin 引擎进行路由挂载。
 //
-// 多个注册器可叠加，由 Runner 在启动 HTTP 前按注册顺序逐个执行。
+// 多个注册器可叠加，由 Register 在 Exec + engineInit 后按注册顺序逐个执行。
 // 插件可直接暴露 RouteRegistrar 供业务侧通过 [WithRoute] 导入，
 // 实现「插件自带路由、业务侧一行 Option 接入」的装配方式。
 //
-// ctx 为 Runner 装配完成后的运行期上下文（reg.Init.Ctx），已包含通过
+// ctx 为 Register 装配完成后的上下文（reg.Init.Ctx，未经 Runner 的 WithCancel 包裹）。RouteRegistrar 不应依赖此 ctx 的 Done() 信号做后台任务——应使用 per-request gin.Context 或 Runner 的 goroutineFunc 入口。已包含通过
 // [WithDatabase] / [WithCache] 等声明的 DB、缓存管理器等组件实例，
 // 业务侧可直接用 xCtxUtil.MustGetDB(ctx) / MustGetCacheManager(ctx) 取用，
 // 无需自行从 *xReg.Reg 读取，避免 context 值语义导致的「装配前捕获」陷阱。

@@ -2,7 +2,7 @@
 
 ## 概述
 
-Runner 启动阶段的声明式配置层，采用**函数式选项模式（Functional Options）**。业务侧用一行 `WithXxx()` 选择内置组件的实现（Redis/MySQL/Postgres/SQLite/路由），Runner 自动完成装配，无需手写初始化节点。
+Register 启动阶段的声明式配置层，采用**函数式选项模式（Functional Options）**。业务侧用一行 `WithXxx()` 选择内置组件的实现（Redis/MySQL/Postgres/SQLite/路由），Register 自动完成装配，无需手写初始化节点。
 
 ## 目录结构
 
@@ -29,14 +29,14 @@ option/
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
-| 启用 Redis 缓存 | `WithCache(xOptCache.WithRedis(addr, opts...))` | Runner 自动装配 Redis 缓存管理器 |
-| 启用内存缓存 | `WithCache(xOptCache.WithMemory(opts...))` | Runner 自动装配内存缓存管理器 |
+| 启用 Redis 缓存 | `WithCache(xOptCache.WithRedis(addr, opts...))` | Register 自动装配 Redis 缓存管理器 |
+| 启用内存缓存 | `WithCache(xOptCache.WithMemory(opts...))` | Register 自动装配内存缓存管理器 |
 | 从环境变量装配缓存 | `WithCache(xOptCache.FromEnv())` | 自动读取 `NOSQL_DRIVER` 选择 redis/memory 后端 |
-| 启用 MySQL | `WithDatabase(xOptDatabase.MySQL(dsn, opts...))` | Runner 自动装配 MySQL + GORM |
-| 启用 Postgres | `WithDatabase(xOptDatabase.Postgres(dsn, opts...))` | Runner 自动装配 Postgres + GORM |
-| 启用 SQLite | `WithDatabase(xOptDatabase.SQLite(dsn, opts...))` | Runner 自动装配 SQLite + GORM |
-| 启用 Oracle | `WithDatabase(xOptDatabase.Oracle(dsn, opts...))` | Runner 自动装配 Oracle + GORM（需 Oracle Instant Client） |
-| 启用 SQL Server | `WithDatabase(xOptDatabase.SQLServer(dsn, opts...))` | Runner 自动装配 SQL Server + GORM |
+| 启用 MySQL | `WithDatabase(xOptDatabase.MySQL(dsn, opts...))` | Register 自动装配 MySQL + GORM |
+| 启用 Postgres | `WithDatabase(xOptDatabase.Postgres(dsn, opts...))` | Register 自动装配 Postgres + GORM |
+| 启用 SQLite | `WithDatabase(xOptDatabase.SQLite(dsn, opts...))` | Register 自动装配 SQLite + GORM |
+| 启用 Oracle | `WithDatabase(xOptDatabase.Oracle(dsn, opts...))` | Register 自动装配 Oracle + GORM（需 Oracle Instant Client） |
+| 启用 SQL Server | `WithDatabase(xOptDatabase.SQLServer(dsn, opts...))` | Register 自动装配 SQL Server + GORM |
 | 从环境变量装配数据库 | `WithDatabase(xOptDatabase.FromEnv(opts...))` | 自动读取 `DATABASE_DRIVER` + DSN 拼装 |
 | 注册 HTTP 路由 | `router.go` → `WithRoute(func(ctx, serve))` | 注册器接收已装配依赖的 ctx 与 Gin 引擎，按顺序执行；支持一次传入多个注册器 |
 | 注册路由组 | `router.go` → `WithRouteGroup(prefix, func(*gin.RouterGroup))` | `WithRoute` 的语法糖，闭包内通过 gin.Context 取依赖 |
@@ -88,17 +88,17 @@ Memory 二级选项：`WithMemoryDefaultTTL(d)` / `WithMemoryMaxEntries(n)` / `W
 
 - **字段全小写只读**：`Config` / `CacheConfig` / `database.DatabaseConfig` 的字段均为小写，通过 getter 对外暴露，避免外部误改。
 - **nil Option 安全**：`Apply` 和 `WithRoute` 都会跳过 nil，支持条件构造（如 `cond && WithRedis(...)`）。
-- **零值 = 未启用**：未设置时 Type/Driver 为空串，等价于 `"none"`，Runner 据此跳过装配。
+- **零值 = 未启用**：未设置时 Type/Driver 为空串，等价于 `"none"`，Register 据此跳过装配。
 - **二级选项模式**：所有参数较多的配置拆分为一级选项 + 二级选项（`RedisOption` / `MemoryOption` / `DatabaseOption`），避免参数列表爆炸。
 - **database 是独立子包**：不 import option 父包，避免循环依赖。
 - **禁止手写 DSN 字符串绕过 FromEnv** — 使用 `WithDatabase(xOptDatabase.FromEnv())` 从环境变量装配，便于配置管理和多环境切换。
 - **禁止在 `WithRoute` / `WithRouteGroup` 中注册非 HTTP 逻辑** — 路由注册器应专注于 Gin 路由绑定。
-- **禁止混用 `WithRedis` 和 `WithMemory`** — 同一 Runner 只能启用一种缓存后端。
+- **禁止混用 `WithRedis` 和 `WithMemory`** — 同一 Register 只能启用一种缓存后端。
 - **禁止手写 Redis 连接参数绕过 FromEnv** — 使用 `WithCache(xOptCache.FromEnv())` 从环境变量装配缓存，便于配置管理和多环境切换。
 
 ## 调试路径
 
-1. Runner 没有装配缓存/数据库 — 检查 Option 是否正确传入 `Runner()`，以及 `CacheConfig.Enabled()` / `Config.Enabled()` 是否返回 true。
+1. Register 没有装配缓存/数据库 — 检查 Option 是否正确传入 `Register()`，以及 `CacheConfig.Enabled()` / `Config.Enabled()` 是否返回 true。
 2. 启动时 panic "不支持的缓存类型" / "不支持的数据库驱动" — 检查传入的 Type/Driver 值和常量定义是否匹配。
 3. DSN 拼装错误 — 使用 `FromEnv` 时检查所有相关环境变量（`DATABASE_HOST` / `DATABASE_USER` 等）是否有值。
-4. 路由未生效 — 确认 `WithRoute` 注册的函数被执行（Runner 按序调用），检查 Gin 路由路径是否重复。
+4. 路由未生效 — 确认 `WithRoute` 注册的函数被执行（Register 按序调用），检查 Gin 路由路径是否重复。

@@ -11,12 +11,12 @@ import "context"
 //   - V: 缓存值的类型。
 //
 // Get 方法根据键检索值，返回指向值的指针、是否存在以及可能的错误。
-// Set 方法将键值对存入缓存，需处理 value 为 nil 的场景。
+// Set 方法将键值对存入缓存，需处理 value 为 nil 的场景；opts 用于在单次调用覆盖默认 TTL 等行为。
 // Exists 方法检查指定键是否存在。
 // Delete 方法从缓存中移除指定的键。
 type KeyCache[K any, V any] interface {
 	Get(ctx context.Context, key K) (*V, bool, error)
-	Set(ctx context.Context, key K, value *V) error
+	Set(ctx context.Context, key K, value *V, opts ...SetOption) error
 	Exists(ctx context.Context, key K) (bool, error)
 	Delete(ctx context.Context, key K) error
 }
@@ -33,21 +33,21 @@ type KeyCache[K any, V any] interface {
 //   - S: 结构体的类型，用于指定已有的结构体字段。
 //
 // Get 方法获取指定字段的值，返回指向值的指针、是否存在以及可能的错误。
-// Set 方法设置单个字段的值。
+// Set 方法设置单个字段的值；opts 用于覆盖默认 TTL。
 // GetAll 方法获取哈希表中的所有字段和值。
 // GetAllStruct 方法获取哈希表中的所有字段和值，返回指定的结构体。
-// SetAll 方法批量设置多个字段的值。
-// SetAllStruct 方法批量设置多个字段的值，使用指定的结构体。
+// SetAll 方法批量设置多个字段的值；opts 用于覆盖默认 TTL。
+// SetAllStruct 方法批量设置多个字段的值，使用指定的结构体；opts 用于覆盖默认 TTL。
 // Exists 方法检查指定字段是否存在。
 // Remove 方法从哈希表中移除指定的字段。
 // Delete 方法删除整个哈希表。
 type HashCache[K any, F comparable, V any, S any] interface {
 	Get(ctx context.Context, key K, field F) (*V, bool, error)
-	Set(ctx context.Context, key K, field F, value *V) error
+	Set(ctx context.Context, key K, field F, value *V, opts ...SetOption) error
 	GetAll(ctx context.Context, key K) (map[F]V, error)
 	GetAllStruct(ctx context.Context, key K) (S, error)
-	SetAll(ctx context.Context, key K, fields map[F]*V) error
-	SetAllStruct(ctx context.Context, key K, value S) error
+	SetAll(ctx context.Context, key K, fields map[F]*V, opts ...SetOption) error
+	SetAllStruct(ctx context.Context, key K, value S, opts ...SetOption) error
 	Exists(ctx context.Context, key K, field F) (bool, error)
 	Remove(ctx context.Context, key K, fields ...F) error
 	Delete(ctx context.Context, key K) error
@@ -61,14 +61,15 @@ type HashCache[K any, F comparable, V any, S any] interface {
 //   - K: 集合键的类型，用于标识特定的集合。
 //   - V: 集合成员的值类型。
 //
-// Add 方法将一个或多个成员添加到集合中，已存在的成员会被忽略。
+// Add 方法将一组成员添加到集合中，已存在的成员会被忽略；opts 用于覆盖默认 TTL。
+//   members 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
 // Members 方法获取集合中的所有成员。
 // IsMember 方法检查指定成员是否存在于集合中。
 // Count 方法获取集合中的成员数量。
 // Remove 方法从集合中移除指定的成员。
 // Delete 方法删除整个集合。
 type SetCache[K any, V any] interface {
-	Add(ctx context.Context, key K, members ...V) error
+	Add(ctx context.Context, key K, members []V, opts ...SetOption) error
 	Members(ctx context.Context, key K) ([]V, error)
 	IsMember(ctx context.Context, key K, member V) (bool, error)
 	Count(ctx context.Context, key K) (int64, error)
@@ -84,8 +85,9 @@ type SetCache[K any, V any] interface {
 //   - K: 列表键的类型，用于标识特定的列表。
 //   - V: 列表元素的值类型。
 //
-// Prepend 方法将一个或多个值插入到列表头部（左侧）。
-// Append 方法将一个或多个值追加到列表尾部（右侧）。
+// Prepend 方法将一组值插入到列表头部（左侧）；opts 用于覆盖默认 TTL。
+//   values 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
+// Append 方法将一组值追加到列表尾部（右侧）；opts 用于覆盖默认 TTL。
 // Range 方法按索引范围获取列表元素，支持负数索引（-1 表示最后一个元素）。
 // Index 方法获取指定索引位置的元素，支持负数索引。
 // Len 方法获取列表的长度。
@@ -94,8 +96,8 @@ type SetCache[K any, V any] interface {
 // Remove 方法从列表中移除指定数量的匹配元素，count > 0 从头部开始，count < 0 从尾部开始，count = 0 移除所有匹配项。
 // Delete 方法删除整个列表。
 type ListCache[K any, V any] interface {
-	Prepend(ctx context.Context, key K, values ...V) error
-	Append(ctx context.Context, key K, values ...V) error
+	Prepend(ctx context.Context, key K, values []V, opts ...SetOption) error
+	Append(ctx context.Context, key K, values []V, opts ...SetOption) error
 	Range(ctx context.Context, key K, start int64, end int64) ([]V, error)
 	Index(ctx context.Context, key K, index int64) (*V, error)
 	Len(ctx context.Context, key K) (int64, error)

@@ -66,8 +66,15 @@ func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bo
 // Set 设置单个字段的值。
 //
 // value 为 nil 时等价于 [Remove] 该 field，与 KeyCache.Set 的 nil 删除语义对齐。
-// 通过 [Store.Update] 在单把锁内完成读-改-写，避免并发 panic。
-func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V) error {
+// 通过 [Store.Update] / [Store.UpdateKeepExpireAt] 在单把锁内完成读-改-写，避免并发 panic。
+//
+// opts 支持以下条件写入（存在任意条件选项时走 [Store.UpdateKeepExpireAt]）：
+//   - NX：仅当 field 不存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - XX：仅当 field 已存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
+//
+// 无任何条件选项时走 [Store.Update] 保持原有行为。
+func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...xCacheDriver.SetOption) error {
 	if value == nil {
 		return c.Remove(ctx, key, field)
 	}
@@ -76,7 +83,30 @@ func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *
 		return err
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	c.store.Update(k, c.ttl, func(old any) any {
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	hasCond := cfg.NX || cfg.XX || cfg.KeepTTL || cfg.NoSlide
+	if hasCond {
+		// 条件写入：NX/XX 在闭包内原子判断，NoSlide/KeepTTL 保留原 ExpireAt
+		c.store.UpdateKeepExpireAt(k, cfg.TTL, func(old any) any {
+			m, _ := old.(map[F][]byte)
+			if m == nil {
+				m = make(map[F][]byte)
+			}
+			_, fieldExists := m[field]
+			// NX：field 已存在则跳过（不刷新 TTL）
+			if cfg.NX && fieldExists {
+				return UpdateNoChange
+			}
+			// XX：field 不存在则跳过（不刷新 TTL）
+			if cfg.XX && !fieldExists {
+				return UpdateNoChange
+			}
+			m[field] = data
+			return m
+		})
+		return nil
+	}
+	c.store.Update(k, cfg.TTL, func(old any) any {
 		m, _ := old.(map[F][]byte)
 		if m == nil {
 			m = make(map[F][]byte)
@@ -130,9 +160,16 @@ func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, err
 
 // SetAll 批量设置字段。
 //
-// 通过 [Store.Update] 保证原子性。value 为 nil 的 field 会被删除。
+// 通过 [Store.Update] / [Store.UpdateKeepExpireAt] 保证原子性。value 为 nil 的 field 会被删除。
 // 修改后若 map 为空则整个 hash 被删除。
-func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V) error {
+//
+// opts 支持条件写入（与 [Set] 语义一致）：
+//   - NX：仅写入不存在的 field（已存在的 field 被跳过）
+//   - XX：仅写入已存在的 field（不存在的 field 被跳过）
+//   - KeepTTL/NoSlide：保留原 ExpireAt 不滑动
+//
+// 无任何条件选项时走 [Store.Update] 保持原有行为。
+func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...xCacheDriver.SetOption) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -151,7 +188,50 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 		encoded[f] = data
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	c.store.Update(k, c.ttl, func(old any) any {
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	hasCond := cfg.NX || cfg.XX || cfg.KeepTTL || cfg.NoSlide
+	if hasCond {
+		// 条件写入：NX/XX 在闭包内按 field 原子判断，NoSlide/KeepTTL 保留原 ExpireAt
+		c.store.UpdateKeepExpireAt(k, cfg.TTL, func(old any) any {
+			m, _ := old.(map[F][]byte)
+			if m == nil {
+				m = make(map[F][]byte)
+			}
+			changed := false
+			for f, data := range encoded {
+				_, fieldExists := m[f]
+				// NX：field 已存在则跳过
+				if cfg.NX && fieldExists {
+					continue
+				}
+				// XX：field 不存在则跳过
+				if cfg.XX && !fieldExists {
+					continue
+				}
+				m[f] = data
+				changed = true
+			}
+			// 条件写入下，若无任何 field 被写入，则 deleteFields 也不执行（整体无变化）
+			if !changed && len(deleteFields) > 0 {
+				return UpdateNoChange
+			}
+			for _, f := range deleteFields {
+				if _, ok := m[f]; ok {
+					delete(m, f)
+					changed = true
+				}
+			}
+			if !changed {
+				return UpdateNoChange
+			}
+			if len(m) == 0 {
+				return nil
+			}
+			return m
+		})
+		return nil
+	}
+	c.store.Update(k, cfg.TTL, func(old any) any {
 		m, _ := old.(map[F][]byte)
 		if m == nil {
 			m = make(map[F][]byte)
@@ -171,7 +251,7 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 }
 
 // SetAllStruct 用结构体批量设置字段。
-func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S) error {
+func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...xCacheDriver.SetOption) error {
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -185,7 +265,7 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 		v := m[f]
 		fields[f] = &v
 	}
-	return c.SetAll(ctx, key, fields)
+	return c.SetAll(ctx, key, fields, opts...)
 }
 
 // Exists 判断字段是否存在。

@@ -25,9 +25,9 @@ func NewSetCache[K any, V any](rdb *redis.Client, codec xCacheDriver.Codec, enc 
 }
 
 // refreshTTL 在写操作后按需续期。
-func (c *SetCache[K, V]) refreshTTL(ctx context.Context, key K) {
-	if c.ttl > 0 {
-		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), c.ttl)
+func (c *SetCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
+	if ttl > 0 {
+		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), ttl)
 	}
 }
 
@@ -44,19 +44,42 @@ func (c *SetCache[K, V]) encodeMembers(members []V) ([]any, error) {
 	return args, nil
 }
 
-// Add 将一个或多个成员添加到集合中，已存在的成员会被忽略。
-func (c *SetCache[K, V]) Add(ctx context.Context, key K, members ...V) error {
+// Add 将一组成员添加到集合中，已存在的成员会被忽略。
+//
+// opts 用于在单次调用覆盖默认 TTL 或附加条件：
+//   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
+//   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
+//   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
+func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...xCacheDriver.SetOption) error {
 	if len(members) == 0 {
 		return nil
+	}
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	k := xCacheDriver.EncodeKey(c.enc, key)
+	// NX/XX 预检：基于 key 是否存在决定是否跳过写入
+	if cfg.NX || cfg.XX {
+		exists, err := c.rdb.Exists(ctx, k).Result()
+		if err != nil {
+			return err
+		}
+		if cfg.NX && exists > 0 {
+			return nil
+		}
+		if cfg.XX && exists == 0 {
+			return nil
+		}
 	}
 	args, err := c.encodeMembers(members)
 	if err != nil {
 		return err
 	}
-	if err := c.rdb.SAdd(ctx, xCacheDriver.EncodeKey(c.enc, key), args...).Err(); err != nil {
+	if err := c.rdb.SAdd(ctx, k, args...).Err(); err != nil {
 		return err
 	}
-	c.refreshTTL(ctx, key)
+	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 

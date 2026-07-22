@@ -46,10 +46,17 @@ func (c *SetCache[K, V]) encodeMember(member V) (string, error) {
 	return string(data), nil
 }
 
-// Add 将一个或多个成员添加到集合中，已存在的成员会被忽略。
+// Add 将一组成员添加到集合中，已存在的成员会被忽略。
 //
-// 通过 [Store.Update] 在单把锁内完成读-改-写，避免并发 panic。
-func (c *SetCache[K, V]) Add(ctx context.Context, key K, members ...V) error {
+// 通过 [Store.Update] / [Store.UpdateKeepExpireAt] 在单把锁内完成读-改-写，避免并发 panic。
+//
+// opts 支持以下条件写入（存在任意条件选项时走 [Store.UpdateKeepExpireAt]）：
+//   - NX：仅当 key 不存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - XX：仅当 key 已存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
+//
+// 无任何条件选项时走 [Store.Update] 保持原有行为。
+func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...xCacheDriver.SetOption) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -63,7 +70,31 @@ func (c *SetCache[K, V]) Add(ctx context.Context, key K, members ...V) error {
 		encoded = append(encoded, string(data))
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	c.store.Update(k, c.ttl, func(old any) any {
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	hasCond := cfg.NX || cfg.XX || cfg.KeepTTL || cfg.NoSlide
+	if hasCond {
+		// 条件写入：NX/XX 在闭包内按 key 原子判断，NoSlide/KeepTTL 保留原 ExpireAt
+		c.store.UpdateKeepExpireAt(k, cfg.TTL, func(old any) any {
+			set, _ := old.(map[string]struct{})
+			// NX：key 已存在则跳过（不刷新 TTL）
+			if cfg.NX && set != nil {
+				return UpdateNoChange
+			}
+			// XX：key 不存在则跳过（不刷新 TTL）
+			if cfg.XX && set == nil {
+				return UpdateNoChange
+			}
+			if set == nil {
+				set = make(map[string]struct{})
+			}
+			for _, mk := range encoded {
+				set[mk] = struct{}{}
+			}
+			return set
+		})
+		return nil
+	}
+	c.store.Update(k, cfg.TTL, func(old any) any {
 		set, _ := old.(map[string]struct{})
 		if set == nil {
 			set = make(map[string]struct{})

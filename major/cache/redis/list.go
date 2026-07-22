@@ -26,9 +26,9 @@ func NewListCache[K any, V any](rdb *redis.Client, codec xCacheDriver.Codec, enc
 }
 
 // refreshTTL 在写操作后按需续期。
-func (c *ListCache[K, V]) refreshTTL(ctx context.Context, key K) {
-	if c.ttl > 0 {
-		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), c.ttl)
+func (c *ListCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
+	if ttl > 0 {
+		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), ttl)
 	}
 }
 
@@ -45,13 +45,32 @@ func (c *ListCache[K, V]) encodeValues(values []V) ([]any, error) {
 	return args, nil
 }
 
-// Prepend 将一个或多个值插入到列表头部（左侧）。
+// Prepend 将一组值插入到列表头部（左侧）。
 //
 // Redis LPUSH 按参数顺序从左插入，最终顺序与参数顺序相反。
 // 为对齐业务语义（参数顺序即头部顺序），这里反转参数。
-func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error {
+// opts 用于在单次调用覆盖默认 TTL 或附加条件：
+//   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
+//   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
+//   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
+func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...xCacheDriver.SetOption) error {
 	if len(values) == 0 {
 		return nil
+	}
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	k := xCacheDriver.EncodeKey(c.enc, key)
+	// NX/XX 预检：基于 key 是否存在决定是否跳过写入
+	if cfg.NX || cfg.XX {
+		exists, err := c.rdb.Exists(ctx, k).Result()
+		if err != nil {
+			return err
+		}
+		if cfg.NX && exists > 0 {
+			return nil
+		}
+		if cfg.XX && exists == 0 {
+			return nil
+		}
 	}
 	reversed := make([]V, len(values))
 	for i, v := range values {
@@ -61,26 +80,52 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error
 	if err != nil {
 		return err
 	}
-	if err := c.rdb.LPush(ctx, xCacheDriver.EncodeKey(c.enc, key), args...).Err(); err != nil {
+	if err := c.rdb.LPush(ctx, k, args...).Err(); err != nil {
 		return err
 	}
-	c.refreshTTL(ctx, key)
+	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 
-// Append 将一个或多个值追加到列表尾部（右侧）。
-func (c *ListCache[K, V]) Append(ctx context.Context, key K, values ...V) error {
+// Append 将一组值追加到列表尾部（右侧）。
+//
+// opts 用于在单次调用覆盖默认 TTL 或附加条件：
+//   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
+//   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
+//   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
+func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...xCacheDriver.SetOption) error {
 	if len(values) == 0 {
 		return nil
+	}
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	k := xCacheDriver.EncodeKey(c.enc, key)
+	// NX/XX 预检：基于 key 是否存在决定是否跳过写入
+	if cfg.NX || cfg.XX {
+		exists, err := c.rdb.Exists(ctx, k).Result()
+		if err != nil {
+			return err
+		}
+		if cfg.NX && exists > 0 {
+			return nil
+		}
+		if cfg.XX && exists == 0 {
+			return nil
+		}
 	}
 	args, err := c.encodeValues(values)
 	if err != nil {
 		return err
 	}
-	if err := c.rdb.RPush(ctx, xCacheDriver.EncodeKey(c.enc, key), args...).Err(); err != nil {
+	if err := c.rdb.RPush(ctx, k, args...).Err(); err != nil {
 		return err
 	}
-	c.refreshTTL(ctx, key)
+	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 

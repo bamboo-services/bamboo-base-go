@@ -90,7 +90,7 @@ func TestMemorySetCache(t *testing.T) {
 	sc := NewSetCache[string, string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
-	_ = sc.Add(ctx, "tags", "go", "cache", "go") // 去重
+	_ = sc.Add(ctx, "tags", []string{"go", "cache", "go"}) // 去重
 	count, _ := sc.Count(ctx, "tags")
 	if count != 2 {
 		t.Fatalf("Count want 2 (dedup), got %d", count)
@@ -120,7 +120,7 @@ func TestMemoryListCache(t *testing.T) {
 	lc := NewListCache[string, string](store, xCacheDriver.JSONCodec{}, xCacheDriver.DefaultKeyEncoder{}, 0)
 	ctx := context.Background()
 
-	_ = lc.Append(ctx, "queue", "a", "b", "c")
+	_ = lc.Append(ctx, "queue", []string{"a", "b", "c"})
 	length, _ := lc.Len(ctx, "queue")
 	if length != 3 {
 		t.Fatalf("Len want 3, got %d", length)
@@ -132,7 +132,7 @@ func TestMemoryListCache(t *testing.T) {
 	}
 
 	// Prepend 语义：Prepend(k, x, y) 后头部为 [x, y, ...]
-	_ = lc.Prepend(ctx, "queue", "x", "y")
+	_ = lc.Prepend(ctx, "queue", []string{"x", "y"})
 	ranged, _ = lc.Range(ctx, "queue", 0, 1)
 	if ranged[0] != "x" || ranged[1] != "y" {
 		t.Fatalf("Prepend order mismatch: %+v", ranged)

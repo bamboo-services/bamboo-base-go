@@ -29,9 +29,9 @@ func NewHashCache[K any, F comparable, V any, S any](rdb *redis.Client, codec xC
 }
 
 // refreshTTL 在写操作后按需续期。
-func (c *HashCache[K, F, V, S]) refreshTTL(ctx context.Context, key K) {
-	if c.ttl > 0 {
-		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), c.ttl)
+func (c *HashCache[K, F, V, S]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
+	if ttl > 0 {
+		_ = c.rdb.Expire(ctx, xCacheDriver.EncodeKey(c.enc, key), ttl)
 	}
 }
 
@@ -55,7 +55,11 @@ func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bo
 // Set 设置单个字段的值。
 //
 // value 为 nil 时等价于 [Remove] 该 field，与 KeyCache.Set 的 nil 删除语义对齐。
-func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V) error {
+// opts 用于在单次调用覆盖默认 TTL 或附加条件写入：
+//   - NX：仅当 field 不存在时写入（Redis HSETNX）
+//   - XX：仅当 field 已存在时写入（先 HExists 预检，不存在则跳过）
+//   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
+func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...xCacheDriver.SetOption) error {
 	if value == nil {
 		return c.Remove(ctx, key, field)
 	}
@@ -64,10 +68,35 @@ func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *
 		return err
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	if err := c.rdb.HSet(ctx, k, xCacheDriver.EncodeKey(c.enc, field), data).Err(); err != nil {
-		return err
+	f := xCacheDriver.EncodeKey(c.enc, field)
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	switch {
+	case cfg.NX:
+		// HSETNX 仅当 field 不存在时写入，条件不满足时返回 false（非错误）
+		if err := c.rdb.HSetNX(ctx, k, f, data).Err(); err != nil {
+			return err
+		}
+	case cfg.XX:
+		// XX：field 已存在才写入，不存在则跳过
+		exists, err := c.rdb.HExists(ctx, k, f).Result()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+		if err := c.rdb.HSet(ctx, k, f, data).Err(); err != nil {
+			return err
+		}
+	default:
+		if err := c.rdb.HSet(ctx, k, f, data).Err(); err != nil {
+			return err
+		}
 	}
-	c.refreshTTL(ctx, key)
+	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 
@@ -121,7 +150,10 @@ func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, err
 }
 
 // SetAll 批量设置字段。
-func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V) error {
+//
+// opts 用于覆盖默认 TTL 或附加条件：NoSlide/KeepTTL 时跳过续期。
+// NX/XX 对批量 HSET 无原生对应，此处不预检（与单字段 Set 语义不同），仅尊重 NoSlide/KeepTTL。
+func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...xCacheDriver.SetOption) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -143,7 +175,10 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 	if err := c.rdb.HSet(ctx, k, args...).Err(); err != nil {
 		return err
 	}
-	c.refreshTTL(ctx, key)
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 
@@ -151,7 +186,8 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 //
 // 先把 S 序列化为 []byte，再反序列化为 map[string]V（要求 field 名为 string），
 // 最后逐字段以 codec 编码为 []byte 通过 HSET 写入。
-func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S) error {
+// opts 用于覆盖默认 TTL 或附加条件：NoSlide/KeepTTL 时跳过续期。
+func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...xCacheDriver.SetOption) error {
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -175,7 +211,10 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 	if err := c.rdb.HSet(ctx, k, args...).Err(); err != nil {
 		return err
 	}
-	c.refreshTTL(ctx, key)
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	if !cfg.NoSlide && !cfg.KeepTTL {
+		c.refreshTTL(ctx, key, cfg.TTL)
+	}
 	return nil
 }
 

@@ -67,7 +67,7 @@ func TestConcurrentSetCacheAdd(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < membersPerG; i++ {
 				member := gid*1000 + i
-				if err := sc.Add(ctx, "set", member); err != nil {
+				if err := sc.Add(ctx, "set", []int{member}); err != nil {
 					t.Errorf("Add failed: %v", err)
 					return
 				}
@@ -100,7 +100,7 @@ func TestConcurrentListCacheAppend(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < itemsPerG; i++ {
 				val := gid*1000 + i
-				if err := lc.Append(ctx, "list", val); err != nil {
+				if err := lc.Append(ctx, "list", []int{val}); err != nil {
 					t.Errorf("Append failed: %v", err)
 					return
 				}

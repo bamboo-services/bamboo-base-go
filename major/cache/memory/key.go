@@ -48,7 +48,15 @@ func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
 }
 
 // Set 将值序列化后写入内存。value 为 nil 时等价于删除。
-func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V) error {
+//
+// opts 用于在单次调用覆盖默认 TTL，并支持 NX/XX/KeepTTL 条件写入：
+//   - NX：仅当 key 不存在时写入（条件不满足时直接返回，不刷新 TTL）
+//   - XX：仅当 key 已存在时写入（条件不满足时直接返回，不刷新 TTL）
+//   - KeepTTL：覆盖值但保留原 ExpireAt（等价于 Redis SET KEEPTTL）
+//
+// NoSlide 对 KeyCache 无意义（Set 本身就是整体覆盖），传入时被忽略。
+// 无任何条件选项时走 [Store.Set] 保持原有行为。
+func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...xCacheDriver.SetOption) error {
 	if value == nil {
 		return c.Delete(ctx, key)
 	}
@@ -57,7 +65,13 @@ func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V) error {
 	if err != nil {
 		return err
 	}
-	c.store.Set(k, data, c.ttl)
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	// 存在 NX/XX/KeepTTL 条件时走 SetCond，否则保持原 Set 路径
+	if cfg.NX || cfg.XX || cfg.KeepTTL {
+		c.store.SetCond(k, data, cfg.TTL, cfg.NX, cfg.XX, cfg.KeepTTL)
+		return nil
+	}
+	c.store.Set(k, data, cfg.TTL)
 	return nil
 }
 

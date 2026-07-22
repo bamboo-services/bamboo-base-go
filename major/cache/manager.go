@@ -32,6 +32,8 @@ type (
 	DefaultKeyEncoder = xCacheDriver.DefaultKeyEncoder
 	// CacheType 等价于 [xCacheDriver.CacheType]。
 	CacheType = xCacheDriver.CacheType
+	// SetOption 等价于 [xCacheDriver.SetOption]，写操作的函数式选项。
+	SetOption = xCacheDriver.SetOption
 )
 
 // 常量与函数别名：const 可直接引用 driver 包常量（底层类型一致即兼容）。
@@ -46,6 +48,43 @@ const (
 
 // EncodeKey 等价于 [xCacheDriver.EncodeKey]，保留 xCache.EncodeKey 历史调用路径。
 func EncodeKey(enc KeyEncoder, key any) string { return xCacheDriver.EncodeKey(enc, key) }
+
+// ApplySet 等价于 [xCacheDriver.ApplySet]，将默认 TTL 与选项列表合成最终配置。
+func ApplySet(base time.Duration, opts []SetOption) xCacheDriver.SetConfig {
+	return xCacheDriver.ApplySet(base, opts)
+}
+
+// WithTTL 等价于 [xCacheDriver.WithTTL]，设置本次写入的过期时间覆盖默认 TTL。
+// ttl > 0 时按此值过期；ttl <= 0 时表示永不过期（即使默认 TTL > 0，本次也设为永久）。
+func WithTTL(ttl time.Duration) SetOption { return xCacheDriver.WithTTL(ttl) }
+
+// WithNX 设置仅当键不存在时写入的条件。
+//
+// 等价于 [xCacheDriver.WithNX]，重导出到 xCache 命名空间方便业务侧使用。
+//
+//	_ = kc.Set(ctx, "lock:order:1", &token, xCache.WithNX(), xCache.WithTTL(30*time.Second))
+func WithNX() SetOption { return xCacheDriver.WithNX() }
+
+// WithXX 设置仅当键已存在时写入的条件。
+//
+// 等价于 [xCacheDriver.WithXX]，重导出到 xCache 命名空间方便业务侧使用。
+//
+//	_ = kc.Set(ctx, "config:feature", &v, xCache.WithXX())
+func WithXX() SetOption { return xCacheDriver.WithXX() }
+
+// WithKeepTTL 保留原有 TTL，覆盖值但不重设过期时间。
+//
+// 等价于 [xCacheDriver.WithKeepTTL]，重导出到 xCache 命名空间方便业务侧使用。
+//
+//	_ = kc.Set(ctx, "user:1", &u, xCache.WithKeepTTL())
+func WithKeepTTL() SetOption { return xCacheDriver.WithKeepTTL() }
+
+// WithNoSlide 写入但不续期（不滑动 TTL）。
+//
+// 等价于 [xCacheDriver.WithNoSlide]，重导出到 xCache 命名空间方便业务侧使用。
+//
+//	_ = lc.Append(ctx, "queue:1m", []string{"a", "b"}, xCache.WithNoSlide())
+func WithNoSlide() SetOption { return xCacheDriver.WithNoSlide() }
 
 // Manager 缓存统一管理器，作为业务侧访问缓存能力的唯一入口。
 //

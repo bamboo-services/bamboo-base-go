@@ -48,7 +48,14 @@ func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
 }
 
 // Set 将值序列化后写入 Redis。value 为 nil 时等价于删除。
-func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V) error {
+//
+// opts 用于在单次调用覆盖默认 TTL 或附加条件写入（NX/XX/KeepTTL）：
+//   - NX：仅当键不存在时写入（Redis SET NX）
+//   - XX：仅当键已存在时写入（Redis SET XX）
+//   - KeepTTL：保留原有 TTL 不重设（Redis SET KEEPTTL），与 TTL 互斥
+//
+// 当 NX/XX 条件不满足时返回 nil（非错误），与 Redis SET NX/XX 返回 nil 的语义对齐。
+func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...xCacheDriver.SetOption) error {
 	if value == nil {
 		return c.Delete(ctx, key)
 	}
@@ -57,8 +64,30 @@ func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V) error {
 		return err
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	if c.ttl > 0 {
-		return c.rdb.Set(ctx, k, data, c.ttl).Err()
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	// 任一条件选项启用时走 SetArgs 路径，否则保持原 Set 逻辑以保证零选项行为不变
+	if cfg.NX || cfg.XX || cfg.KeepTTL {
+		mode := ""
+		if cfg.NX {
+			mode = "NX"
+		} else if cfg.XX {
+			mode = "XX"
+		}
+		// KeepTTL 与 TTL 互斥：KeepTTL 时 TTL 置 0 交由 SetArgs 的 KeepTTL 字段处理
+		ttl := time.Duration(0)
+		if !cfg.KeepTTL {
+			ttl = cfg.TTL
+		}
+		args := redis.SetArgs{Mode: mode, TTL: ttl, KeepTTL: cfg.KeepTTL}
+		err := c.rdb.SetArgs(ctx, k, data, args).Err()
+		// NX/XX 条件不满足时 SetArgs 返回 redis.Nil，视为正常跳过而非错误
+		if errors.Is(err, redis.Nil) {
+			return nil
+		}
+		return err
+	}
+	if cfg.TTL > 0 {
+		return c.rdb.Set(ctx, k, data, cfg.TTL).Err()
 	}
 	return c.rdb.Set(ctx, k, data, 0).Err()
 }

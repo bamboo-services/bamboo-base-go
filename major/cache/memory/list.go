@@ -49,12 +49,19 @@ func normalizeIndex(idx int64, length int) (int, bool) {
 	return int(idx), true
 }
 
-// Prepend 将一个或多个值插入到列表头部（左侧）。
+// Prepend 将一组值插入到列表头部（左侧）。
 //
-// Prepend(k, a, b, c) 后列表头部为 [a, b, c, ...原元素]。
+// Prepend(k, []V{a, b, c}) 后列表头部为 [a, b, c, ...原元素]。
 // Memory 后端直接操作切片，无需像 Redis LPUSH 那样反转参数。
-// 通过 [Store.Update] 在单把锁内完成读-改-写，避免 append 共享底层数组的并发污染。
-func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error {
+// 通过 [Store.Update] / [Store.UpdateKeepExpireAt] 在单把锁内完成读-改-写，避免 append 共享底层数组的并发污染。
+//
+// opts 支持以下条件写入（存在任意条件选项时走 [Store.UpdateKeepExpireAt]）：
+//   - NX：仅当 key 不存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - XX：仅当 key 已存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
+//
+// 无任何条件选项时走 [Store.Update] 保持原有行为。
+func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...xCacheDriver.SetOption) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -67,7 +74,29 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error
 		encoded = append(encoded, data)
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	c.store.Update(k, c.ttl, func(old any) any {
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	hasCond := cfg.NX || cfg.XX || cfg.KeepTTL || cfg.NoSlide
+	if hasCond {
+		// 条件写入：NX/XX 在闭包内按 key 原子判断，NoSlide/KeepTTL 保留原 ExpireAt
+		c.store.UpdateKeepExpireAt(k, cfg.TTL, func(old any) any {
+			l, _ := old.([][]byte)
+			// NX：key 已存在则跳过（不刷新 TTL）
+			if cfg.NX && l != nil {
+				return UpdateNoChange
+			}
+			// XX：key 不存在则跳过（不刷新 TTL）
+			if cfg.XX && l == nil {
+				return UpdateNoChange
+			}
+			// 必须新建切片，避免在共享底层数组上写
+			newList := make([][]byte, 0, len(encoded)+len(l))
+			newList = append(newList, encoded...)
+			newList = append(newList, l...)
+			return newList
+		})
+		return nil
+	}
+	c.store.Update(k, cfg.TTL, func(old any) any {
 		l, _ := old.([][]byte)
 		// 必须新建切片，避免在共享底层数组上写
 		newList := make([][]byte, 0, len(encoded)+len(l))
@@ -78,10 +107,17 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values ...V) error
 	return nil
 }
 
-// Append 将一个或多个值追加到列表尾部（右侧）。
+// Append 将一组值追加到列表尾部（右侧）。
 //
-// 通过 [Store.Update] 保证原子性。新建切片避免共享底层数组污染。
-func (c *ListCache[K, V]) Append(ctx context.Context, key K, values ...V) error {
+// 通过 [Store.Update] / [Store.UpdateKeepExpireAt] 保证原子性。新建切片避免共享底层数组污染。
+//
+// opts 支持以下条件写入（存在任意条件选项时走 [Store.UpdateKeepExpireAt]）：
+//   - NX：仅当 key 不存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - XX：仅当 key 已存在时写入（条件不满足返回 [UpdateNoChange]，不刷新 TTL）
+//   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
+//
+// 无任何条件选项时走 [Store.Update] 保持原有行为。
+func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...xCacheDriver.SetOption) error {
 	if len(values) == 0 {
 		return nil
 	}
@@ -94,7 +130,28 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values ...V) error 
 		encoded = append(encoded, data)
 	}
 	k := xCacheDriver.EncodeKey(c.enc, key)
-	c.store.Update(k, c.ttl, func(old any) any {
+	cfg := xCacheDriver.ApplySet(c.ttl, opts)
+	hasCond := cfg.NX || cfg.XX || cfg.KeepTTL || cfg.NoSlide
+	if hasCond {
+		// 条件写入：NX/XX 在闭包内按 key 原子判断，NoSlide/KeepTTL 保留原 ExpireAt
+		c.store.UpdateKeepExpireAt(k, cfg.TTL, func(old any) any {
+			l, _ := old.([][]byte)
+			// NX：key 已存在则跳过（不刷新 TTL）
+			if cfg.NX && l != nil {
+				return UpdateNoChange
+			}
+			// XX：key 不存在则跳过（不刷新 TTL）
+			if cfg.XX && l == nil {
+				return UpdateNoChange
+			}
+			newList := make([][]byte, 0, len(encoded)+len(l))
+			newList = append(newList, l...)
+			newList = append(newList, encoded...)
+			return newList
+		})
+		return nil
+	}
+	c.store.Update(k, cfg.TTL, func(old any) any {
 		l, _ := old.([][]byte)
 		newList := make([][]byte, 0, len(encoded)+len(l))
 		newList = append(newList, l...)

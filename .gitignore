@@ -26,4 +26,4 @@ go.work.sum
 *.test.binary.gz.*
 
 ### AI ###
-.omo/
+.omo/.zcode/

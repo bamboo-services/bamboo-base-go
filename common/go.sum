@@ -1,5 +1,5 @@
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202607011542 h1:Gp81M9eyPqcFI9QP+H/61qL6mVmd9Lz5WJGPLeWmacs=
-github.com/bamboo-services/bamboo-base-go/defined v1.0.0-202607011542/go.mod h1:ek8hbiQX7Zdd39NDtA521FHICv0A8Fkl3ZN/GIKtXYg=
+github.com/bamboo-services/bamboo-base-go/defined v1.1.1 h1:yqEHfkFUTjgEXnCVFOb3brbpNC5rf2mVwv/+U96SsWg=
+github.com/bamboo-services/bamboo-base-go/defined v1.1.1/go.mod h1:PxsSaC5ZYVq14M59686/x/5VXf6u35pymTmelLiHyVM=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gabriel-vasile/mimetype v1.4.13 h1:46nXokslUBsAJE/wMsp5gtO500a4F3Nkz9Ufpk2AcUM=

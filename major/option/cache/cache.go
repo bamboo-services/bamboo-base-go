@@ -102,23 +102,26 @@ func WithCacheType(t CacheType) CacheOption {
 //     自动拼装 Redis 连接参数并装配 Redis 后端
 //   - NOSQL_DRIVER 为 "memory" 时，按 NOSQL_MEMORY_DEFAULT_TTL/MAX_ENTRIES/SHARD_COUNT
 //     装配程序内内存缓存后端
-//   - NOSQL_DRIVER 为空或 "none" 时返回 nil，表示不启用内置缓存
+//   - NOSQL_DRIVER 为空或 "none" 时，闭包不修改 [CacheConfig]，等价于不启用内置缓存
 //
 // Redis 连接池超时等高级参数暂未从环境变量读取（保持 env 列表精简），如需调整请配合
 // [WithRedisDialTimeout] / [WithRedisReadTimeout] 等二级选项显式设置。
 // Memory 的分片等参数同理，可用 [WithMemoryShardCount] 等二级选项覆盖。
 //
-// 该函数依赖 .env 已在 Register 阶段通过 godotenv 加载完成。
+// 环境变量读取被延迟到 Option 闭包执行时（即 [xOption.Apply] 在 [xReg.Register] 内部
+// 调用阶段），此时 configInit() 已通过 godotenv.Load() 加载 .env，保证 FromEnv 可用于
+// 业务侧在 Register 调用前构造 opts 切片的常见写法。
 //
-// 返回值可能为 nil（未启用内置缓存），父包 [option.WithCache] 会跳过 nil 选项。
+// 未启用内置缓存时（driver 为空或 none），返回的闭包不修改 [CacheConfig]，
+// [CacheConfig.Enabled] 返回 false，Register 阶段会跳过缓存节点注册。
 func FromEnv() CacheOption {
-	switch xCache.CacheType(xEnv.GetEnvString(xEnv.NoSqlDriver, "none")) {
-	case CacheTypeRedis:
-		return redisFromEnvOption()
-	case CacheTypeMemory:
-		return memoryFromEnvOption()
-	default:
-		return nil
+	return func(c *CacheConfig) {
+		switch xCache.CacheType(xEnv.GetEnvString(xEnv.NoSqlDriver, "none")) {
+		case CacheTypeRedis:
+			redisFromEnvOption()(c)
+		case CacheTypeMemory:
+			memoryFromEnvOption()(c)
+		}
 	}
 }
 

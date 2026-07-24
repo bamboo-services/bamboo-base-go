@@ -59,10 +59,20 @@ func TestFromEnv_SQLServerDispatch(t *testing.T) {
 	}
 }
 
-// TestFromEnv_NoneReturnsNil 验证 DATABASE_DRIVER=none 时 FromEnv 返回 nil。
-func TestFromEnv_NoneReturnsNil(t *testing.T) {
+// TestFromEnv_NoneDisabled 验证 DATABASE_DRIVER=none 时 FromEnv 返回的闭包
+// 不修改 [xOptDatabase.DatabaseConfig]，[xOptDatabase.DatabaseConfig.Enabled] 返回 false。
+//
+// 修复后 FromEnv 不再返回 nil（改用惰性求值，env 读取延迟到闭包执行），
+// "未启用"语义由 Enabled() 表达，而非 nil 返回值。
+func TestFromEnv_NoneDisabled(t *testing.T) {
 	t.Setenv("DATABASE_DRIVER", "none")
-	if opt := xOptDatabase.FromEnv(); opt != nil {
-		t.Errorf("none 驱动应返回 nil，got non-nil: %T", opt)
+	opt := xOptDatabase.FromEnv()
+	if opt == nil {
+		t.Fatal("FromEnv 不应返回 nil（惰性求值后始终返回闭包）")
+	}
+	cfg := xOptDatabase.DatabaseConfig{}
+	opt(&cfg)
+	if cfg.Enabled() {
+		t.Errorf("none 驱动应禁用数据库，got Enabled()=true, driver=%q", cfg.Driver())
 	}
 }

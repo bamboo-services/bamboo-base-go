@@ -168,28 +168,31 @@ func applyDatabase(target *DatabaseConfig, opts ...DatabaseOption) {
 // 读取顺序与优先级:
 //  1. 若设置了 DATABASE_DSN，则直接使用该完整连接串，驱动由 DATABASE_DRIVER 决定
 //  2. 否则按 DATABASE_DRIVER 调用对应驱动的 env DSN 拼装函数（见 mysql.go / postgres.go / sqlite.go / oracle.go / sqlserver.go）
-//  3. DATABASE_DRIVER 为空或 "none" 时返回 nil，表示不启用内置数据库
+//  3. DATABASE_DRIVER 为空或 "none" 时，闭包不修改 [DatabaseConfig]，等价于不启用内置数据库
 //
 // DATABASE_PREFIX 若已设置，会同步写入 TablePrefix，由 DatabaseInit 应用到 GORM NamingStrategy。
 // 连接池参数暂未从环境变量读取（保持 env 列表精简），如需调整请配合
 // [WithMaxOpenConns] 等二级选项显式设置。
 //
-// 该函数依赖 .env 已在 Register 阶段通过 godotenv 加载完成。
+// 环境变量读取被延迟到 Option 闭包执行时（即 [xOption.Apply] 在 [xReg.Register] 内部
+// 调用阶段），此时 configInit() 已通过 godotenv.Load() 加载 .env，保证 FromEnv 可用于
+// 业务侧在 Register 调用前构造 opts 切片的常见写法。
 //
-// 返回的 DatabaseOption 可能为 nil（未启用内置数据库），父包 [option.WithDatabase] 会跳过 nil 选项。
+// 未启用内置数据库时（driver 为空或 none），返回的闭包不修改 [DatabaseConfig]，
+// [DatabaseConfig.Enabled] 返回 false，Register 阶段会跳过数据库节点注册。
 // opts 中的二级选项会与 env 装配结果一起透传到 [DatabaseConfig]，可与 [WithAutoMigrate] / [WithPrepare]
 // 等叠加使用。
 func FromEnv(opts ...DatabaseOption) DatabaseOption {
-	driver := Driver(xEnv.GetEnvString(xEnv.DatabaseDriver, "none"))
-	if driver == "" || driver == DriverNone {
-		return nil
-	}
-	dsn := xEnv.GetEnvString(xEnv.DatabaseDSN, "")
-	if dsn == "" {
-		dsn = resolveDSNFromEnv(driver)
-	}
-	prefix := xEnv.GetEnvString(xEnv.DatabasePrefix, "")
 	return func(c *DatabaseConfig) {
+		driver := Driver(xEnv.GetEnvString(xEnv.DatabaseDriver, "none"))
+		if driver == "" || driver == DriverNone {
+			return
+		}
+		dsn := xEnv.GetEnvString(xEnv.DatabaseDSN, "")
+		if dsn == "" {
+			dsn = resolveDSNFromEnv(driver)
+		}
+		prefix := xEnv.GetEnvString(xEnv.DatabasePrefix, "")
 		c.driver = driver
 		c.dsn = dsn
 		c.tablePrefix = prefix

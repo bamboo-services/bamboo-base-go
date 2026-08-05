@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/database/sqlserver
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.1.1
+	github.com/bamboo-services/bamboo-base-go/common v1.2.0
 	gorm.io/driver/sqlserver v1.6.3
 )
 

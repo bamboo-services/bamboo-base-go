@@ -3,8 +3,8 @@ module github.com/bamboo-services/bamboo-base-go/plugins/async
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.1.2
-	github.com/bamboo-services/bamboo-base-go/defined v1.1.2
+	github.com/bamboo-services/bamboo-base-go/common v1.2.0
+	github.com/bamboo-services/bamboo-base-go/defined v1.2.0
 	github.com/gin-gonic/gin v1.12.0
 )
 

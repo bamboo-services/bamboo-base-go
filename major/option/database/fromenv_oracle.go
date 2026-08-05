@@ -6,25 +6,6 @@ import (
 	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
-// Oracle 构造 Oracle 的 [DatabaseOption]。
-//
-// dsn 为 godror logfmt 格式连接串，例如：
-//
-//	user="scott" password="tiger" connectString="dbhost:1521/orclpdb1" libDir="/path/to/instantclient"
-//
-// 注意：Oracle 驱动底层为 godror，依赖 Oracle Instant Client（ODPI-C）。
-// macOS/Windows 需在 dsn 中指定 libDir 或通过环境变量 DATABASE_LIB_DIR 配置；
-// Linux 需用 ldconfig 将 Instant Client 加入系统库搜索路径。
-// 如需从环境变量自动拼装，改用 [FromEnv] 并设置 DATABASE_DRIVER=oracle。
-// 如需调整连接池参数，配合 [WithMaxOpenConns] 等二级选项使用。
-func Oracle(dsn string, opts ...DatabaseOption) DatabaseOption {
-	return func(c *DatabaseConfig) {
-		c.driver = DriverOracle
-		c.dsn = dsn
-		applyDatabase(c, opts...)
-	}
-}
-
 // OracleFromEnv 从环境变量拼装 Oracle godror logfmt DSN。
 //
 // 格式: user="..." password="..." connectString="host:port/service" libDir="..."
@@ -36,6 +17,9 @@ func Oracle(dsn string, opts ...DatabaseOption) DatabaseOption {
 //   - DATABASE_PORT          (默认 1521)
 //   - DATABASE_SERVICE_NAME  (默认 ORCLPDB1)
 //   - DATABASE_LIB_DIR       (默认 空；Linux 下留空由 ldconfig 兜底)
+//
+// 该函数仅负责拼装 DSN 字符串，不涉及任何驱动包。显式构造请使用 [WithDriver]
+// 并 import 对应驱动插件（如 plugins/database/oracle），[FromEnv] 会自动调用本函数。
 func OracleFromEnv() string {
 	user := xEnv.GetEnvString(xEnv.DatabaseUser, "system")
 	pass := xEnv.GetEnvString(xEnv.DatabasePass, "")

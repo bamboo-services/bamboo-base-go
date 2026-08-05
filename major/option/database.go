@@ -7,8 +7,9 @@ import (
 // 以下类型为 [xOptDatabase] 子包类型的别名重导出，保持父包对外 API 兼容，
 // 使 init 包与业务侧可继续通过 xOption.DatabaseConfig / xOption.Driver 等访问。
 //
-// 构造函数（MySQL / Postgres / SQLite / FromEnv / WithAutoMigrate 等）已迁移至 [xOptDatabase] 子包，
-// 业务侧应使用 xOption.WithDatabase(xOptDatabase.MySQL(...)) 的两层调用形态。
+// 配置构造（WithDriver / WithDialector / FromEnv / WithAutoMigrate 等）位于 [xOptDatabase] 子包，
+// 业务侧应使用 xOption.WithDatabase(xOptDatabase.WithDriver(...)) 的两层调用形态。
+// 数据库驱动已插件化，使用内置驱动需 import 对应驱动插件（如 plugins/database/mysql）。
 type (
 	// Driver 数据库驱动类型，详见 [xOptDatabase.Driver]。
 	Driver = xOptDatabase.Driver
@@ -43,8 +44,8 @@ const (
 // nil DatabaseOption 会被跳过，支持条件构造。
 // 使用示例：
 //
-//	// 显式 MySQL DSN
-//	xOption.WithDatabase(xOptDatabase.MySQL("user:pass@tcp(localhost:3306)/db"))
+//	// 显式指定 MySQL 驱动（需 import plugins/database/mysql 触发注册）
+//	xOption.WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverMySQL, "user:pass@tcp(localhost:3306)/db"))
 //	// 从环境变量装配 + 声明迁移与数据初始化
 //	xOption.WithDatabase(
 //	    xOptDatabase.FromEnv(),

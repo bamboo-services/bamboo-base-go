@@ -2,12 +2,19 @@
 
 ## 概述
 
-插件模块集合，提供可选的扩展能力。每个插件是独立的 Go module，按需引入。所有插件的 Runner 启动函数签名与 `xMain.Runner` 的附加协程参数兼容（`func(ctx context.Context, option ...any)`），可无缝挂载。
+插件模块集合，提供可选的扩展能力。每个插件是独立的 Go module，按需引入。所有插件的 Runner 启动函数签名与 `xMain.Runner` 的附加协程参数兼容（`func(ctx context.Context, option ...any)`），可无缝挂载。`database/` 类别为数据库驱动插件（mysql / postgres / sqlite / oracle / sqlserver），仅在 `init()` 中将驱动工厂注册到 common 层驱动注册表，业务端 import 即生效。
 
 ## 目录结构
 
 ```text
 plugins/
+├── database/                  # 数据库驱动插件（各自独立 module，仅依赖 common）
+│   ├── mysql/                 #   MySQL 驱动（gorm.io/driver/mysql）
+│   ├── postgres/              #   PostgreSQL 驱动（gorm.io/driver/postgres）
+│   ├── sqlite/                #   SQLite 驱动（libtnb/sqlite，纯 Go）
+│   ├── oracle/                #   Oracle 驱动（gorm-oracle，需 CGO/Instant Client）
+│   ├── sqlserver/             #   SQL Server 驱动（gorm.io/driver/sqlserver）
+│   └── sqlite/database_integration_test.go # SQLite 集成测试（AutoMigrate/Prepare/Register）
 ├── grpc/                      # gRPC 框架插件（详见 grpc/AGENTS.md）
 │   ├── runner/                #   gRPC 启动器
 │   ├── interceptor/           #   一元/流式拦截器
@@ -41,6 +48,7 @@ plugins/
 
 | 任务 | 位置 | 说明 |
 |------|------|------|
+| 注册数据库驱动 | `database/mysql` 等 → import 插件触发 init() | 每个插件独立 module，仅依赖 common 驱动注册表 |
 | 启动 gRPC 服务 | `grpc/runner/runner.go` → `New()` | 详见 `grpc/AGENTS.md` |
 | 启动定时任务 | `cron/runner/runner.go` → `New()` | 传入 `WithJobs()` Option |
 | 定义定时任务 | `cron/job.go` → `NewJob(spec, fn)` | 支持 `func()` 和 `func(ctx)` 两种签名 |
@@ -89,3 +97,8 @@ plugins/
 ## 引用
 
 - [grpc/](./grpc/AGENTS.md) — gRPC 框架插件（启动器/拦截器/中间件/proto）
+- [database/mysql/](./database/mysql/AGENTS.md) — MySQL 驱动插件
+- [database/postgres/](./database/postgres/AGENTS.md) — PostgreSQL 驱动插件
+- [database/sqlite/](./database/sqlite/AGENTS.md) — SQLite 驱动插件
+- [database/oracle/](./database/oracle/AGENTS.md) — Oracle 驱动插件
+- [database/sqlserver/](./database/sqlserver/AGENTS.md) — SQL Server 驱动插件

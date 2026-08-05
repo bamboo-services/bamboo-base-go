@@ -6,11 +6,13 @@
 # 基础变量
 # ============================================================
 
-# 内部模块列表（非 plugins，用于 vet 遍历）
+# 内部模块列表（非 plugins，用于 vet/test 遍历）
 PACKAGES := major common defined
 
-# 插件列表（用于 vet 遍历）
-PLUGINS := cron grpc async email
+# 插件列表（用于 vet/test 遍历）
+# 注：database/oracle 依赖 godror（CGO + Oracle Instant Client），不纳入默认遍历，
+#     需要 Oracle 的环境请单独执行 `go test ./plugins/database/oracle/...`。
+PLUGINS := database/mysql database/postgres database/sqlite database/sqlserver cron grpc async email
 
 # ============================================================
 # 帮助信息
@@ -44,7 +46,12 @@ help:
 # ============================================================
 
 test:
-	go test -v ./...
+	@for pkg in $(PACKAGES); do \
+		go test -v ./$$pkg/...; \
+	done
+	@for plg in $(PLUGINS); do \
+		go test -v ./plugins/$$plg/...; \
+	done
 
 proto:
 	buf generate

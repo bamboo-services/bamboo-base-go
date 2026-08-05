@@ -33,7 +33,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version: '1.25.11'
 
       - name: Extract version from release tag
         id: ver
@@ -60,6 +60,11 @@ jobs:
             "defined"
             "common"
             "major"
+            "plugins/database/mysql"
+            "plugins/database/postgres"
+            "plugins/database/sqlite"
+            "plugins/database/oracle"
+            "plugins/database/sqlserver"
             "plugins/cron"
             "plugins/grpc"
             "plugins/async"
@@ -83,7 +88,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           # 校验每个 go.mod 仍能被 go 解析（go list -m 仅解析模块路径，不下载）
-          for mod in defined common major plugins/cron plugins/grpc plugins/async plugins/email; do
+          for mod in defined common major plugins/database/mysql plugins/database/postgres plugins/database/sqlite plugins/database/oracle plugins/database/sqlserver plugins/cron plugins/grpc plugins/async plugins/email; do
             echo "🔍 校验 $mod/go.mod"
             (cd "$mod" && go list -m > /dev/null)
           done
@@ -113,7 +118,7 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           # 按依赖顺序打 tag（同 commit，顺序仅为可读性）
-          for mod in defined common major plugins/cron plugins/grpc plugins/async plugins/email; do
+          for mod in defined common major plugins/database/mysql plugins/database/postgres plugins/database/sqlite plugins/database/oracle plugins/database/sqlserver plugins/cron plugins/grpc plugins/async plugins/email; do
             sub_tag="${mod}/${TAG}"
             if git rev-parse -q --verify "refs/tags/${sub_tag}" >/dev/null; then
               echo "⚠️  Tag ${sub_tag} 已存在，跳过"
@@ -156,6 +161,11 @@ jobs:
             echo "| defined | \`defined/${TAG}\` |"
             echo "| common | \`common/${TAG}\` |"
             echo "| major | \`major/${TAG}\` |"
+            echo "| plugins/database/mysql | \`plugins/database/mysql/${TAG}\` |"
+            echo "| plugins/database/postgres | \`plugins/database/postgres/${TAG}\` |"
+            echo "| plugins/database/sqlite | \`plugins/database/sqlite/${TAG}\` |"
+            echo "| plugins/database/oracle | \`plugins/database/oracle/${TAG}\` |"
+            echo "| plugins/database/sqlserver | \`plugins/database/sqlserver/${TAG}\` |"
             echo "| plugins/cron | \`plugins/cron/${TAG}\` |"
             echo "| plugins/grpc | \`plugins/grpc/${TAG}\` |"
             echo "| plugins/async | \`plugins/async/${TAG}\` |"

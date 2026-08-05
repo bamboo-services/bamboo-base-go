@@ -2,7 +2,7 @@
 
 ## 概述
 
-内置初始化节点集合，存放 `Register()` 注册的系统级组件初始化函数。当前包含雪花算法、缓存（Redis/Memory 双后端）和数据库（MySQL/Postgres/SQLite/Oracle/SQLServer 五驱动）三种初始化节点。
+内置初始化节点集合，存放 `Register()` 注册的系统级组件初始化函数。当前包含雪花算法、缓存（Redis/Memory 双后端）和数据库三种初始化节点。数据库不内置任何驱动，通过 common 层驱动注册表解析业务端注入的驱动插件（plugins/database/*）。
 
 ## 目录结构
 
@@ -10,7 +10,7 @@
 init/
 ├── init_snowflake.go    # SnowflakeInit() — 雪花算法默认节点初始化与验证
 ├── init_cache.go        # CacheInit() — 缓存管理器初始化（Redis/Memory 双后端）
-└── init_database.go     # DatabaseInit() — 数据库初始化（MySQL/Postgres/SQLite/Oracle/SQLServer 五驱动）
+└── init_database.go     # DatabaseInit() — 数据库初始化（Dialector 优先，否则按 Driver 查 common 注册表）
 ```
 
 ## 导航指南
@@ -19,7 +19,7 @@ init/
 |------|------|------|
 | 雪花算法初始化 | `init_snowflake.go` → `SnowflakeInit()` | 注册到 `SnowflakeNodeKey`，生成测试 ID 验证可用性 |
 | 缓存管理器初始化 | `init_cache.go` → `CacheInit(cfg)` | 根据 `CacheConfig.Type()` 选择 Redis/Memory 后端，返回 `*xCache.Manager` |
-| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 根据 `DatabaseConfig.Driver()` 选择 MySQL/Postgres/SQLite/Oracle/SQLServer 驱动；建连成功后自动执行 AutoMigrate（若声明）与 Prepare 回调（若注册）；返回 `*gorm.DB` |
+| 数据库初始化 | `init_database.go` → `DatabaseInit(cfg)` | 优先使用 `cfg.Dialector()`（WithDialector 注入），否则按 `Driver()` 从 common 注册表解析驱动插件工厂；建连后自动执行 AutoMigrate 与 Prepare；返回 `*gorm.DB` |
 | Redis 兼容性桥接 | `init_cache.go` → `RedisClientFromManager()` | 从 Manager 提取 `*redis.Client` 补注册到 `RedisClientKey`，兼容历史代码 |
 | 添加新的内置节点 | 在此目录新建文件，遵循 `XxxInit(...)` 签名 | 然后在 `register.go` 的 `Register()` 中通过 `reg.Init.Use()` 注册 |
 
@@ -44,5 +44,5 @@ init/
 1. 雪花算法初始化失败 — 检查 `SNOWFLAKE_DATACENTER_ID` 和 `SNOWFLAKE_NODE_ID` 环境变量是否在 0-31 范围内。
 2. 生成的 ID 重复 — 确认多实例部署时 datacenter_id 和 node_id 组合唯一。
 3. Redis 初始化失败（Ping 不通） — 检查 `NOSQL_HOST` / `NOSQL_PORT` / `NOSQL_DATABASE` 环境变量和网络连通性。
-4. 数据库初始化失败 — 检查 `DATABASE_DRIVER` + DSN 拼装是否正确，连接池参数是否合理。
+4. 数据库初始化失败 — 检查是否 import 了对应驱动插件（plugins/database/*）、`DATABASE_DRIVER` + DSN 拼装是否正确。
 5. `RedisClientFromManager` 返回 nil — 确认 Manager 已成功注入到 `CacheManagerKey`，且后端确实为 Redis。

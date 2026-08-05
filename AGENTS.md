@@ -1,7 +1,7 @@
 # 项目知识库
 
-**生成日期:** 2026-07-21
-**提交:** ca22603
+**生成日期:** 2026-08-05
+**提交:** 0421a44
 **分支:** master
 
 ## 概述
@@ -12,7 +12,7 @@ Bamboo Base Go 是 Bamboo 服务的 Go 基础组件库，面向 Gin HTTP API 与
 
 ```text
 bamboo-base/
-├── go.work                       # Go 工作区配置（7 个模块）
+├── go.work                       # Go 工作区配置（12 个模块）
 ├── go.mod                        # 根模块（仅占位，不包含代码）
 ├── Makefile                      # 构建/测试/发布命令
 ├── .env.example                  # 环境变量模板
@@ -28,6 +28,7 @@ bamboo-base/
 ├── common/                       # 通用层（依赖 defined，无 gin 依赖）
 │   ├── error/                    #   错误码体系 + IError 接口
 │   ├── log/                      #   slog 日志系统（双写 + 切割 + ContextExtractor）
+│   ├── database/                 #   数据库驱动枚举 + Dialector 工厂注册表
 │   ├── snowflake/                #   基因雪花算法
 │   ├── validator/                #   8 个自定义验证器 + 中文翻译 + ValidateProvider 接口
 │   ├── utility/                  #   工具函数（加密/生成/密码/字符串/时间/解析/验证）
@@ -51,6 +52,12 @@ bamboo-base/
 │   ├── hook/                     #   Redis 钩子
 │   └── go.mod
 └── plugins/                      # 插件层（各自独立 module）
+    ├── database/                 #   数据库驱动插件（按需引入）
+    │   ├── mysql/                #     MySQL 驱动（gorm.io/driver/mysql）
+    │   ├── postgres/             #     PostgreSQL 驱动（gorm.io/driver/postgres）
+    │   ├── sqlite/               #     SQLite 驱动（github.com/libtnb/sqlite，纯 Go）
+    │   ├── oracle/               #     Oracle 驱动（gorm-oracle，需 CGO/Instant Client）
+    │   └── sqlserver/            #     SQL Server 驱动（gorm.io/driver/sqlserver）
     ├── grpc/                     #   gRPC 框架插件
     ├── cron/                     #   定时任务插件
     ├── async/                    #   异步任务插件
@@ -63,8 +70,8 @@ bamboo-base/
 |------|------|------|
 | 快速启动 HTTP 服务 | `major/register` → `Register()` + `major/main` → `Runner()` | `xReg.Register(ctx, nodeList, opts...) → xMain.Runner(reg, log, goroutineFunc...)` |
 | HTTP + gRPC 一体化启动 | `plugins/grpc/runner` → `New()` | 作为附加协程传入 Runner |
-| 配置数据库 | `major/option` → `WithDatabase(xOptDatabase.MySQL())` / `WithDatabase(xOptDatabase.Postgres())` / `WithDatabase(xOptDatabase.SQLite())` / `WithDatabase(xOptDatabase.Oracle())` / `WithDatabase(xOptDatabase.SQLServer())` | 声明式双层配置 |
-| 从环境变量装配数据库 | `major/option` → `WithDatabase(xOptDatabase.FromEnv())` | 自动读取 DATABASE_DRIVER 等 |
+| 配置数据库 | `major/option` → `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverMySQL, dsn))` 等 + import `plugins/database/mysql` | 驱动插件化，按需引入 |
+| 从环境变量装配数据库 | `major/option` → `WithDatabase(xOptDatabase.FromEnv())` + import 对应驱动插件 | 自动读取 DATABASE_DRIVER 等 |
 | 配置缓存后端 | `major/option` → `WithCache(xOptCache.WithRedis())` / `WithCache(xOptCache.WithMemory())` | 声明式双层选择 Redis 或内存缓存 |
 | 注册 HTTP 路由 | `major/option` → `WithRoute()` / `WithRouteGroup()` | 支持多个注册器叠加；注册器接收已装配依赖的 ctx 与 Gin 引擎 |
 | 返回成功响应 | `major/result` → `Success()` / `SuccessHasData()` | |
@@ -118,7 +125,8 @@ bamboo-base/
 | `xOption.WithCache` | 函数 | `major/option/cache.go` | 包裹 CacheOption 为顶层 Option |
 | `xOption.WithDatabase` | 函数 | `major/option/database.go` | 包裹 DatabaseOption 为顶层 Option |
 | `xOptCache.WithRedis` | 函数 | `major/option/cache/redis.go` | 启用 Redis 缓存选项（返回 CacheOption） |
-| `xOptDatabase.MySQL` | 函数 | `major/option/database/mysql.go` | 启用 MySQL 数据库选项（返回 DatabaseOption） |
+| `xOptDatabase.WithDriver` | 函数 | `major/option/database/database.go` | 显式指定驱动枚举 + DSN（替代旧内置构造函数） |
+| `xDB.RegisterDialector` | 函数 | `common/database/dialector.go` | 驱动插件注册 Dialector 工厂 |
 | `xInit.CacheInit` | 函数 | `major/register/init/init_cache.go` | 缓存管理器初始化工厂 |
 | `xInit.DatabaseInit` | 函数 | `major/register/init/init_database.go` | 数据库初始化工厂 |
 | `xCtxUtil.ContextExtractor` | 接口 | `major/utility/context/gin_extractor_impl.go` | 上下文提取器接口 |
@@ -136,8 +144,8 @@ bamboo-base/
                │                          │
     ┌──────────▼──────────┐   ┌──────────▼──────────┐
     │      major 层        │   │     plugins 层       │
-    │  (register/main/     │   │  (grpc/cron/         │
-    │   middleware/result/ │   │   async/email)       │
+    │  (register/main/     │   │  (grpc/cron/async/   │
+    │   middleware/result/ │   │   email/database/*)   │
     │   models/helper/     │   │                      │
     │   cache/option/      │   │                      │
     │   utility/validator) │   │                      │
@@ -147,8 +155,9 @@ bamboo-base/
                │     │
     ┌──────────▼─────▼──────────┐
     │       common 层            │
-    │  (error/log/snowflake/     │
-    │   validator/utility)       │
+    │  (error/log/database/      │
+    │   snowflake/validator/     │
+    │   utility)                 │
     │  ← 无 gin 依赖            │
     └──────────┬────────────────┘
                │
@@ -161,6 +170,7 @@ bamboo-base/
 依赖方向（单向）：`defined ← common ← major`，`defined + common ← plugins/*`
 
 各插件间的依赖关系：
+- `plugins/database/mysql` / `postgres` / `sqlite` / `oracle` / `sqlserver` 依赖 `common`（驱动注册表，均不依赖 major）
 - `plugins/grpc` 依赖 `defined` + `common`
 - `plugins/cron` 依赖 `common`
 - `plugins/async` 依赖 `common`
@@ -168,7 +178,7 @@ bamboo-base/
 
 ## 约定
 
-- **Go Workspace 管理**：7 个独立 module 通过 `go.work` 关联，每个 module 有独立的 `go.mod`。
+- **Go Workspace 管理**：12 个独立 module 通过 `go.work` 关联，每个 module 有独立的 `go.mod`。
 - **导入别名统一**：使用 `x` 前缀的简短别名（`xReg` / `xMain` / `xError` / `xLog` / `xModels` / `xResult` / `xUtil` / `xEnv` / `xCtx` / `xVaild` / `xSnowflake` / `xMiddle` / `xHelper` / `xRoute` / `xCache` / `xOption` / `xInit` / `xCtxUtil`）。
 - **中文注释**：所有公开类型和函数使用中文注释，遵循 Go doc 注释规范。
 - **日志器命名体系**：使用 4 字母大写常量标识模块（`NamedMAIN` / `NamedINIT` / `NamedRESU` / `NamedHTTP` / `NamedGRPC` 等，定义在 `common/log/const.go`）。
@@ -218,6 +228,7 @@ make vet                     # go vet 检查所有模块
 # 发布（统一版本号 vX.Y.Z）
 make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给所有子模块打 tag
                              # 子 tag: defined/vX.Y.Z, common/vX.Y.Z, major/vX.Y.Z,
+                             #         plugins/database/{mysql,postgres,sqlite,oracle,sqlserver}/vX.Y.Z,
                              #         plugins/{cron,grpc,async,email}/vX.Y.Z
                              # Action 同时自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z
 ```
@@ -237,7 +248,7 @@ make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给�
   - 统一版本号方案，废弃各模块独立 `version` 文件
 - **架构变更（opts 上提 Register）**：opts 从 Runner 参数迁移到 Register 参数，Runner 不再参与组件装配。DB/Cache/Redis 在 Register 阶段通过 Use 在 Exec 前装配，业务节点可在 Exec 时直接从 ctx 获取。
 - **架构变更（mainRunner 重构）**：`Runner()` 单函数拆解为 `mainRunner` 结构体 + 按生命周期阶段拆分的方法链（`initContext → initSignal → initSync → initGoroutine → initWeb`），方法分布在 `runner.go` / `goroutine.go` / `web.go`。原 `major/main/option.go` 已删除，Runner 不再持有内部选项。
-- **数据库后端扩展**：`major/option/database` 子包新增 Oracle（godror）与 SQL Server（go-mssqldb）驱动，`FromEnv()` 自动按 `DATABASE_DRIVER` 分发到对应驱动的 env DSN 拼装函数。
+- **架构变更（数据库驱动插件化）**：数据库驱动从 major 剥离为 `plugins/database/*` 独立插件，common 层新增 `database` 驱动注册表（`RegisterDialector` / `GetDialectorFactory`）。core 不再内置任何驱动，业务端通过 `WithDriver(DriverMySQL, dsn)` 或 `FromEnv()` + import 对应插件接入；自定义驱动可用 `WithDialector` 直接注入。`FromEnv()` 仍按 `DATABASE_DRIVER` 分发到各 env DSN 拼装函数（`fromenv_*.go`，纯字符串零体积）。
 
 ## 引用
 
@@ -246,6 +257,11 @@ make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给�
     - [major/register/init/](./major/register/init/AGENTS.md) — 内置初始化节点（雪花/缓存/数据库）
   - [major/cache/](./major/cache/AGENTS.md) — 泛型缓存系统（Key/Hash/Set/List）
   - [major/option/](./major/option/AGENTS.md) — 声明式配置层
-- [common/](./common/AGENTS.md) — 通用层（错误/日志/雪花/验证器/工具，无 gin 依赖）
-- [plugins/](./plugins/AGENTS.md) — 插件层（grpc/cron/async/email）
+- [common/](./common/AGENTS.md) — 通用层（错误/日志/数据库注册表/雪花/验证器/工具，无 gin 依赖）
+- [plugins/](./plugins/AGENTS.md) — 插件层（database/grpc/cron/async/email）
+  - [plugins/database/mysql](./plugins/database/mysql/AGENTS.md) — MySQL 驱动插件
+  - [plugins/database/postgres](./plugins/database/postgres/AGENTS.md) — PostgreSQL 驱动插件
+  - [plugins/database/sqlite](./plugins/database/sqlite/AGENTS.md) — SQLite 驱动插件
+  - [plugins/database/oracle](./plugins/database/oracle/AGENTS.md) — Oracle 驱动插件
+  - [plugins/database/sqlserver](./plugins/database/sqlserver/AGENTS.md) — SQL Server 驱动插件
   - [plugins/grpc/](./plugins/grpc/AGENTS.md) — gRPC 框架插件

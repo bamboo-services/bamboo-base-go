@@ -40,10 +40,10 @@ func TestSQLServerFromEnv_Defaults(t *testing.T) {
 	}
 }
 
-// TestSQLServer_ConstructOption 验证 SQLServer() 构造的 DatabaseOption 正确设置 driver 与 dsn。
-func TestSQLServer_ConstructOption(t *testing.T) {
+// TestSQLServer_WithDriver 验证 WithDriver 构造的 DatabaseOption 正确设置 driver 与 dsn。
+func TestSQLServer_WithDriver(t *testing.T) {
 	dsn := "sqlserver://sa:Pa55w0rd@localhost:1433?database=mydb"
-	opt := xOptDatabase.SQLServer(dsn)
+	opt := xOptDatabase.WithDriver(xOptDatabase.DriverSQLServer, dsn)
 	cfg := xOptDatabase.DatabaseConfig{}
 	opt(&cfg)
 	if cfg.Driver() != xOptDatabase.DriverSQLServer {

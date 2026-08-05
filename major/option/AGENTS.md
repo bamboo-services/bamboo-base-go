@@ -2,7 +2,7 @@
 
 ## 概述
 
-Register 启动阶段的声明式配置层，采用**函数式选项模式（Functional Options）**。业务侧用一行 `WithXxx()` 选择内置组件的实现（Redis/MySQL/Postgres/SQLite/路由），Register 自动完成装配，无需手写初始化节点。
+Register 启动阶段的声明式配置层，采用**函数式选项模式（Functional Options）**。业务侧用一行 `WithXxx()` 选择内置组件的实现（Redis/路由/数据库驱动），Register 自动完成装配，无需手写初始化节点。数据库驱动已插件化到 `plugins/database/*`，core 不内置任何驱动。
 
 ## 目录结构
 
@@ -17,12 +17,12 @@ option/
 │   ├── redis.go           #   WithRedis + RedisOption 二级选项
 │   └── memory.go          #   WithMemory + MemoryOption 二级选项
 └── database/              # 数据库配置子包（独立，避免循环依赖）
-    ├── database.go        #   DatabaseConfig + DatabaseOption + FromEnv + 连接池/迁移选项
-    ├── mysql.go           #   MySQL() + MySQLFromEnv()
-    ├── postgres.go        #   Postgres() + PostgresFromEnv()
-    ├── sqlite.go          #   SQLite() + SQLiteFromEnv()
-    ├── oracle.go          #   Oracle() + OracleFromEnv()
-    └── sqlserver.go       #   SQLServer() + SQLServerFromEnv()
+    ├── database.go        #   DatabaseConfig + Driver/WithDriver/WithDialector + FromEnv + 连接池/迁移选项
+    ├── fromenv_mysql.go   #   MySQLFromEnv()（env → DSN 拼装，纯字符串零体积）
+    ├── fromenv_postgres.go#   PostgresFromEnv()
+    ├── fromenv_sqlite.go  #   SQLiteFromEnv()
+    ├── fromenv_oracle.go  #   OracleFromEnv()
+    └── fromenv_sqlserver.go # SQLServerFromEnv()
 ```
 
 ## 导航指南
@@ -32,12 +32,13 @@ option/
 | 启用 Redis 缓存 | `WithCache(xOptCache.WithRedis(addr, opts...))` | Register 自动装配 Redis 缓存管理器 |
 | 启用内存缓存 | `WithCache(xOptCache.WithMemory(opts...))` | Register 自动装配内存缓存管理器 |
 | 从环境变量装配缓存 | `WithCache(xOptCache.FromEnv())` | 自动读取 `NOSQL_DRIVER` 选择 redis/memory 后端 |
-| 启用 MySQL | `WithDatabase(xOptDatabase.MySQL(dsn, opts...))` | Register 自动装配 MySQL + GORM |
-| 启用 Postgres | `WithDatabase(xOptDatabase.Postgres(dsn, opts...))` | Register 自动装配 Postgres + GORM |
-| 启用 SQLite | `WithDatabase(xOptDatabase.SQLite(dsn, opts...))` | Register 自动装配 SQLite + GORM |
-| 启用 Oracle | `WithDatabase(xOptDatabase.Oracle(dsn, opts...))` | Register 自动装配 Oracle + GORM（需 Oracle Instant Client） |
-| 启用 SQL Server | `WithDatabase(xOptDatabase.SQLServer(dsn, opts...))` | Register 自动装配 SQL Server + GORM |
-| 从环境变量装配数据库 | `WithDatabase(xOptDatabase.FromEnv(opts...))` | 自动读取 `DATABASE_DRIVER` + DSN 拼装 |
+| 启用 MySQL | `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverMySQL, dsn, opts...))` + import `plugins/database/mysql` | 驱动插件化，Register 自动装配 MySQL + GORM |
+| 启用 Postgres | `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverPostgres, dsn, opts...))` + import `plugins/database/postgres` | 驱动插件化，Register 自动装配 Postgres + GORM |
+| 启用 SQLite | `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverSQLite, dsn, opts...))` + import `plugins/database/sqlite` | 驱动插件化，Register 自动装配 SQLite + GORM |
+| 启用 Oracle | `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverOracle, dsn, opts...))` + import `plugins/database/oracle` | 驱动插件化（需 Oracle Instant Client） |
+| 启用 SQL Server | `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverSQLServer, dsn, opts...))` + import `plugins/database/sqlserver` | 驱动插件化，Register 自动装配 SQL Server + GORM |
+| 注入自定义驱动 | `WithDatabase(xOptDatabase.WithDialector(tidb.Open(dsn)))` | 直接注入任意 GORM Dialector，无需插件 |
+| 从环境变量装配数据库 | `WithDatabase(xOptDatabase.FromEnv(opts...))` + import 对应驱动插件 | 自动读取 `DATABASE_DRIVER` + DSN 拼装 |
 | 注册 HTTP 路由 | `router.go` → `WithRoute(func(ctx, serve))` | 注册器接收已装配依赖的 ctx 与 Gin 引擎，按顺序执行；支持一次传入多个注册器 |
 | 注册路由组 | `router.go` → `WithRouteGroup(prefix, func(*gin.RouterGroup))` | `WithRoute` 的语法糖，闭包内通过 gin.Context 取依赖 |
 
@@ -73,12 +74,9 @@ Memory 二级选项：`WithMemoryDefaultTTL(d)` / `WithMemoryMaxEntries(n)` / `W
 
 | 构造函数（均返回 `DatabaseOption`） | 说明 |
 |----------|------|
-| `database.MySQL(dsn, opts...)` | 构造 MySQL DatabaseOption |
-| `database.Postgres(dsn, opts...)` | 构造 Postgres DatabaseOption |
-| `database.SQLite(dsn, opts...)` | 构造 SQLite DatabaseOption |
-| `database.Oracle(dsn, opts...)` | 构造 Oracle DatabaseOption（godror logfmt DSN） |
-| `database.SQLServer(dsn, opts...)` | 构造 SQL Server DatabaseOption（URL DSN） |
-| `database.FromEnv(opts...)` | 从 `DATABASE_DRIVER` + 分项 env 自动装配，返回 DatabaseOption（未启用时返回 nil） |
+| `database.WithDriver(driver, dsn, opts...)` | 显式指定驱动枚举 + DSN；打开时按 driver 从 common 注册表解析 Dialector 工厂（需 import 对应插件） |
+| `database.WithDialector(d)` | 直接注入任意 GORM Dialector（自定义驱动，无需插件） |
+| `database.FromEnv(opts...)` | 从 `DATABASE_DRIVER` + 分项 env 自动装配（未启用时闭包不修改 config，Enabled()=false） |
 
 连接池二级选项（`DatabaseOption`）：`WithMaxOpenConns` / `WithMaxIdleConns` / `WithConnMaxLifetime` / `WithConnMaxIdleTime`
 
@@ -99,6 +97,6 @@ Memory 二级选项：`WithMemoryDefaultTTL(d)` / `WithMemoryMaxEntries(n)` / `W
 ## 调试路径
 
 1. Register 没有装配缓存/数据库 — 检查 Option 是否正确传入 `Register()`，以及 `CacheConfig.Enabled()` / `Config.Enabled()` 是否返回 true。
-2. 启动时 panic "不支持的缓存类型" / "不支持的数据库驱动" — 检查传入的 Type/Driver 值和常量定义是否匹配。
+2. 启动时报错 "不支持的数据库驱动" — 检查是否 import 了对应驱动插件（plugins/database/*），以及 Driver 常量是否匹配。
 3. DSN 拼装错误 — 使用 `FromEnv` 时检查所有相关环境变量（`DATABASE_HOST` / `DATABASE_USER` 等）是否有值。
 4. 路由未生效 — 确认 `WithRoute` 注册的函数被执行（Register 按序调用），检查 Gin 路由路径是否重复。

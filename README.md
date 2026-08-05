@@ -151,6 +151,7 @@ bamboo-base/
 │   ├── result/                   #   HTTP 响应处理 (xResult)
 │   └── route/                    #   路由处理 (xRoute)
 ├── common/                       # 通用层模块
+│   ├── database/                 #   数据库驱动注册表 (xDB)
 │   ├── error/                    #   错误处理 (xError)
 │   ├── log/                      #   日志系统 (xLog)
 │   ├── snowflake/                #   雪花算法 (xSnowflake)
@@ -162,6 +163,7 @@ bamboo-base/
 │   ├── context/                  #   上下文键常量 (xCtx)
 │   └── env/                      #   环境变量管理 (xEnv)
 └── plugins/                      # 插件模块
+    ├── database/                 #   数据库驱动插件 (mysql/postgres/sqlite/oracle/sqlserver)
     ├── cron/                     #   定时任务插件
     └── grpc/                     #   gRPC 框架插件
 ```
@@ -170,6 +172,7 @@ bamboo-base/
 
 ```
 defined ──> common ──> major
+plugins/database/* ──> common (驱动注册表)
 plugins/cron ──────────> common
 plugins/grpc ──> defined + common
 ```

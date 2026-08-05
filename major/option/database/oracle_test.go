@@ -45,10 +45,10 @@ func TestOracleFromEnv_NoLibDir(t *testing.T) {
 	}
 }
 
-// TestOracle_ConstructOption 验证 Oracle() 构造的 DatabaseOption 正确设置 driver 与 dsn。
-func TestOracle_ConstructOption(t *testing.T) {
+// TestOracle_WithDriver 验证 WithDriver 构造的 DatabaseOption 正确设置 driver 与 dsn。
+func TestOracle_WithDriver(t *testing.T) {
 	dsn := `user="scott" password="tiger" connectString="dbhost:1521/orclpdb1"`
-	opt := xOptDatabase.Oracle(dsn)
+	opt := xOptDatabase.WithDriver(xOptDatabase.DriverOracle, dsn)
 	cfg := xOptDatabase.DatabaseConfig{}
 	opt(&cfg)
 	if cfg.Driver() != xOptDatabase.DriverOracle {

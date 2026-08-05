@@ -6,6 +6,11 @@ use (
 	./major
 	./plugins/async
 	./plugins/cron
+	./plugins/database/mysql
+	./plugins/database/oracle
+	./plugins/database/postgres
+	./plugins/database/sqlite
+	./plugins/database/sqlserver
 	./plugins/email
 	./plugins/grpc
 )

@@ -2,7 +2,7 @@
 
 ## 概述
 
-通用层模块（`github.com/bamboo-services/bamboo-base-go/common`），提供错误处理、日志系统、雪花算法 ID 生成、请求验证器和工具函数。是 `major` 层和 `plugins/*` 插件的共同依赖，被依赖链中的第二层（`defined → common → major`）。**common 层已完全解耦 gin 依赖，保持纯 Go 依赖。**
+通用层模块（`github.com/bamboo-services/bamboo-base-go/common`），提供错误处理、日志系统、数据库驱动注册表、雪花算法 ID 生成、请求验证器和工具函数。是 `major` 层和 `plugins/*` 插件的共同依赖，被依赖链中的第二层（`defined → common → major`）。**common 层已完全解耦 gin 依赖，保持纯 Go 依赖。**
 
 ## 目录结构
 
@@ -20,6 +20,8 @@ common/
 │   ├── const.go               # 日志器名称常量（NamedMAIN / NamedINIT / NamedRESU 等）
 │   ├── handler.go             # 自定义 slog Handler（控制台 + 文件双写 + LogContextExtractor）
 │   └── rotator.go             # 按日期 + 大小的日志文件切割器
+├── database/
+│   └── dialector.go           # Driver 枚举 + RegisterDialector / GetDialectorFactory 驱动注册表
 ├── snowflake/
 │   ├── gene.go                # Gene 类型 + 预定义基因常量（系统级 0-15 / 业务级 16-63）
 │   ├── gene_calc.go           # 基因 ID 计算（位运算嵌入 gene）
@@ -62,6 +64,7 @@ common/
 > - `GetDB` / `GetRDB` / `GetEmailClient` / `GetSnowflakeNode` 等上下文提取函数已从 `common/utility/context/` 迁移到 `major/utility/context/`，通过 `ContextExtractor` 接口解耦 gin 依赖。
 > - GORM 日志适配器已从 `common/log/gorm.go` 迁移到 `major/log/gorm.go`。
 > - `common/validator/translator.go` 不再直接依赖 `gin/binding`，通过 `ValidateProvider` 接口由 major 层注入。
+> - 新增 `database` 驱动注册表（`RegisterDialector` / `GetDialectorFactory`），承载驱动枚举与 GORM Dialector 工厂注册，供 `plugins/database/*` 插件 init() 注册，使框架 core（major）不依赖任何具体数据库驱动。
 
 ## 导航指南
 
@@ -75,6 +78,8 @@ common/
 | 选择基因类型 | `snowflake/gene.go` | 系统级 0-15 / 业务级 16-63 |
 | 注册自定义验证器 | `validator/custom.go` → `RegisterCustomValidators()` | 在 Gin 引擎初始化时调用 |
 | 翻译验证错误 | `validator/translator.go` → `TranslateError(err)` | 返回 `map[field]message` 中文翻译 |
+| 注册驱动插件工厂 | `database/dialector.go` → `RegisterDialector()` | 由 plugins/database/* 在 init() 调用 |
+| 查找驱动工厂 | `database/dialector.go` → `GetDialectorFactory()` | 框架 core 按 Driver 枚举解析 Dialector |
 | 加密密码 | `utility/package/password.go` → `Encrypt()` | base64 + bcrypt |
 | 构建 API 响应体 | `base_response.go` → `BaseResponse` | HTTP 与 gRPC 共用结构 |
 | 设置 ValidateProvider | `validator/translator.go` → `SetValidateProvider()` | major 层在初始化时注入 |

@@ -48,7 +48,7 @@ major/
 │   ├── database.go            #   薄桥接层：WithDatabase + 类型别名重导出
 │   ├── router.go              #   RouteRegistrar + WithRoute
 │   ├── cache/                 #   缓存配置子包（WithRedis/WithMemory/FromEnv）
-│   └── database/              #   数据库配置子包（MySQL/Postgres/SQLite/FromEnv）
+│   └── database/              #   数据库配置子包（WithDriver/WithDialector/FromEnv，驱动插件化）
 ├── utility/                   # HTTP 请求绑定与上下文提取工具
 │   ├── bind.go                #   Bind[T]() — 请求参数绑定入口
 │   ├── binding.go             #   Binding[T].Data()/Query()/URI()/Header()
@@ -72,7 +72,7 @@ major/
 ```
 
 > **Runner 装配链路**：`opts ...xOption.Option` → `Register` 内 `Apply()` → `DatabaseInit`/`CacheInit` 工厂 → `RegNode.Use()` → `Exec()` → context 注入。
-> 业务侧原先在 `startup.Init()` 中手写的 db/redis 节点，现可由 `WithMySQL/WithPostgres/WithSQLite/WithRedis` 一行替代；AutoMigrate 表声明和建表后数据初始化（种子数据）已纳入 `DatabaseOption`，通过 `WithAutoMigrate` / `WithPrepare` 声明式装配，由 `DatabaseInit` 在 DB 建连后自动执行，不再需要手写迁移节点或借道 `WithRoute` 回调。
+> 业务侧原先在 `startup.Init()` 中手写的 db/redis 节点，现可由 `WithDriver(DriverMySQL, dsn)` + import 驱动插件（如 `plugins/database/mysql`）或 `WithCache(...)` 一行替代；AutoMigrate 表声明和建表后数据初始化（种子数据）已纳入 `DatabaseOption`，通过 `WithAutoMigrate` / `WithPrepare` 声明式装配，由 `DatabaseInit` 在 DB 建连后自动执行，不再需要手写迁移节点或借道 `WithRoute` 回调。数据库驱动已插件化，core 不内置任何驱动。
 
 > **架构变更说明**：`HandleValidationError`、`Bind` 绑定工具、`GetDB/GetRDB` 等上下文提取函数已从 `common` 层迁移到 `major` 层，并通过 `ContextExtractor` 接口解耦 gin 依赖。common 层现在完全不依赖 gin，保持纯 Go 依赖。
 
@@ -82,8 +82,8 @@ major/
 |------|------|------|
 | 启动应用 | `main/runner.go` → `Runner()` | `Runner(reg, log, goroutineFunc...)` |
 | 配置缓存后端 | `option/cache.go` → `WithCache(xOptCache.WithRedis)` / `WithCache(xOptCache.WithMemory)` | 声明式双层选择 Redis 或内存缓存 |
-| 配置数据库 | `option/database.go` → `WithDatabase(xOptDatabase.MySQL)` / `WithDatabase(xOptDatabase.Postgres)` / `WithDatabase(xOptDatabase.SQLite)` | 双层指定驱动，Runner 自动装配 |
-| 从环境变量装配数据库 | `option/database.go` → `WithDatabase(xOptDatabase.FromEnv)` | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
+| 配置数据库 | `option/database.go` → `WithDatabase(xOptDatabase.WithDriver(xOptDatabase.DriverMySQL, dsn))` + import 驱动插件 | 双层指定驱动，Runner 自动装配 |
+| 从环境变量装配数据库 | `option/database.go` → `WithDatabase(xOptDatabase.FromEnv)` + import 对应驱动插件 | 自动读取 `DATABASE_DRIVER` + 分项配置拼装 DSN |
 | 注册 HTTP 路由 | `option/router.go` → `WithRoute` / `WithRouteGroup` | 可叠加多个，支持插件自带路由 |
 | 使用缓存 | 从 context 获取 `*xCache.Manager` → `xCache.KeyCacheOf(mgr)` 等 | 泛型缓存接口，自动按后端分发 |
 | 返回成功响应 | `result/result.go` → `Success()` / `SuccessHasData()` | 自动注入 context / code / overhead |

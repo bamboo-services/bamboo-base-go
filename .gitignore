@@ -26,4 +26,8 @@ go.work.sum
 *.test.binary.gz.*
 
 ### AI ###
-.omo/.zcode/
+.omo/
+.zcode/
+
+### 运行时日志（测试/本地运行产生）###
+.logs/

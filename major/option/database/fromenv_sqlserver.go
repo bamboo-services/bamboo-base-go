@@ -6,22 +6,6 @@ import (
 	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
 )
 
-// SQLServer 构造 SQL Server 的 [DatabaseOption]。
-//
-// dsn 为 SQL Server URL 格式连接串，例如：
-//
-//	sqlserver://user:pass@host:port?database=dbname
-//
-// 如需从环境变量自动拼装，改用 [FromEnv] 并设置 DATABASE_DRIVER=sqlserver。
-// 如需调整连接池参数，配合 [WithMaxOpenConns] 等二级选项使用。
-func SQLServer(dsn string, opts ...DatabaseOption) DatabaseOption {
-	return func(c *DatabaseConfig) {
-		c.driver = DriverSQLServer
-		c.dsn = dsn
-		applyDatabase(c, opts...)
-	}
-}
-
 // SQLServerFromEnv 从环境变量拼装 SQL Server URL DSN。
 //
 // 格式: sqlserver://user:pass@host:port?database=name
@@ -32,6 +16,9 @@ func SQLServer(dsn string, opts ...DatabaseOption) DatabaseOption {
 //   - DATABASE_HOST   (默认 localhost)
 //   - DATABASE_PORT   (默认 1433)
 //   - DATABASE_NAME   (默认 master)
+//
+// 该函数仅负责拼装 DSN 字符串，不涉及任何驱动包。显式构造请使用 [WithDriver]
+// 并 import 对应驱动插件（如 plugins/database/sqlserver），[FromEnv] 会自动调用本函数。
 func SQLServerFromEnv() string {
 	return fmt.Sprintf(
 		"sqlserver://%s:%s@%s:%s?database=%s",

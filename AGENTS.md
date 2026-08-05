@@ -231,6 +231,11 @@ make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给�
                              #         plugins/database/{mysql,postgres,sqlite,oracle,sqlserver}/vX.Y.Z,
                              #         plugins/{cron,grpc,async,email}/vX.Y.Z
                              # Action 同时自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z
+make release VERSION=vX.Y.Z AI_MODEL=<model> AI_API_KEY=<key>
+                             # 可选：用 AI 生成中文 Release Notes（OpenAI 兼容接口）
+                             # 非敏感 AI 配置走仓库 Variables：RELEASE_AI_BASE_URL / RELEASE_AI_MODEL
+                             # 密钥走 GitHub Secrets：RELEASE_AI_API_KEY（缺失时 workflow 优雅跳过）
+                             # 提供方切换示例见 .env.example
 ```
 
 > 旧的多版本号方案（每个模块独立 `version` 文件 + `make release PKG=` / `make release-all`）已废弃。
@@ -249,6 +254,7 @@ make release VERSION=vX.Y.Z  # 创建 GitHub Release，触发 Action 自动给�
 - **架构变更（opts 上提 Register）**：opts 从 Runner 参数迁移到 Register 参数，Runner 不再参与组件装配。DB/Cache/Redis 在 Register 阶段通过 Use 在 Exec 前装配，业务节点可在 Exec 时直接从 ctx 获取。
 - **架构变更（mainRunner 重构）**：`Runner()` 单函数拆解为 `mainRunner` 结构体 + 按生命周期阶段拆分的方法链（`initContext → initSignal → initSync → initGoroutine → initWeb`），方法分布在 `runner.go` / `goroutine.go` / `web.go`。原 `major/main/option.go` 已删除，Runner 不再持有内部选项。
 - **架构变更（数据库驱动插件化）**：数据库驱动从 major 剥离为 `plugins/database/*` 独立插件，common 层新增 `database` 驱动注册表（`RegisterDialector` / `GetDialectorFactory`）。core 不再内置任何驱动，业务端通过 `WithDriver(DriverMySQL, dsn)` 或 `FromEnv()` + import 对应插件接入；自定义驱动可用 `WithDialector` 直接注入。`FromEnv()` 仍按 `DATABASE_DRIVER` 分发到各 env DSN 拼装函数（`fromenv_*.go`，纯字符串零体积）。
+- **AI 生成 Release Content**：发布链路内置可选 AI 板块，由 `.github/scripts/generate-release-notes.sh`（零依赖 bash+curl，OpenAI 兼容 chat/completions）实现，供 Makefile（`make release AI_API_KEY=...`）与 release.yml 复用。上一版本探测固定使用 `git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude 'v*-*'`，排除子模块 tag 与 pseudo-version tag。
 
 ## 引用
 

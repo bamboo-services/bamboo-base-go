@@ -4,10 +4,12 @@ name: Release Modules
 # 流程：
 #   1. 从 release tag 检出代码
 #   2. 解析 release tag name → 提取版本号 vX.Y.Z
-#   3. 在所有子模块 go.mod 中将 bamboo-base-go/<subpkg> 的依赖版本替换为 vX.Y.Z
-#   4. 提交 bump commit
-#   5. 按 defined → common → major → plugins/* 顺序打子模块 tag
-#   6. 推送 commit 和 tags 到默认分支
+#   3. 查找上一 root tag（排除子模块 tag 与 pseudo-version tag）→ 供 AI 生成对比范围
+#   4. 在所有子模块 go.mod 中将 bamboo-base-go/<subpkg> 的依赖版本替换为 vX.Y.Z
+#   5. 提交 bump commit
+#   6. 按 defined → common → major → plugins/* 顺序打子模块 tag
+#   7. 推送 commit 和 tags 到默认分支
+#   8. （可选）配置 RELEASE_AI_API_KEY 密钥时：AI 生成并更新 Release Content（gh release edit）
 #
 # 结果：每个子模块获得一个 <path>/vX.Y.Z tag（如 common/v1.2.0），可被
 #       下游业务通过 `go get github.com/bamboo-services/bamboo-base-go/<path>@vX.Y.Z` 引用。
@@ -18,6 +20,12 @@ on:
 
 permissions:
   contents: write
+
+# 非敏感 AI 配置（仓库级）：可在仓库 Settings → Variables 中覆盖
+# 敏感密钥（RELEASE_AI_API_KEY）走 GitHub Secrets，workflow 中经 secrets 注入
+env:
+  RELEASE_AI_BASE_URL: ${{ vars.RELEASE_AI_BASE_URL || 'https://api.openai.com/v1' }}
+  RELEASE_AI_MODEL:    ${{ vars.RELEASE_AI_MODEL    || 'gpt-4o-mini' }}
 
 jobs:
   release:
@@ -48,6 +56,21 @@ jobs:
           echo "tag=$TAG"        >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "📦 Release Tag: $TAG  |  Version: $VERSION"
+
+      - name: Find previous root tag
+        id: prev
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          # 从 release tag 的父提交向上找最近的 root tag：
+          #   --match  只认 vX.Y.Z，排除 common/ 等子模块前缀 tag
+          #   --exclude 'v*-*' 排除 pseudo-version / 预发布 tag
+          PREV=$(git describe --tags --abbrev=0 \
+            --match 'v[0-9]*.[0-9]*.[0-9]*' \
+            --exclude 'v*-*' \
+            "${TAG}~1" 2>/dev/null || echo "")
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+          echo "📌 上一 root tag: ${PREV:-<无>}"
 
       - name: Bump submodule dependencies in go.mod
         env:
@@ -147,12 +170,51 @@ jobs:
           git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" --tags
           echo "✅ 已推送所有子模块 tag"
 
+      # ---------------- AI 生成 Release Content（可选） ----------------
+      # 仅当仓库配置了 RELEASE_AI_API_KEY 密钥时生效；
+      # 密钥为空 → 优雅跳过，不破坏原有发布流程。
+      # 位置放在最后：tag/bump/推送是发布的关键路径，Release 内容属于展示层、
+      # 非 tag 前置依赖；且 gh 在此处已可用（release 事件 + contents: write）。
+      # continue-on-error：AI 失败不阻断已成功的发布（Release 已有 --generate-notes 兜底）。
+      - name: 🤖 AI 生成 Release Content
+        id: ai_notes
+        continue-on-error: true
+        env:
+          RELEASE_AI_BASE_URL: ${{ env.RELEASE_AI_BASE_URL }}
+          RELEASE_AI_MODEL:    ${{ env.RELEASE_AI_MODEL }}
+          RELEASE_AI_API_KEY:  ${{ secrets.RELEASE_AI_API_KEY }}
+          TAG:      ${{ steps.ver.outputs.tag }}
+          PREV_TAG: ${{ steps.prev.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_AI_API_KEY" ]; then
+            echo "ℹ️ 未配置 RELEASE_AI_API_KEY, 跳过 AI 生成 (保留 --generate-notes 内容)"
+            echo "ai=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$PREV_TAG" ]; then
+            echo "ℹ️ 首个 Release, 无对比范围, 跳过 AI 生成"
+            echo "ai=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "🤖 AI 生成 Release Content: $PREV_TAG...$TAG (model=$RELEASE_AI_MODEL)"
+          .github/scripts/generate-release-notes.sh \
+            --from "$PREV_TAG" --to "$TAG" \
+            --output .release-notes.md
+          gh release edit "$TAG" --notes-file .release-notes.md
+          echo "ai=done" >> "$GITHUB_OUTPUT"
+          echo "✅ 已用 AI 生成并更新 Release Notes"
+
       - name: Summary
         env:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           {
             echo "## 🎉 Release ${TAG} 完成"
+            echo ""
+            echo "### Release Content"
+            echo ""
+            echo "AI 生成状态: ${{ steps.ai_notes.outputs.ai }}"
             echo ""
             echo "### 子模块 Tag"
             echo ""

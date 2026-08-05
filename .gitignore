@@ -29,5 +29,12 @@ go.work.sum
 .omo/
 .zcode/
 
+### 发布临时文件（make release 生成的 AI Release Notes）###
+/.release-notes.md
+
+### Python（测试脚本缓存）###
+__pycache__/
+*.pyc
+
 ### 运行时日志（测试/本地运行产生）###
 .logs/

@@ -29,10 +29,15 @@ help:
 	@echo ""
 	@echo "发布命令:"
 	@echo "  make release VERSION=<tag>    - 创建 GitHub Release (触发 Action 给子模块打 tag)"
+	@echo "    可选 AI 生成 Release Notes:"
+	@echo "      make release VERSION=vX.Y.Z AI_MODEL=<model> AI_API_KEY=<key>"
+	@echo "      环境变量: RELEASE_AI_BASE_URL / RELEASE_AI_MODEL / RELEASE_AI_API_KEY"
+	@echo "      未配置 AI 时回退 gh --generate-notes"
 	@echo ""
 	@echo "发布流程:"
-	@echo "  1. make release VERSION=vX.Y.Z"
-	@echo "     → 调用 gh release create --generate-notes 自动生成 What's Changed"
+	@echo "  1. make release VERSION=vX.Y.Z [AI_MODEL=... AI_API_KEY=...]"
+	@echo "     → 有 AI 配置: 调用 .github/scripts/generate-release-notes.sh 生成中文 Notes"
+	@echo "     → 无 AI 配置: gh release create --generate-notes"
 	@echo "  2. GitHub Action 监听 release published 事件"
 	@echo "     → 自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z"
 	@echo "     → 按 defined → common → major → plugins/* 顺序打子 tag"
@@ -40,6 +45,7 @@ help:
 	@echo ""
 	@echo "示例:"
 	@echo "  make release VERSION=v1.2.0"
+	@echo "  make release VERSION=v1.2.0 AI_MODEL=deepseek-chat AI_API_KEY=sk-xxx"
 
 # ============================================================
 # 开发命令
@@ -71,29 +77,48 @@ vet:
 # 发布命令
 # ============================================================
 
-# --- make release VERSION=vX.Y.Z ---
+# 发布变量（命令行可覆盖，也读取 shell 环境变量）
+# AI 生成 Release Notes 的可选配置；未配置 AI_API_KEY 时回退 gh --generate-notes
+AI_BASE_URL ?= $(RELEASE_AI_BASE_URL)
+AI_MODEL    ?= $(RELEASE_AI_MODEL)
+AI_API_KEY  ?= $(RELEASE_AI_API_KEY)
+# AI 生成的 Release Notes 临时文件（使用后删除）
+RELEASE_NOTES_FILE ?= .release-notes.md
+
+# --- make release VERSION=vX.Y.Z [AI_MODEL=...] [AI_API_KEY=...] ---
 # 在 GitHub 上创建 Release，触发 .github/workflows/release.yml
 # Action 会自动为每个子模块打 <path>/vX.Y.Z tag 并更新下游 go.mod 依赖
+# 提供 AI_API_KEY 时：调用 .github/scripts/generate-release-notes.sh 生成中文 Release Notes
+#                   （失败自动回退 --generate-notes）
+# 未提供时：回退现有 gh release create --generate-notes
 release:
 ifndef VERSION
 	$(error 请指定版本号: make release VERSION=vX.Y.Z)
 endif
 	@echo "🚀 创建 GitHub Release: $(VERSION)"
 	@command -v gh >/dev/null 2>&1 || { echo "❌ 未找到 gh CLI,请先安装: https://cli.github.com/"; exit 1; }
-	@# 获取上一个 tag 作为 notes 起始点（用于生成 What's Changed）
-	@$(eval PREV_TAG := $(shell git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo ""))
-	@if [ -n "$(PREV_TAG)" ]; then \
-		echo "   📝 生成 Release Notes 范围: $(PREV_TAG)...$(VERSION)"; \
-		gh release create "$(VERSION)" \
-			--title "$(VERSION)" \
-			--generate-notes \
-			--notes-start-tag "$(PREV_TAG)"; \
+	@set -e; \
+	PREV_TAG=$$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude 'v*-*' HEAD^ 2>/dev/null || true); \
+	NOTES_OPTS="--generate-notes"; \
+	if [ -n "$$PREV_TAG" ]; then NOTES_OPTS="--generate-notes --notes-start-tag $$PREV_TAG"; fi; \
+	NOTES_FILE="$(RELEASE_NOTES_FILE)"; \
+	if [ -n "$(AI_API_KEY)" ]; then \
+		echo "   🤖 AI 生成 Release Notes ($(AI_MODEL)): $${PREV_TAG:-<起始>}...$(VERSION)"; \
+		if RELEASE_AI_API_KEY="$(AI_API_KEY)" \
+		   RELEASE_AI_MODEL="$(AI_MODEL)" \
+		   RELEASE_AI_BASE_URL="$(AI_BASE_URL)" \
+		   .github/scripts/generate-release-notes.sh \
+		     --from "$$PREV_TAG" --to HEAD --output "$$NOTES_FILE"; then \
+			NOTES_OPTS="--notes-file $$NOTES_FILE"; \
+			echo "   📝 已生成 AI Release Notes: $$NOTES_FILE"; \
+		else \
+			echo "   ⚠️ AI 生成失败, 回退 GitHub 自动生成"; \
+		fi; \
 	else \
-		echo "   📝 首个 Release,生成全部 Release Notes"; \
-		gh release create "$(VERSION)" \
-			--title "$(VERSION)" \
-			--generate-notes; \
-	fi
-	@echo "✅ Release $(VERSION) 已创建"
-	@echo "   👀 查看: https://github.com/bamboo-services/bamboo-base-go/releases/tag/$(VERSION)"
-	@echo "   ⏳ GitHub Action 将自动为子模块打 tag (defined/common/major/plugins/*/$(VERSION))"
+		echo "   📝 未配置 AI (设置 AI_API_KEY 启用), 使用 GitHub 自动生成"; \
+	fi; \
+	gh release create "$(VERSION)" --title "$(VERSION)" $$NOTES_OPTS; \
+	rm -f "$$NOTES_FILE"; \
+	echo "✅ Release $(VERSION) 已创建"; \
+	echo "   👀 查看: https://github.com/bamboo-services/bamboo-base-go/releases/tag/$(VERSION)"; \
+	echo "   ⏳ GitHub Action 将自动为子模块打 tag (defined/common/major/plugins/*/$(VERSION))"

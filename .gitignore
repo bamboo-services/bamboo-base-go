@@ -28,6 +28,8 @@ go.work.sum
 ### AI ###
 .omo/
 .zcode/
+.claude/worktrees/
+.claude/settings.local.json
 
 ### 发布临时文件（make release 生成的 AI Release Notes）###
 /.release-notes.md

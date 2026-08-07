@@ -37,12 +37,12 @@ func (mockDialector) Initialize(db *gorm.DB) error {
 	db.ConnPool = sql.OpenDB(mockConnector{})
 	return nil
 }
-func (mockDialector) Migrator(*gorm.DB) gorm.Migrator               { return nil }
-func (mockDialector) DataTypeOf(*schema.Field) string               { return "" }
-func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression { return nil }
+func (mockDialector) Migrator(*gorm.DB) gorm.Migrator                       { return nil }
+func (mockDialector) DataTypeOf(*schema.Field) string                       { return "" }
+func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression        { return nil }
 func (mockDialector) BindVarTo(clause.Writer, *gorm.Statement, interface{}) {}
-func (mockDialector) QuoteTo(clause.Writer, string)                  {}
-func (mockDialector) Explain(sql string, vars ...interface{}) string { return "" }
+func (mockDialector) QuoteTo(clause.Writer, string)                         {}
+func (mockDialector) Explain(sql string, vars ...interface{}) string        { return "" }
 
 // TestRegisterOptionUptoExec 验证业务节点在 Register 带上 DB+Cache opts 后，
 // 能从 ctx 拿到 *gorm.DB 和 *xCache.Manager，且 reg.Init.Ctx 也包含它们。

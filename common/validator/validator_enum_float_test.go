@@ -53,7 +53,6 @@ func Test_ValidateEnumFloat_ValidValues(t *testing.T) {
 		},
 	}
 
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := v.Struct(tc.input)
@@ -104,7 +103,6 @@ func Test_ValidateEnumFloat_InvalidValues(t *testing.T) {
 			expectedField: "折扣",
 		},
 	}
-
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

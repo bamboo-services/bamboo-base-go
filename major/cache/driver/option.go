@@ -10,7 +10,7 @@ import "time"
 //	_ = kc.Set(ctx, "user:1", &u, xCache.WithTTL(5*time.Minute))
 //
 // 设计为函数式选项而非方法参数，便于后续无破坏性地扩展更多控制项
-//（如仅当不存在时写入、条件续期、版本号等）。
+// （如仅当不存在时写入、条件续期、版本号等）。
 type SetOption func(*SetConfig)
 
 // SetConfig 持有单次写操作的运行时配置，由 [ApplySet] 从实例默认值与选项列表合成。

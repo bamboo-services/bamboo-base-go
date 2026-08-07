@@ -16,12 +16,12 @@ func (mockDialector) Name() string { return "mock" }
 func (mockDialector) Initialize(*gorm.DB) error {
 	return nil
 }
-func (mockDialector) Migrator(*gorm.DB) gorm.Migrator               { return nil }
-func (mockDialector) DataTypeOf(*schema.Field) string               { return "" }
-func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression { return nil }
+func (mockDialector) Migrator(*gorm.DB) gorm.Migrator                       { return nil }
+func (mockDialector) DataTypeOf(*schema.Field) string                       { return "" }
+func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression        { return nil }
 func (mockDialector) BindVarTo(clause.Writer, *gorm.Statement, interface{}) {}
-func (mockDialector) QuoteTo(clause.Writer, string)                  {}
-func (mockDialector) Explain(sql string, vars ...interface{}) string { return "" }
+func (mockDialector) QuoteTo(clause.Writer, string)                         {}
+func (mockDialector) Explain(sql string, vars ...interface{}) string        { return "" }
 
 // mockFactory 返回 mockDialector 的工厂。
 func mockFactory(dsn string) gorm.Dialector { return mockDialector{} }

@@ -44,7 +44,6 @@ func Test_ValidateEnumString_ValidValues(t *testing.T) {
 		},
 	}
 
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := v.Struct(tc.input)
@@ -95,7 +94,6 @@ func Test_ValidateEnumString_InvalidValues(t *testing.T) {
 			expectedField: "角色",
 		},
 	}
-
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

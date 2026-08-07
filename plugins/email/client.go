@@ -3,10 +3,11 @@ package xEmail
 import (
 	"context"
 	"fmt"
+	"io/fs"
 
-	mail "github.com/wneessen/go-mail"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
 	xEnv "github.com/bamboo-services/bamboo-base-go/defined/env"
+	"github.com/wneessen/go-mail"
 )
 
 // Config 邮件客户端配置
@@ -23,11 +24,11 @@ type Config struct {
 
 // EmailClient 邮件客户端
 type EmailClient struct {
-	client *mail.Client
-	tmpl   *TemplateManager
-	from   string
+	client   *mail.Client
+	tmpl     *TemplateManager
+	from     string
 	fromName string
-	log    *xLog.LogNamedLogger
+	log      *xLog.LogNamedLogger
 }
 
 // InitClient 初始化邮件客户端（注册节点函数）
@@ -230,6 +231,14 @@ func (c *EmailClient) SendTemplate(ctx context.Context, msg *Message) error {
 // AddTemplateDir 添加外部模板目录
 func (c *EmailClient) AddTemplateDir(dir string) error {
 	return c.tmpl.AddDir(dir)
+}
+
+// AddTemplateFS 从 embed.FS 加载邮件模板，同名模板覆盖内置模板。
+//
+// 适用于将模板直接内嵌进二进制的单文件部署场景，
+// 替代 AddTemplateDir 对运行时文件系统目录的依赖。
+func (c *EmailClient) AddTemplateFS(fsys fs.FS, pattern string) error {
+	return c.tmpl.AddFS(fsys, pattern)
 }
 
 // ListTemplates 返回可用模板名称列表

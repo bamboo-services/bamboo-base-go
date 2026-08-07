@@ -36,14 +36,14 @@ const (
 	NamedSIGN = "SIGN" // 签名验证日志
 
 	// 其他通用类
-	NamedUTIL = "UTIL" // 工具层日志
-	NamedFILT = "FILT" // 过滤器层日志
-	NamedMIDE = "MIDE" // 中间件层日志
-	NamedVALD = "VALD" // 验证器层日志
-	NamedINIT = "INIT" // 初始化日志
-	NamedTHOW = "THOW" // 抛出错误日志
-	NamedRESU = "RESU" // 响应结果日志
-	NamedRECO = "RECO" // 恢复层系统日志
-	NamedCRON = "CRON" // 定时任务日志
+	NamedUTIL  = "UTIL"  // 工具层日志
+	NamedFILT  = "FILT"  // 过滤器层日志
+	NamedMIDE  = "MIDE"  // 中间件层日志
+	NamedVALD  = "VALD"  // 验证器层日志
+	NamedINIT  = "INIT"  // 初始化日志
+	NamedTHOW  = "THOW"  // 抛出错误日志
+	NamedRESU  = "RESU"  // 响应结果日志
+	NamedRECO  = "RECO"  // 恢复层系统日志
+	NamedCRON  = "CRON"  // 定时任务日志
 	NamedEMAIL = "EMAIL" // 邮件服务日志
 )

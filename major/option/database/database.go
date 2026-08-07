@@ -46,13 +46,13 @@ const (
 //   - [WithDialector] 直接注入任意 GORM 驱动（TiDB / ClickHouse 等自定义驱动，无需注册）；
 //   - [FromEnv] 从环境变量自动装配。
 type DatabaseConfig struct {
-	driver         Driver
-	dsn            string
-	dialector      gorm.Dialector // 显式注入的 GORM 驱动拨号器（WithDialector / 自定义驱动）
-	common         CommonOptions
-	tablePrefix    string
-	migrateTables  []interface{} // AutoMigrate 目标表，可多次叠加
-	prepareFuncs   []PrepareFunc // 建表后数据初始化回调，按注册顺序执行
+	driver        Driver
+	dsn           string
+	dialector     gorm.Dialector // 显式注入的 GORM 驱动拨号器（WithDialector / 自定义驱动）
+	common        CommonOptions
+	tablePrefix   string
+	migrateTables []interface{} // AutoMigrate 目标表，可多次叠加
+	prepareFuncs  []PrepareFunc // 建表后数据初始化回调，按注册顺序执行
 }
 
 // Driver 返回数据库驱动类型。

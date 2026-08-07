@@ -38,12 +38,12 @@ func (mockDialector) Initialize(db *gorm.DB) error {
 	db.ConnPool = sql.OpenDB(mockConnector{})
 	return nil
 }
-func (mockDialector) Migrator(*gorm.DB) gorm.Migrator               { return nil }
-func (mockDialector) DataTypeOf(*schema.Field) string               { return "" }
-func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression { return nil }
+func (mockDialector) Migrator(*gorm.DB) gorm.Migrator                       { return nil }
+func (mockDialector) DataTypeOf(*schema.Field) string                       { return "" }
+func (mockDialector) DefaultValueOf(*schema.Field) clause.Expression        { return nil }
 func (mockDialector) BindVarTo(clause.Writer, *gorm.Statement, interface{}) {}
-func (mockDialector) QuoteTo(clause.Writer, string)                  {}
-func (mockDialector) Explain(sql string, vars ...interface{}) string { return "" }
+func (mockDialector) QuoteTo(clause.Writer, string)                         {}
+func (mockDialector) Explain(sql string, vars ...interface{}) string        { return "" }
 
 // TestDatabaseInit_UnregisteredDriver 验证 WithDriver 但未 import 对应驱动插件时，
 // DatabaseInit 在 openByDriver 阶段 fail-fast 报错（不 panic、不产生 *gorm.DB）。

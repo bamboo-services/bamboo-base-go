@@ -62,7 +62,9 @@ type HashCache[K any, F comparable, V any, S any] interface {
 //   - V: 集合成员的值类型。
 //
 // Add 方法将一组成员添加到集合中，已存在的成员会被忽略；opts 用于覆盖默认 TTL。
-//   members 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
+//
+//	members 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
+//
 // Members 方法获取集合中的所有成员。
 // IsMember 方法检查指定成员是否存在于集合中。
 // Count 方法获取集合中的成员数量。
@@ -86,7 +88,9 @@ type SetCache[K any, V any] interface {
 //   - V: 列表元素的值类型。
 //
 // Prepend 方法将一组值插入到列表头部（左侧）；opts 用于覆盖默认 TTL。
-//   values 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
+//
+//	values 采用 []V 而非 ...V 变参，以便在尾部保留 opts 变参位置。
+//
 // Append 方法将一组值追加到列表尾部（右侧）；opts 用于覆盖默认 TTL。
 // Range 方法按索引范围获取列表元素，支持负数索引（-1 表示最后一个元素）。
 // Index 方法获取指定索引位置的元素，支持负数索引。

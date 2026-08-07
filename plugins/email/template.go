@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -93,6 +94,25 @@ func (t *TemplateManager) AddDir(dir string) error {
 	pattern := dir + "/*.html"
 	if _, err = externalTmpl.ParseGlob(pattern); err != nil {
 		return fmt.Errorf("解析外部模板失败: %w", err)
+	}
+
+	t.templates = externalTmpl
+	t.names = extractTemplateNames(externalTmpl)
+	return nil
+}
+
+// AddFS 从 embed.FS 加载外部模板，同名模板覆盖内置模板。
+//
+// 与 [TemplateManager.AddDir] 的文件系统依赖不同，模板直接内嵌在二进制中，
+// 适用于单二进制部署场景（无需运行时文件系统目录）。
+func (t *TemplateManager) AddFS(fsys fs.FS, pattern string) error {
+	externalTmpl, err := t.templates.Clone()
+	if err != nil {
+		return fmt.Errorf("克隆模板失败: %w", err)
+	}
+
+	if _, err = externalTmpl.ParseFS(fsys, pattern); err != nil {
+		return fmt.Errorf("解析内嵌模板失败: %w", err)
 	}
 
 	t.templates = externalTmpl

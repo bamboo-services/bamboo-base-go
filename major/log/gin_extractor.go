@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
+	xConsts "github.com/bamboo-services/bamboo-base-go/defined/context"
 )
 
 // GinLogExtractor 基于 gin.Context 的日志追踪 ID 提取器

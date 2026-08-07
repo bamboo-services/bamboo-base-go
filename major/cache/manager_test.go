@@ -53,7 +53,7 @@ func TestManagerSetWithTTL(t *testing.T) {
 	kc := xCache.KeyCacheOf[string, int](m)
 	ctx := context.Background()
 
-	_ = kc.Set(ctx, "short", intPtr(1))                          // 用默认 50ms
+	_ = kc.Set(ctx, "short", intPtr(1))                                      // 用默认 50ms
 	_ = kc.Set(ctx, "long", intPtr(2), xCache.WithTTL(500*time.Millisecond)) // 覆盖为 500ms
 
 	if _, ok, _ := kc.Get(ctx, "short"); !ok {

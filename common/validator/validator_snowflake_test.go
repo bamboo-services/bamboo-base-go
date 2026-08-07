@@ -75,7 +75,6 @@ func Test_ValidateSnowflake_ValidValues(t *testing.T) {
 		},
 	}
 
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := v.Struct(tc.input)
@@ -163,7 +162,6 @@ func Test_ValidateSnowflake_InvalidValues(t *testing.T) {
 			expectedField: "基因ID",
 		},
 	}
-
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

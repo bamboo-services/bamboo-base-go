@@ -5,8 +5,8 @@ import (
 
 	xError "github.com/bamboo-services/bamboo-base-go/common/error"
 	xLog "github.com/bamboo-services/bamboo-base-go/common/log"
-	xCache "github.com/bamboo-services/bamboo-base-go/major/cache"
 	xCtx "github.com/bamboo-services/bamboo-base-go/defined/context"
+	xCache "github.com/bamboo-services/bamboo-base-go/major/cache"
 )
 
 // MustGetCacheManager 从上下文中获取缓存管理器实例（panic 版本）。

@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/database/sqlite
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.2.2
+	github.com/bamboo-services/bamboo-base-go/common v1.2.3
 	github.com/libtnb/sqlite v1.2.0
 )
 

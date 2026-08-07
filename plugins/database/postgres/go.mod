@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/database/postgres
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.2.2
+	github.com/bamboo-services/bamboo-base-go/common v1.2.3
 	gorm.io/driver/postgres v1.6.0
 )
 

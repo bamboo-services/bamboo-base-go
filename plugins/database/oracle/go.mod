@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/database/oracle
 go 1.25.11
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.2.0
+	github.com/bamboo-services/bamboo-base-go/common v1.2.1
 	github.com/oracle-samples/gorm-oracle v1.1.3
 )
 

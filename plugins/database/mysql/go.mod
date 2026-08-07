@@ -3,7 +3,7 @@ module github.com/bamboo-services/bamboo-base-go/plugins/database/mysql
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.2.1
+	github.com/bamboo-services/bamboo-base-go/common v1.2.2
 	gorm.io/driver/mysql v1.6.0
 )
 

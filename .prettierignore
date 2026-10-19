@@ -1,0 +1,12 @@
+# 只格式化工程文档与根 README，不批量改动 AGENTS.md 或其它配置。
+**/*
+!README.md
+!docs/
+!docs/**/
+!docs/**/*.md
+
+node_modules/
+.git/
+.pi/
+**/AGENTS.md
+**/*.pb.go

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto tidy test vet release
+.PHONY: help proto tidy test vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release
 
 # ============================================================
 # 基础变量
@@ -26,6 +26,12 @@ help:
 	@echo "  make tidy                     - 整理 Go 模块依赖"
 	@echo "  make test                     - 测试代码"
 	@echo "  make vet                      - go vet 检查所有模块"
+	@echo "  make lint                     - 文档规范 + 常规 Go 模块检查"
+	@echo "  make lint-docs                - Prettier + Markdownlint 检查工程文档"
+	@echo "  make format-docs              - 仅格式化 docs/ 与根 README.md"
+	@echo "  make lint-go                  - Go 正确性、命名/注释与 gofmt 检查"
+	@echo "  make lint-go-oracle           - 单独检查 Oracle（需特殊构建环境）"
+	@echo "  make lint-go-all              - 包含 Oracle 的全部模块检查"
 	@echo ""
 	@echo "发布命令:"
 	@echo "  make release VERSION=<tag>    - 创建 GitHub Release (触发 Action 给子模块打 tag)"
@@ -72,6 +78,24 @@ vet:
 	@for plg in $(PLUGINS); do \
 		go vet ./plugins/$$plg/...; \
 	done
+
+lint: lint-docs lint-go
+
+lint-docs:
+	pnpm run format:docs:check
+	pnpm run lint:docs
+
+format-docs:
+	pnpm run format:docs
+
+lint-go:
+	sh .github/scripts/lint-go.sh default
+
+lint-go-oracle:
+	sh .github/scripts/lint-go.sh oracle
+
+lint-go-all:
+	sh .github/scripts/lint-go.sh all
 
 # ============================================================
 # 发布命令

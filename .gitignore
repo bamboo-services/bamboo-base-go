@@ -40,3 +40,7 @@ __pycache__/
 
 ### 运行时日志（测试/本地运行产生）###
 .logs/
+
+### 文档开发工具 ###
+node_modules/
+.pnpm-store/

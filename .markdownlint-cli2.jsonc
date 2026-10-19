@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/v0.23.3/schema/markdownlint-cli2-config-schema.json",
+  "globs": ["README.md", "docs/**/*.md"],
+  "ignores": ["node_modules/**", ".git/**", ".pi/**"],
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD010": { "code_blocks": false },
+    "MD024": { "siblings_only": true },
+    "MD033": { "allowed_elements": ["br", "details", "summary"] },
+    "MD060": false
+  }
+}

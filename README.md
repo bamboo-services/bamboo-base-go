@@ -121,22 +121,22 @@ cp .env.example .env
 
 常用配置项：
 
-| 环境变量 | 说明 | 默认值（代码兜底） |
-|----------|------|-------------------|
-| `XLF_DEBUG` | 调试模式 | `false` |
-| `XLF_HOST` | HTTP 监听地址 | `localhost` |
-| `XLF_PORT` | HTTP 监听端口 | `1118` |
-| `GRPC_PORT` | gRPC 监听端口 | `1119` |
-| `GRPC_REFLECTION` | gRPC 反射开关 | `false` |
-| `DATABASE_HOST` | 数据库主机 | `localhost` |
-| `NOSQL_HOST` | Redis 主机 | `localhost` |
-| `NOSQL_DATABASE` | Redis DB 索引 | `0` |
+| 环境变量          | 说明          | 默认值（代码兜底） |
+| ----------------- | ------------- | ------------------ |
+| `XLF_DEBUG`       | 调试模式      | `false`            |
+| `XLF_HOST`        | HTTP 监听地址 | `localhost`        |
+| `XLF_PORT`        | HTTP 监听端口 | `1118`             |
+| `GRPC_PORT`       | gRPC 监听端口 | `1119`             |
+| `GRPC_REFLECTION` | gRPC 反射开关 | `false`            |
+| `DATABASE_HOST`   | 数据库主机    | `localhost`        |
+| `NOSQL_HOST`      | Redis 主机    | `localhost`        |
+| `NOSQL_DATABASE`  | Redis DB 索引 | `0`                |
 
 ## 项目结构
 
 项目使用 Go Workspace (`go.work`) 管理多个独立模块：
 
-```
+```text
 bamboo-base/
 ├── go.work                       # Go 工作区配置
 ├── major/                        # 核心层模块
@@ -170,7 +170,7 @@ bamboo-base/
 
 ### 模块依赖关系
 
-```
+```text
 defined ──> common ──> major
 plugins/database/* ──> common (驱动注册表)
 plugins/cron ──────────> common
@@ -185,6 +185,31 @@ plugins/grpc ──> defined + common
 - [go-redis](https://github.com/redis/go-redis) - Redis 客户端
 - [validator](https://github.com/go-playground/validator) - 请求验证
 - [protobuf](https://github.com/protocolbuffers/protobuf-go) - Protobuf 消息与 Any 支持
+
+## 开发检查
+
+文档检查覆盖 `docs/**/*.md` 与根 `README.md`，不批量格式化各模块 `AGENTS.md`。Markdownlint 检查结构，Prettier 统一排版；不强制中文段落按固定列宽换行，也不改写代码块内容或正文语气。
+
+文档工具使用 pnpm 锁定，要求 Node.js 22+、pnpm 12.8.1：
+
+```sh
+pnpm install --frozen-lockfile
+make lint-docs
+make format-docs  # 修正文档排版，不改正文含义
+```
+
+Go 使用 `.golangci-lint-version` 固定 golangci-lint v2 的版本，配置见 `.golangci.yml`。可使用官方发行二进制，或在匹配的 Go 工具链环境安装：
+
+```sh
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+make lint-go
+```
+
+Go 检查同时启用正确性检查、命名/导出注释规则与 gofmt。脚本根据实际 `go.mod` 生成临时 Workspace，不依赖个人本地工作区，支持当前 v1 目录与后续 v2 重组；检查失败会保留非零退出码，不自动修改业务代码。生成目录和 `*.pb.go` 不作为人工风格修复对象，源码本身仍需能编译。
+
+默认明确跳过需要 CGO/Oracle Instant Client 的 Oracle 模块；准备好对应环境后执行 `make lint-go-oracle`，或用 `make lint-go-all` 检查全部模块。`make lint` 运行文档与常规模块检查；CI 使用同一组入口，不把“仅新问题”过滤当成全量通过。
+
+这套门禁用于发现存量问题，不代表现有所有 Go 模块已经通过；真实状态以检查退出码与 CI 报告为准。
 
 ## 参与贡献
 

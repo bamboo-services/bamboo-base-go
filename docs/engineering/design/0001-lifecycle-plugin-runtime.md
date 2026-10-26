@@ -5,7 +5,7 @@
 
 ## 目标与边界
 
-前期调研（[research/0001](../research/0001-lifecycle-plugin-runtime.md)）已经把 v1.x 绑死 Gin、节点缺关闭钩子、以及 `goroutine.go` 假退出的病根扒清楚了。本稿把这些问题转成生命周期契约：已经确认的决定直接写进正文，尚未接上的排空与父子归属问题列在文末，不把方向确认当成所有细节都已定稿。
+前期调研（[research/0001](../research/0001-lifecycle-plugin-runtime.md)）已经把 v1.x 绑死 Gin、节点缺关闭钩子、以及 `goroutine.go` 假退出的病根扒清楚了。本稿把这些问题转成生命周期契约。单次 App、任意阶段关机、钩子异常、错误归属与 Component 排队规则已经确认；其它尚未完成的开工决定在文末标明，不把方向确认当成所有细节都已定稿。
 
 本次设计在仓库根下新建独立模块 **`application`**（模块路径 `github.com/bamboo-services/bamboo-base-go/application/v2`，纳入 `go.work`），专门充当新一代生命周期内核。首批整体 Release 与各独立模块均从 **v2.0.0** 起步；module/import 使用小写 `/v2`，源码目录不新增 `v2/` 层。后续按需发版及完整版本清单见 [0003](./0003-foundation-module-consolidation.md#异常与兼容)。模块间的单向依赖关系为：
 
@@ -46,10 +46,33 @@ application/
 ├── graph.go        # Kahn 分层拓扑排序、环检测、Requires 作用域校验
 ├── supervisor.go   # Worker 协程监督、runHandle 实现、非预期早退捕获
 ├── activator.go    # Activator 实现、Component 并发配额与重入控制
-└── option.go       # Option 与 Config（StartTimeout/CleanupTimeout/ShutdownBudget）
+└── option.go       # Option 与 Config（Start/Grace/Cleanup/ShutdownTimeout）
 ```
 
-### 2. 从注册到启动：五步点火流水线
+### 2. App 只运行一轮，关闭也不能把它复活
+
+同一 App 的状态只能向前走。Running 的状态发布与运行期准入开启采用同一同步边界；关闭请求若先取得状态变更权，就不得再从 Starting 越过它启动新的运行体。运行结果和关机结果分开缓存；“资源是否清理干净”也与“关机协调器是否已经返回”分开记录。
+
+| 状态       | 含义与可调用入口                                                   |
+| ---------- | ------------------------------------------------------------------ |
+| New        | 可以 Register；第一次 Run 进入 Starting；Shutdown 可直接封存空 App |
+| Starting   | 已冻结注册；依次校验与启动；Shutdown 可中断启动                    |
+| Running    | 运行和激活准入已打开；Shutdown 进入 Stopping                       |
+| Stopping   | 不再启动插件或激活任务；并发 Shutdown 等同一次协调结果             |
+| Stopped    | 协调结束且所有已创建实例都已真实收尾；资源释放错误仍可能非 nil     |
+| Incomplete | 协调已返回，但有在途或无法确认已清理的实例及被保留依赖             |
+
+New → Starting → Running 是正常启动；启动失败也可以从 Starting 进入 Stopping 回滚，未触碰资源的配置/建图失败可直接结束为 Stopped。New 上的 Shutdown 不调用任何工厂或钩子，返回 nil 并进入 Stopped。Incomplete 不因晚到任务结束自动改成 Stopped，因为可能仍保留着尚未进入 Stop 的提供者；原关机快照与结果不变。
+
+第一次 Run 无论成功还是失败，都会消耗这次运行机会。重复或并发 Run 立即返回 ErrAlreadyRun，不加入等待、不创建第二组协程，也不改变第一次结果。若尚未 Run 就已被 Shutdown 封存，随后 Run 返回 ErrAppClosed。需要再跑一轮就重新 New；首版不支持重启同一个 App。
+
+Register 只允许 New。第一次 Run 领取运行权与冻结定义、Shutdown 封存空 App、并发注册使用同一状态锁，谁先完成状态变更谁生效。晚到的 Register 返回 ErrRegistrationClosed，不能出现“建图后还漏进一个定义”。注册时复制 Requires/Provides 等元数据切片；不在持锁状态调用用户工厂或钩子。
+
+Shutdown 在 Starting 发生时，立即停止安排下一个工厂/钩子并取消当前 startCtx，不先等待应用完整启动。当前 factory/Start/Expose 若仍在执行，监督器等它真实结束后才决定清理资格；到总上限仍未结束就报告残留，不并发 Stop。已成功创建并进入过 Start 的实例按规则回滚，只有构造但尚未进入 Start 的实例无需 Stop。即使当前 Start 响应关闭后返回 nil，也不能越过关闭标记进入 Running。
+
+启动中关闭的 Run 返回 ErrStartupInterrupted，并保留同期启动错误与关机错误；Shutdown 只报告清理是否成功。正在运行时的正常主动关闭不因 Context 取消自动变成运行失败。应用信号监听在取得运行权后、第一处可能分配资源的调用前就装好，启动中也能收到退出请求。
+
+### 3. 从注册到启动：五步点火流水线
 
 调用 `app := application.New(opts...)` 创建应用实例后，整个启动过程严格按以下五步推进：
 
@@ -60,7 +83,7 @@ application/
                                   → 端口绑好/连接 Ping 通即算 Ready → 写入 SharedContainer
 4. 冻结容器并启动 Worker.Run  ──► 冻结 SharedContainer 为只读 → 开闸放行(gate.Open)
                                   → 为每个 Worker 起受管协程跑 Run(lifetimeCtx)
-5. 阻塞监听信号与看门狗通道   ──► 收到 SIGINT/SIGTERM 或任一 Worker 非预期退出 → 转入 Shutdown()
+5. 阻塞等本轮运行结束       ──► 信号监听从启动前已生效；关闭请求或 Worker 异常 → 同一次 Shutdown()
 ```
 
 其中三个实现细节必须写死在代码里：
@@ -73,41 +96,77 @@ application/
 - **启动失败的原地回滚**：
   在顺着 `layers` 调 `inst.Start(startCtx)` 的过程中，只要第 $k$ 个插件返回了非 `nil` 错误，内核立刻停下脚步：先对已经返回错误的失败实例调用一次 `Stop`，再按逆序回滚此前已启动实例；回滚同样受总协调上限约束，启动错误与清理错误用 `errors.Join` 保留。若 Start 忽略自己的超时仍不返回，不能并发调用它的 Stop；内核转入失败关机，保留其依赖并如实报告卡在 Starting 的实例。只有它真正离开 Start 后，监督流程才能安排清理。
 - **Worker 看门狗监督（`supervisor.go`）**：
-  所有 `Tool` 和 `Worker` 的 `Start` 跑通后，内核为每个 `Worker` 分配一个 `*runHandle`，并起 goroutine 执行 `worker.Run(lifetimeCtx)`。如果当前应用还没拉响关机警报（`workerEntry.expectedStop.Load() == false`），某个 `Worker.Run` 却自己退出来了——哪怕它返回的是 `nil`——看门狗协程都会立刻构造 `ErrWorkerUnexpectedExit` 推入 `app.errChan`，触发全局失败关机。
+  所有 Tool/Worker 启动成功后，由内核监督 Worker.Run。Worker 完成事件与进入 Stopping 使用同一状态同步边界判定：完成事件若先发生，哪怕返回 nil，也记为 ErrWorkerUnexpectedExit 并触发失败关机；停止状态若先发布，按约定的正常退出/取消结果不再误报。不能只靠一条稍后处理的 errChan 消息猜测退出时的状态。
+  进入 Stopping 时统一将全部已创建 Worker 标记为 expectedStop，不等逆拓扑轮到各自 Stop。已经记录的运行根因不会被这个标记清除；panic 和其它真实非关闭错误仍被记录，不把“预期停止”解释成吞掉所有错误。协议适配器应把其约定的正常关闭返回值规范化为 nil 或明确的取消结果。
 
-### 3. 运行期：`Activator` 怎么激发与收敛 `Component`？
+### 4. 运行期：先接纳任务，再决定何时创建实例
 
-当 `CronRunner` 到点触发定时任务，或者某个业务服务需要按需拉起一个 `Component` 时，严禁自己写裸 `go job()`，必须调用内核注入的 `Activator.Activate(ctx, compKey, opts...)`。
+定时器或业务代码通过 Activator.Activate 触发 Component，不能自己裸开 goroutine 绕过实例监督。每次接纳都对应一个唯一任务身份；这不等于立刻构造插件对象。
 
-`Activate` 在 `act.mu` 内完成身份核验、准入与父子登记。父级身份从内核写入 Context 的私有凭据中读取，不接受业务在 Payload 中自报 ParentKey。
+#### 准入成功时就交付句柄
 
-1. **查身份与闸门**：凭据必须属于当前 App 的活跃 Worker 或 Component；裸 Context、跨 App 凭据或已经结束的父实例返回 `ErrInvalidActivationParent`。应用或父级已停止接纳新任务时返回 `ErrShuttingDown`。登记子实例与关闭父级闸门必须用同一把锁，不能让任务钻进检查与关闸之间。
-2. **查重入策略（默认 `OverlapSkip`）**：
-   - 若该 `Component` 配置为默认的 `OverlapSkip` 且当前活跃实例数 `activeCount > 0`，直接返回 `(nil, ErrComponentSkipped)`，不造新实例；
-   - 若配置为 `OverlapAllow(maxConcurrency)`，检查 `activeCount < maxConcurrency`，超限则返回 `ErrConcurrencyLimitExceeded`；
-   - 若配置为 `OverlapQueue(maxQueue)`，将激活请求塞入长度为 `maxQueue` 的有界等待队列，队满同样报错拒绝；
-3. **造新实例并跑完整生命周期**：
-   准入后生成唯一 `instanceID`，同时记录父插件 `ParentKey` 和父实例 `ParentInstanceID`。后者才是实例树的关联键：两个相同定义的父 Component 不能被混成同一个父级。新实例在受管 goroutine 中执行：
-   - 调 `Start(startCtx)`，成功才进入 `Run(compCtx)`；启动失败也要清理已分配资源，但不能丢掉启动错误。
-   - `Run` 返回后先关闭自己的子任务准入，再等已经接纳的子实例完成整棵子树。父任务不能一边退出一边继续生孩子。
-   - 子树全部收拢后才调自身 `Stop`；`Start` 若仍未返回，也不得并发调用它的 `Stop`。
-   - 真实收尾后合并 `Start/Run/Stop` 的错误并公布稳定结果，退还并发配额，最后关闭 `handle.done`。
+内核在同一准入同步边界完成 App/父实例状态、身份和配额检查，以及任务登记。可信父级必须属于当前 App 的活跃 Worker/Component；裸 Context、跨 App 或已结束的父级返回 ErrInvalidActivationParent，关闭准入返回 ErrShuttingDown。Activate 调用 Context 在接纳前已取消时，返回 ctx.Err()，不交付句柄。
 
-嵌套不等于无限递归：激活目标的插件键若已经出现在当前祖先链上，返回 `ErrActivationCycle`，避免父实例占住同一定义的配额，又等待永远排不到的子实例。Overlap 配额按整个 App 中的 Component 定义统计，实例树另按 InstanceID 追踪。
+接纳成功后，立即登记 InstanceID、ParentKey/ParentInstanceID 和已解析的 Requires 依赖占用，并返回 RunHandle。队列项也属于已接纳的子任务，父级不能因为它没有运行就漏掉它；依赖占用是内核引用登记，不提前分配数据库连接或插件资源。只有真正派发时才在受管 goroutine 中调用工厂。
 
-### 4. 关机期：先排空，再清理，但不假装能强杀协程
+拒绝接纳一律返回 nil 句柄：跳过为 ErrComponentSkipped，并发超限为 ErrConcurrencyLimitExceeded，队满为 ErrQueueFull，嵌套排队受限为 ErrNestedQueueWouldBlock。拒绝不留下子任务、容量或依赖占用。
 
-收到信号、Worker 异常退出或宿主主动调用 `Shutdown()` 后，内核只开启一次协调流程。先关闭全局与实例激活闸门，再以当时的时刻确定两个固定截止点：自然排空在第 20 秒结束，整个协调过程在第 60 秒结束。不是每到一个插件就重新送它 20 秒。
+#### 重入策略只定义一套配额口径
+
+| 策略                | 准入行为                                               |
+| ------------------- | ------------------------------------------------------ |
+| OverlapSkip（默认） | 已有未真实收尾的执行实例就跳过，不排队                 |
+| OverlapAllow(n)     | 最多 n 个执行槽，超限拒绝，不排队                      |
+| OverlapQueue(q)     | 同一定义共享一个串行执行槽和最多 q 个等待项，FIFO 取出 |
+
+执行槽从派发、调用工厂前占用，直到该实例及子树真正收尾才释放，不能只等 Run 返回。Stop panic 或仍有在途清理时保留槽位。MaxQueue 只数等待项，不包括正在构造、启动、运行、等子树或清理的实例；Queue 的并发固定为 1，不再读取 MaxConcurrency。
+
+例如 Queue(3) 可以同时有一个正在执行的 A，以及 B→C→D 三个等待项；E 到达时拒绝。A 真正完成后，在锁内释放槽并认领下一个仍合法的队首，再在锁外调用工厂；新请求不能抢在前序等待项前面。这个队列按 App 中的 Component 定义共享，不为每个父级另开一份。
+
+#### 未派发取消，与执行中取消分开记
+
+| 状态变化              | 谁占用什么、如何结束                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| 接纳 → Queued         | 占等待容量、父子登记与依赖引用；不调用工厂或任何钩子                                      |
+| Queued → Dispatched   | 锁内核对父级/App 仍允许派发，取出队首、转换为执行槽；原身份和依赖引用继续沿用，不再加一遍 |
+| Queued → Cancelled    | 原子移除等待项，公布未派发取消结果，各释放一次等待容量、父子登记和依赖引用                |
+| Dispatched → 最终结果 | 按实际进入过的生命周期及子树收尾，再释放执行槽和全部登记                                  |
+
+父实例关闭子任务准入或 App 进入 Stopping 时，取消其尚未派发的项，不留到 Grace 中再开始。取消和派发与关闸共享同步边界，只有一个分支能赢。若派发先赢，该项按在途实例监督，关闭通知不能并发 Stop；尚未进入的工厂/Start 入口仍应复查停止标记，不为了凑齐流程强行调用后续钩子。Stop 资格沿用前面的 App 规则。
+
+未派发取消的句柄已经履行全部真实收尾义务，因为根本没有对象和钩子需要清理。结果为 OutcomeCancelled、Dispatched=false、CancelRequested=true、CancelErr=取消原因，FactoryErr/StartErr/RunErr/StopErr 均为 nil；Wait 返回这个稳定结果和 CancelErr，不往 RunErr 编造一段业务返回值。
+
+父级关闭的原因为 ErrParentClosing，App 关闭为 ErrShuttingDown，两者都应能通过 errors.Is 匹配 context.Canceled。并发发生时保留先在线性化边界确定的原因，不事后改写结果。即使某等待项因错误路径被多次观察，完成状态、done 关闭和计数退还也只能提交一次。
+
+#### 接纳后不跟随原请求，也不新增任务 deadline
+
+接纳成功的任务从 App 的未取消基底派生自己的 Context，保留独立身份/追踪 ID，并受父级生命周期与 App 关闭协调监管。原 HTTP/gRPC 请求结束不移除队列项，也不取消已经派发的任务；任务依然是受管的，不是野协程。只有接纳前的 ctx.Err() 参与本次拒绝判定，接纳后的请求取消不再回头撤销它。
+
+首版不提供 WithTaskTimeout 或排队过期计时器：等待项会等到可派发、父级关闭或 App 关闭；Start 保留其独立 StartTimeout，Stop 和关机保留原预算。Wait(waitCtx) 到期永远只结束这次等待。首版也不额外增加手动取消任务的公开接口。
+
+WithPayload 保存本次接纳参数，不自动深拷贝任意指针、map 或 slice；调用方应传不可变值或自备快照，接纳后不再修改任务会读取的共享可变数据。队列有界指等待项数量有界，不承诺任意大 Payload 的字节总量也自动有界。
+
+#### 嵌套不允许堵在另一个繁忙队列后面
+
+激活目标已出现在祖先定义链上时仍返回 ErrActivationCycle。除此之外，父级是 Component 且目标采用 OverlapQueue 时，仅在目标槽空闲、没有前序等待项时立即接纳；否则返回 ErrNestedQueueWouldBlock，不产生子句柄、不插队。Worker 及其可信请求 Context 可以正常进入等待队列。
+
+这样保留嵌套子树，但首版不维护全局等待环图。它阻止的是调度器强加的嵌套排队等待；业务代码自行循环等其它句柄或外部锁，仍需自己保证不会死锁。
+
+派发后按有效对象资格执行 Start→Run，Run 返回时关闭自己的子任务准入并处理取消队列，等待已接纳子树收拢后再 Stop。正常返回的阶段错误原样保留，真实收尾后才公布结果、释放槽位并关闭句柄；工厂失败和 Stop panic 仍按后文异常表处理。
+
+### 5. 关机期：先排空，再清理，但不假装能强杀协程
+
+收到信号、Worker 异常退出、运行期清理 panic 或宿主主动调用 Shutdown 后，内核只开启一次协调流程。进入 Stopping 与关闭全局/实例准入、统一标记全部 Worker 的 expectedStop 在同一同步边界完成；随后才触发可能使 Run 退出的取消或 Stop。自然排空和协调截止均从这次关机开始计时，默认第 20 秒与第 60 秒，不随拓扑层数续期。
 
 这 60 秒内，内核按提供者依赖图逆序安排停止。活动 Component 子树也占用它声明的资源；资源只有在所有已接纳消费者真实收尾后才能停止。不能只看父 Worker 自己的 Run 是否返回。
 
-- **Worker 先停接入，再收拢自己的执行**：先标记 expectedStop、关闭新激活；可选 Quiesce 只负责停接入，不能释放仍被消费者使用的资源。随后调用 Stop 触发 Run 退出，同时等待它自管的请求、内部协程和已接纳 Component 子树。若子任务声明使用父 Worker 本身的资源，先关准入并等这些子任务结束，再执行会释放该资源的 Stop。
+- **Worker 先停接入，再收拢自己的执行**：expectedStop 与激活关闸已在进入 Stopping 时全局完成，不等轮到该层。按逆拓扑执行 Quiesce/Stop 与等待；Quiesce 不释放仍被消费者使用的资源。若子任务声明使用父 Worker 的资源，先等相关子树结束，再执行会释放资源的 Stop。预期停止标记只改变退出判定，不允许提前关闭底层资源。
 - **Component 先结束运行和子树，再清理自身**：Run 返回后关闭本实例子任务准入，等待已接纳子树的真实终态，最后调用自身 Stop。Start 仍在运行时也不能并发 Stop。
 - **Tool 同样必须真实收拢内部工作**：例如 Async.Stop 要先拒新任务，等任务真正退出、回收池后才返回。不能只因等待 Context 到期，就返回一个超时错误，留下还在写库的任务。
 
 到第 20 秒，独立的关机定时器取消 App 的强制取消根：实例运行 Context、网络请求根与 Async 派生任务都接入这份通知。它不等待逆拓扑轮到哪个 Stop，因此不会出现“HTTP 等 Async、Async 等 Stop 才收到取消”的闭环。只有资源释放按依赖顺序推进，取消通知不按层排队。随后继续等真退；业务忽略 Done 就仍未结束。
 
-**Stop 的返回条件不因 Context 超时变松。** 无论返回 nil 还是错误，插件都不得再有未上报、仍占用生命周期依赖的执行。资源释放失败可以返回错误，但任务还活着时 Stop 必须继续等待。内核在外层监督 Stop，不把协调器自己卡进一次同步调用里。
+**Stop 的正常返回条件不因 Context 超时变松。** 无论正常返回 nil 还是错误，插件都不得再有未上报、仍占用生命周期依赖的执行。Stop panic 不属于正常返回，内核无法据此证明执行已经收拢，必须保留依赖并报告清理未完成。资源释放失败可以返回错误，但任务还活着时 Stop 必须继续等待。内核在外层监督 Stop，不把协调器自己卡进一次同步调用里。
 
 需要排空的 Worker/Tool.Stop 获得带总截止时间的 stopCtx。真正开始纯资源收尾后，才通过 0002 的 CleanupContext 派生一把最长 10 秒、且不越过总截止的清理 Context；Component 的 Stop 本身就是此类清理。若清理仍忽略超时不返回，照样保留活跃记录，不并发重试 Stop。
 
@@ -131,6 +190,30 @@ import (
     "github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
+// AppState 描述本轮 App，不代表某个任务的业务结果。
+type AppState uint8
+
+const (
+    StateNew AppState = iota + 1
+    StateStarting
+    StateRunning
+    StateStopping
+    StateStopped
+    StateIncomplete
+)
+
+// HookPanicError 保留内核调用边界上的 panic，堆栈仅供内部诊断。
+type HookPanicError struct {
+    PluginKey  ctxkey.Key
+    InstanceID string // 尚未分配实例时允许为空
+    Stage      string // factory/start/expose/run/quiesce/stop
+    Value      any
+    Stack      []byte
+}
+
+func (e *HookPanicError) Error() string
+func (e *HookPanicError) Unwrap() error // Value 为 error 时返回该错误，否则 nil
+
 // Mode 标识插件的三种运行形态。
 type Mode uint8
 
@@ -152,9 +235,12 @@ const (
 // OverlapPolicy 描述 Component 的并发与重入配额。
 type OverlapPolicy struct {
     Kind           OverlapKind
-    MaxConcurrency int // OverlapAllow 时生效，必须 >= 1
-    MaxQueue       int // OverlapQueue 时生效，必须 >= 1
+    MaxConcurrency int // 仅 OverlapAllow 使用，必须 >= 1
+    MaxQueue       int // 仅 OverlapQueue 使用，必须 >= 1；不含单个执行槽
 }
+
+// 零值策略为 Skip。未知 Kind、对应容量小于 1、或不相关字段非零，在建图前拒绝。
+// Queue 固定串行，不用 Allow 的 MaxConcurrency 为它偷偷增加并发。
 
 // PluginInfo 是注册定义的唯一元信息来源；插件主键与资源键都使用 ctxkey.Key。
 type PluginInfo struct {
@@ -187,9 +273,9 @@ type Quiescer interface {
 type Outcome uint8
 
 const (
-    OutcomeSuccess    Outcome = iota + 1 // Run 返回 nil 且 Stop 返回 nil
+    OutcomeSuccess    Outcome = iota + 1 // 执行成功且需要执行的清理均真实完成
     OutcomeFailed                        // Start/Run/Stop 失败；实际错误保留在结果中
-    OutcomeCancelled                     // Run 明确返回 context 取消错误且 Stop 成功
+    OutcomeCancelled                     // 未派发已取消，或执行明确响应取消且真实收尾
 )
 
 // RunResult 汇总一次实例运行的完整账单。
@@ -197,8 +283,13 @@ type RunResult struct {
     InstanceID      string
     PluginKey       ctxkey.Key
     Outcome         Outcome
-    CancelRequested bool  // 运行期间是否收到过内核取消请求
-    StartErr        error // Start 失败时记录；未执行 Run 不得记作成功
+    Dispatched      bool  // 已取得执行槽、进入构造监督；不等于 Start/Run 一定执行
+    CancelRequested bool  // 是否收到内核取消请求，包含尚未派发就被取消
+    CancelErr       error // 未执行 Run 时的取消原因，不冒充 RunErr
+    FactoryErr      error // 工厂 panic 或返回无效实例；没有对象时不调用 Stop
+    StartErr        error // Start 返回错误或 panic
+    ExposeErr       error // Expose panic 或交付校验失败
+    QuiesceErr      error // 静默钩子返回错误或 panic
     RunErr          error // Run 返回的原始错误
     StopErr         error // Stop 返回的清理错误
 }
@@ -206,7 +297,8 @@ type RunResult struct {
 // RunHandle 是内核返回的运行监督句柄（非插件接口）。
 type RunHandle interface {
     InstanceID() string
-    // Wait 只在 Start/Run 与 Stop 的实际收尾完成后返回稳定的实例终态。
+    // Wait 只在本实例需执行的生命周期与子树真实收尾后返回稳定结果。
+    // 未派发取消/工厂无效且无清理资格时可结束；Stop panic 不证明已清理，不关闭句柄。
     // 调用方 ctx 仅控制本次等待；超时返回零值 RunResult 与 ctx.Err()，不取消任务。
     // Shutdown 超预算只产生独立残留快照，不封存此结果，也不关闭 handle.done。
     Wait(ctx context.Context) (RunResult, error)
@@ -214,6 +306,8 @@ type RunHandle interface {
 
 // Activator 供 Worker 或业务按需激发 Component 实例。
 type Activator interface {
+    // ctx 用于可信身份及接纳前取消检查；接纳后不继承其 deadline/取消。
+    // 成功立即返回已登记句柄；失败返回 nil 句柄，不留占用。
     Activate(
         ctx context.Context,
         compKey ctxkey.Key,
@@ -250,8 +344,9 @@ func (a *App) RegisterComponent(
     factory func() RunnablePlugin,
 ) error
 func (a *App) Activator() Activator
-func (a *App) Run() error
-func (a *App) Shutdown() error
+func (a *App) State() AppState
+func (a *App) Run() error      // 本轮已观察的启动/运行根因 + 关机协调错误
+func (a *App) Shutdown() error // 仅关机协调结果，多次调用共享
 ```
 
 ### 环境变量只在启动装配时读取
@@ -275,9 +370,48 @@ New 在装配时读取当前环境和 Option，存成 App 私有快照；解析�
 
 ## 异常与兼容
 
-### 1. 取消请求与业务结果的判定规则（防误判表）
+### 1. 无效实例和钩子 panic 分别处理
 
-内核把 `CancelRequested` 与真实返回值分开记录。若 `Start` 失败，不调用 `Run`，但要等待实际清理完成，再以 `OutcomeFailed` 和 `errors.Join(startErr, stopErr)` 公布结果；其余实例等 `Run`、子树与 `Stop` 完整结束后，按下表封存结果：
+nil 工厂在 Register 时以 ErrNilFactory 拒绝，不登记定义。工厂在真正被调用时返回 nil 或类型化 nil，记为 ErrNilPlugin：没有有效对象就不调用 Start/Expose/Run/Stop。静态插件构造失败触发启动回滚；运行期 Component 构造失败仅结束这次任务。工厂只允许构造对象，禁止分配外部资源；如果违反这个契约又未交出对象，内核没有可供兜底清理的句柄。
+
+内核在实际调用工厂和钩子的同一受管协程中 recover，转换为 HookPanicError，保留 PluginKey、可用的 InstanceID、Stage、原值与堆栈。不会恢复发生 panic 的函数继续执行，更不保证能回滚已发生的数据库写入。
+
+| 失败边界                 | 内核下一步                                                                |
+| ------------------------ | ------------------------------------------------------------------------- |
+| factory panic / 无效实例 | 没有有效对象，不调用 Stop；应用启动失败回滚，Component 则仅本次失败       |
+| Start panic              | 栈已展开后调用当前有效实例的唯一一次 Stop，再按所属作用域处理失败         |
+| Expose panic / 校验失败  | 不发布本批条目；当前实例 Stop，再逆序回滚已启动插件                       |
+| Worker.Run panic         | 记运行失败并触发 App 失败关机；关机已开始则只并入已有运行错误账本         |
+| Component.Run panic      | 本任务失败；关闭子任务准入，收拢子树后再 Stop，不因单次业务失败关闭 App   |
+| Quiesce panic            | 记关停错误，钩子栈退出后仍尝试 Stop，不因一次静默失败跳过清理             |
+| Stop panic               | 记清理无法确认；不重试、不退役、不释放依赖；运行期发生则触发 App 失败关机 |
+
+Start/Quiesce 等钩子若只是超时仍未返回，不能把它当作 panic 已展开来并发调用 Stop。Stop panic 后虽调用栈已经退出，仍可能留有未知自管执行；该实例不释放并发占位、不关闭 handle.done，Wait 只能在调用者自己的超时下退出等待，不伪造 OutcomeFailed 的“已完整收尾”终态。
+
+Stop panic 的实例以阶段 stop-panic 和原 HookPanicError 进入 StuckInstances，并保留已解析依赖。协调器继续处理不依赖它的其它作用域；可推进的工作都处理完而仅剩已知无法确认的清理残留时，可以提前返回 StopIncompleteError，不必为已展开的 panic 空等满 60s。若仍有真实在途钩子，则按总协调上限等待。仅有未完成报告不构成再次调用 Stop 的许可。
+
+recover 只覆盖这些调用边界。插件自行开的协程、进程级致命错误、os.Exit 或其它绕过正常返回的进程控制，不在这份恢复保证内。HookPanicError 与堆栈只进入内部账本/日志，不直接作为 HTTP/gRPC 对外详情。
+
+### 2. Run 与 Shutdown 分别回答不同的问题
+
+Run 只接受第一位调用者，返回整次运行在协调结果确定前观察到的启动/运行错误，再与 Shutdown 的关停错误用 errors.Join 汇总。Shutdown 缓存同一次关机的结果：Quiesce/Stop 错误和 StopIncompleteError，不把 Worker 的原始业务失败重复当成清理失败。
+
+| 场景                         | Run 结果                                      | Shutdown 结果            |
+| ---------------------------- | --------------------------------------------- | ------------------------ |
+| 主动正常关闭，真实收尾成功   | nil                                           | nil                      |
+| 配置/建图失败，未创建资源    | 原始校验错误                                  | nil                      |
+| 启动中收到关闭，清理成功     | ErrStartupInterrupted，保留同期启动错误       | nil                      |
+| Worker 失败，清理成功        | 运行根因，保留 Worker 非预期退出语义          | nil                      |
+| Worker 失败且 Stop 出错      | 运行根因与关停错误的 Join                     | 关停错误                 |
+| 存在卡住或 Stop panic 的实例 | 已知运行根因与 StopIncompleteError 等关停错误 | 同一次关停错误与残留快照 |
+
+正常的 Component 失败通过其句柄返回，不自动污染 App 的运行结果；但 Component.Stop panic 是生命周期安全失败，关停结果中必须能追溯该原因。重复 Run/晚到 Register 的调用错误只返回给该调用者，不改变第一次运行账本。并发和重复 Shutdown 等同一次协调结果，不重复执行钩子。
+
+Run/Shutdown 的返回结果都不随着晚到事件反复变化。总上限之后观察到的任务结果或异常继续记录在实例账本与日志中，不回写已经返回的应用结果；相关句柄只有在真实收尾条件满足时才公布终态。StateIncomplete 也不是任务 Outcome，不能混用。
+
+### 3. 取消请求与业务结果的判定规则（防误判表）
+
+内核把 CancelRequested 与真实返回值分开记录。未派发取消按 CancelErr 结束，不要求调用不存在的钩子；派发后尚未进入 Run 就被关闭中断时，同样以 CancelErr 记录原因，只清理已经进入 Start 的有效对象。任何真实准备期/清理错误优先保留为 OutcomeFailed，不被取消掩盖。工厂未产出有效实例时，可直接以 FactoryErr 形成失败结果；Start/Expose 失败则等有资格执行的 Stop 真正收尾后，以 OutcomeFailed 合并准备与清理错误。如果 QuiesceErr 非 nil，但实例随后真实收尾，则 OutcomeFailed，并与 Run/Stop 错误合并保留。下表只适用于已进入 Run、无准备期/Quiesce 错误、且子树及 Stop 均已真实完成的实例；Stop panic 不套用此表提前封存终态。
 
 | `CancelRequested` | `Run` 返回值                            | `Stop` 返回值    | 最终 `Outcome`     | `Wait` 返回的 `error`          | 说明                                                                        |
 | ----------------- | --------------------------------------- | ---------------- | ------------------ | ------------------------------ | --------------------------------------------------------------------------- |
@@ -287,17 +421,17 @@ New 在装配时读取当前环境和 Option，存成 App 私有快照；解析�
 | `false` / `true`  | `bizErr != nil`                         | `nil`            | `OutcomeFailed`    | `bizErr`                       | 业务执行失败                                                                |
 | `false` / `true`  | `runErr != nil`                         | `stopErr != nil` | `OutcomeFailed`    | `errors.Join(runErr, stopErr)` | **双错并存**：同时保留业务根因与清理错误，绝不互相覆盖                      |
 
-### 2. 超出总协调上限后的残留快照
+### 4. 超出总协调上限或清理无法确认后的残留快照
 
-当默认 60s 总协调上限耗尽，仍有实例卡在 Start、Run、子树等待或 Stop 时：
+当默认 60s 总协调上限耗尽仍有在途实例，或可推进工作处理完后仍存在 Stop panic 等无法确认清理的残留时：
 
 1. **不把快照冒充终态**：内核保留该实例的活跃记录，`handle.done` 继续保持打开。`Outcome` 中不设 `Incomplete` 终态；“仍卡在 Run”只是本次关机观察到的事实，不代表它后来一定成功、失败或取消。
 2. **保护在用底座**：如果一个 `Component` 卡在 `Run` 里没退，内核不调用它的 `Stop`，并沿着已解析的提供者依赖链保留仍在使用的资源。没有被残留实例占用的独立插件继续完成 `Stop`。Worker 与 Tool 也遵守同一保护规则；严格 Stop 契约不允许它们提前返回并隐藏仍在执行的工作。
-3. **如实返回结构化错误**：`app.Shutdown()` 与 `app.Run()` 返回 `*StopIncompleteError`，其中 `StuckInstances []StuckInstance` 是返回时的独立快照，记录 `PluginKey`、`InstanceID`、阶段与连带保留的依赖。快照不随后台结果变化；若实例后来完成了 `Run + Stop`，再公布它的真实终态、关闭句柄。宿主可以另用带超时的 `Wait` 等待，不由内核自行 `os.Exit`。
+3. **如实返回结构化错误**：Shutdown 的结果包含 `*StopIncompleteError`，Run 再将它与已知运行根因合并返回，调用方应通过 errors.As 检查而不是要求顶层错误恰好就是该类型，其中 `StuckInstances []StuckInstance` 是返回时的独立快照，记录 `PluginKey`、`InstanceID`、阶段与连带保留的依赖。快照不随后台结果变化；若实例后来完成了 `Run + Stop`，再公布它的真实终态、关闭句柄。宿主可以另用带超时的 `Wait` 等待，不由内核自行 `os.Exit`。
 
 并发或重复调用 `Shutdown()` 取得同一次协调流程的结果，不会刷新原先的残留快照，也不会重复调用 `Stop`。这与实例句柄是两回事：快照说的是“当时还剩谁”，`Wait` 说的是“这个实例最终怎样了”。
 
-### 3. 与 v1.x 的兼容与迁移边界
+### 5. 与 v1.x 的兼容与迁移边界
 
 - v2 工作树不保留 `major/register`、`major/main` 或旧访问器兼容壳，也不承诺旧 import、键类型与错误类型原样兼容。新调用方主动迁移到 `application` 与对应插件。
 - 已发布的 v1 模块不因这次工作树重组而被改写。旧项目可以继续固定其 v1 依赖版本；这不表示 v2 工作树还会保留一套可编译的旧入口。
@@ -318,16 +452,25 @@ Fx 的 OnStart/OnStop 适合装配已有组件，oklog/run 适合组织阻塞执
 1. 零 Gin 的 Worker + Tool 按提供者依赖顺序启停；非法键、资源键冲突、缺依赖、环与 Component 作用域错误均在任何工厂执行前失败。
 2. Start 报错时当前实例也被清理，错误与回滚错误同时保留；Start 忽略超时仍在执行时不并发 Stop。
 3. Worker.Run 非预期返回 nil 或 error 都触发失败关机；正常 Stop 先触发 Run 退出，再等自管执行收拢。
-4. OverlapSkip/Allow/Queue 的配额、队满拒绝与退还；父实例关闭准入与子实例登记并发时，没有遗漏子任务。队列请求在父级关闭后不得再启动，返回已结束的失败句柄而不是永远等待。
+4. OverlapSkip/Allow/Queue 的执行槽和等待容量分别计数；Queue 按定义串行 FIFO，跨父级提交仍共用顺序；Run 已返回而 Stop 未完时不启动下一项。队满/嵌套忙拒绝不产生句柄或任何占用。
 5. 不同父实例的嵌套子树不串归属；父 Run 失败也要等已接纳子树收尾后才 Stop；祖先递归激活被拒绝。
 6. Wait 调用方超时只退出等待；真实成功不被 CancelRequested 篡改，Start/Run/Stop 错误可分别通过 errors.Is 检查。
 7. 参数缩短后验证关机固定截止点，不随拓扑层数续期。清理在排空之后开始，故意运行越过旧第 30 秒但不越过新总上限；纯清理仍被限制在其自身预算内。
 8. 用可由测试释放的阻塞任务验证残留：Shutdown 到总上限返回、依赖未停、句柄未完成；在总上限之后释放任务，确认它获得仍有效的独立尾部清理窗口，唯一一次 Stop 真正结束后才出现真实终态；旧快照不变，被保留提供者未被自动强拆。
 9. Async 的任务虽然不是 RunnablePlugin，也必须使 Tool.Stop 挂起到真退；HTTP/gRPC 的“Serve 返回、Handler 未退”不能被判为停稳。再构造 Handler 等 Task.Wait、Task 等 ctx.Done 的链路，确认取消在 Grace 到期独立到达，即使 Async.Stop 尚未开始也不会死等。
 10. 四项环境值覆盖默认值，显式 Option 覆盖环境；非法值、空值、无单位、负数与 Grace 不小于总上限均在工厂前报错。New 后修改环境不影响该 App，也不改变进行中的关机截止点。
+11. 并发 Register/Run/Shutdown 只有一个合法状态顺序；重复 Run 不执行第二轮，Run 前关闭不调用工厂，启动中关闭不继续进入后续插件或 Running。已有结果不被非法调用或晚到事件改写。
+12. nil 工厂、nil/类型化 nil 实例不调用不存在对象的 Stop；依次注入 factory/Start/Expose/Run/Quiesce/Stop panic，验证 HookPanicError 的阶段、原值与堆栈、清理资格、错误保留和钩子至多调用一次。
+13. Component.Run panic 只结束本任务；Component.Stop panic 则触发失败关机，实例与依赖不被退役，Wait 不交付伪终态。Quiesce panic 后仍尝试 Stop。分别验证 Run/Shutdown 错误归属，以及 errors.Is/As 能找到原始根因。
+14. A 依赖 B，逆拓扑尚在等待 A.Stop 时，B.Run 响应全局 Grace 取消返回；验证不误报 ErrWorkerUnexpectedExit。反向让 B 在停止状态发布前先退出，必须保留运行根因；关机中发生的 panic/真实错误也不被 expectedStop 吞掉。
+15. 入队立即有句柄、父子登记和依赖占用，工厂调用次数仍为零；原请求随后取消不改变等待项，Wait 超时也不移除它。接纳前已取消则拒绝。
+16. 并发关闭父级/App、派发队首与重复取消同一等待项，只有一个状态分支完成；未派发取消后所有钩子均未调用，CancelErr 可匹配 context.Canceled，RunErr 仍为 nil，每种占用只退一次。
+17. 构造 A 与 B 的繁忙串行队列及嵌套请求，验证立即 ErrNestedQueueWouldBlock，不产生等待环或插队；空闲且无等待项时可立即派发。用可控屏障证明首版没有隐藏的请求/任务 deadline 或排队过期计时器。
 
 ## 待确认
 
-生命周期、真实 Stop、嵌套归属与启动期环境配置已经确认。版本方案也已按 [0003](./0003-foundation-module-consolidation.md#异常与兼容) 收敛：目录不增加 v2 层，module/import 带 /v2，首批全模块 v2.0.0，后续按需发布与全量清单配套。无剩余阻塞性方案选择。
+已确认单次 App 与异常处理，以及共享串行 FIFO、入队即接纳、未派发取消、接纳后与原请求取消独立、嵌套繁忙不等待。首版不增加单任务超时或手动取消接口。原有 App 预算、身份与版本决定不变。
+
+阶段 0 的 App 与队列项已经确认；日志与雪花装配、协议元数据以及能力/数据处置仍需继续收敛，不能据此把整个阶段勾为完成。
 
 文档仍为 draft，未实现 application。RFC 评审应重点检验固定截止点、逆拓扑与活动子树占用的组合；运行正确性必须由后续测试证明。

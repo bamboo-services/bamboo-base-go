@@ -146,7 +146,7 @@ Layer 2: [web-gin]   [grpc]   [cron]                               │
 `plugins/cron` 底层采用社区活跃的 `github.com/go-co-op/gocron/v2`，但它**不让 `gocron` 自己裸跑业务函数**，而是将 `gocron` 作为精准的时间触发器，把任务实例的创建、防重入与生命周期全权交给内核 `Activator`：
 
 1. 业务先把具体的定时任务注册为 `Component`（`app.RegisterComponent(jobInfo, jobFactory)`，默认 `OverlapSkip`）；
-2. 再在 `cron.New(cron.WithCronJob("0 0 * * *", jobKey))` 中绑定调度规则与目标 `Component` 的 `ctxkey.Key`；
+2. 再在 `cron.New(cron.WithCronJob("0 0 * * *", jobKey))` 中绑定调度规则与目标 `Component` 的 `ctxkey.Key`；显式采用 Queue 时，接纳的 tick 按同一定义 FIFO 等待，父 Cron 关闭会取消尚未派发项，不补跑关机积压；
 3. `CronPlugin.Start(startCtx)` 初始化 `gocron.Scheduler` 并校验所有表达式；`Run(lifetimeCtx)` 启动调度器，每次到点触发时调用：
    `activator.Activate(lifetimeCtx, jobKey, application.WithPayload(tickTime))`；
 4. `CronPlugin.Stop(stopCtx)` 调用 `scheduler.Shutdown()` 停止发出新 tick，而正在跑的子 `Component` 由内核等待其 `Run` 与 `Stop` 完整收尾后再关闭底层 `database`/`cache`。
@@ -334,7 +334,7 @@ Cron 仅做表达式触发时，robfig/cron 已经足够，且范围更小。继
 1. 数据库主模块 `GOWORK=off go list -m all` 不包含具体驱动；独立示例只导入一个 Adapter，`GOWORK=off go list -deps ./...` 不包含未选驱动。不要用整个 Workspace 的模块图代替这项检查。
 2. Memory 的 Provides 只有 CacheManagerKey，Redis 模式另含 RedisClientKey；缺少 Redis 能力时在工厂前失败。Stop 真正关闭 janitor/连接池后条目退役。
 3. 启动期/关机拒新、Submit 与 Stop 并发、底层提交失败、池满拒绝、任务 panic 都不泄漏计数；Grace 到期任务收到取消，忽略取消的任务仍令 Stop 等待并保留 DB。释放测试屏障后才允许关闭 DB。另测 Handler 等 Task.Wait、任务等取消而 Async.Stop 尚未开始，确认 Grace 通知独立到达，不形成关闭顺序死锁。
-4. 用 gocron 的间隔调度接口配置 50ms 周期，激活耗时 120ms 的 Component，验证 OverlapSkip 与独立追踪 ID；不要把五段 Cron 表达式误当成毫秒调度接口。嵌套子树也须完整收拢。
+4. 用 gocron 的间隔调度接口配置 50ms 周期，激活耗时 120ms 的 Component，验证 OverlapSkip 与独立追踪 ID；显式 Queue 验证 FIFO、队满、Cron 关闭取消未派发 tick。不要把五段 Cron 表达式误当成毫秒调度接口。嵌套子树也须完整收拢。
 5. 两个 Gin 插件为同名标签配置相反规则，框架 Bind 分别按各自实例校验；不得修改 Gin 全局校验器，也不得在解码时隐式调用它。
 6. 真实 HTTP/gRPC 取消与排空按 0002 验证，包括 Serve 已退但 Handler 未退；WebSocket/hijack 不计入默认保证。
 7. 同一份 40014 BodyError 与 50000 ServerInternalError 经两个结果包得到确定映射；覆盖映射表兜底、非法 HTTP 码与内部 Err 不外泄。SuccessWith 的 T 必须是符合 BaseResponse 约束的 Protobuf 指针，误用时明确报编程错误，不能对 any 作无条件成功承诺。

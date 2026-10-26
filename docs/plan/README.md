@@ -1,13 +1,18 @@
 # 实施计划看板（Plan）
 
-本目录管理分阶段推进、兼容迁移与切流回滚计划。命名、取号（同时扫描 `docs/plan/` 与 `docs/plan/archive/`）及状态规则遵循 [`../engineering/MAINTENANCE.md`](../engineering/MAINTENANCE.md)。
+这里记录“从当前代码怎样走到目标设计”，与 `docs/engineering/` 中的长期设计分开。活动计划平铺在 `docs/plan/`；终态移入 `docs/plan/archive/`。取号时同时扫描两处，规则见 [维护公约](../engineering/MAINTENANCE.md)。
 
-## 进行中计划（平铺于 `docs/plan/`）
+## 进行中计划
 
-| 编号 | 计划 | Scope | 状态（`draft` / `ready` / `in-progress`） |
-| ---- | ---- | ----- | ----------------------------------------- |
+| 编号 | 计划                                                              | Scope     | 状态  |
+| ---- | ----------------------------------------------------------------- | --------- | ----- |
+| 0001 | [v2 全仓重构实施计划](./0001-lifecycle-v2-full-reconstruction.md) | lifecycle | draft |
 
-## 已归档计划（`docs/plan/archive/`）
+0001 仍处于阶段 0 的设计确认：App 状态与异常、Component 队列规则已确认并写回设计；日志/雪花、协议与能力处置等仍未全部确认。计划保持 draft，也未授权开始 Go 实施；不要把进入看板理解成已经开工。
 
-| 编号 | 计划 | Scope | 终态（`done` / `cancelled` / `superseded`） |
-| ---- | ---- | ----- | ------------------------------------------- |
+## 已归档计划
+
+| 编号 | 计划 | Scope | 终态（done / cancelled / superseded） |
+| ---- | ---- | ----- | ------------------------------------- |
+
+本目录是计划与归档的唯一台账，不再保留顶层 plan/ 的重复入口；编号同时扫描当前目录与 archive/。

@@ -19,7 +19,7 @@
 
 ## 工作方式
 
-### 1. `SharedContainer` 的内部结构与三态流转
+### 1. 容器阶段与条目退役不是同一件事
 
 每个 `application.App` 实例内部独自持有一个 `*sharedContainer`，彻底取代 v1.x 的 `ContextNodeList` 裸切片和全局 `globalContextExtractor`。
 
@@ -42,7 +42,9 @@
 - **运行期完整视图（无白名单限制，O(1) 直出）**：
   当所有 Tool/Worker 完成 `Start` 后，`lifetimeCtx` 挂载完整容器视图。读取不再做启动期白名单拦截，但这不是绕过生命周期依赖声明的许可：插件在 `Run/Stop` 或后台任务中使用的共享资源，同样应写入 `Requires`，否则内核无法据此保证停机顺序。哈希表查找本身是 O(1)；端到端是否零分配仍需实测，不在这里先作承诺。
 - **关机期退役拦截（`EntryStopped`）**：
-  每个容器条目内部用 `atomic.Uint32` 维护状态（`EntryReady = 1`、`EntryStopped = 2`）。当关机按逆拓扑推进、某个插件（比如 `DatabasePlugin`）执行完自己的 `Stop(cleanupCtx)` 后，内核立刻将它登记的主键及 `Expose()` 出来的全部附加键状态原子翻转为 `EntryStopped`。如果此后还有超时未退的野协程拿着老 `ctx` 调 `database.Get(ctx)`，容器立刻拦截并返回 `ErrComponentStopped`。
+  条目以 atomic 状态区分 Ready、Stopped 与 Unavailable。某插件的 Stop 按契约正常返回（包括带资源释放错误返回）后，可将其主键与暴露键记为 EntryStopped，后续读取返回 ErrComponentStopped。若 Stop panic，钩子栈结束不等于自管执行已收拢：主键与暴露键改为 EntryUnavailable，拒绝发放可能损坏的句柄，但实例及其底层依赖仍保留，不能记成“已停止”。
+
+  同样的隔离规则适用于 Worker.Run 已 panic、尚待 Stop 收拢的提供者。完整停止前不会再次返回这个故障提供者；它声明的其它健康依赖仍可供受管收尾读取。容器拦截只能防止后续 Get，无法撤销已经发出的裸句柄。
 
 ### 2. 换取消信号，不换共享底座
 
@@ -115,6 +117,12 @@ handle, err := r.activator.Activate(
 - 自动生成了本次 tick 独享的 `ctxkey.RequestKey`（每次定时任务执行在日志里都有独立的 TraceID，不再混成一团）；
 - 可以通过 `application.PayloadFrom[time.Time](compCtx)` 取出当次触发参数 `tickTime`。
 
+Component 的身份、父子与资源引用从接纳时就登记。内核只保存可信身份的内部引用、任务元数据和 Payload，不额外保存调用方请求 Context、临时值或取消链。Payload 若自行引用请求对象，仍会延长其存活时间；内核不深拷贝任意对象，调用方应准备独立快照。
+
+真正派发时，再从同一 App 根构造 startCtx 与 compCtx。startCtx 使用该定义的 Requires 精确视图和独立 StartTimeout；compCtx 使用本任务身份与新追踪 ID，并接入 App 的 Grace 取消通知。首版没有 WithTaskTimeout 或排队到期计时器，不能把原请求 deadline 当成任务 deadline。
+
+父实例关闭或 App Stopping 时，尚未派发项通过内核任务记录完成取消：不创建执行 Context、不调用工厂或钩子，句柄的 CancelErr 记录明确原因，不伪造 RunErr。派发与关闸在同一同步边界判定，避免一个项既被完成取消，又随后拿同一身份启动。
+
 #### （4）`Async`（`plugins/async`）：调用 `Detach` 剥离超时与临时脏数据
 
 当业务在 HTTP 或 gRPC 请求里调用新的 `async.Submit(reqCtx, fn)` 时，插件内部调用 `application.Detach(reqCtx)`：
@@ -156,7 +164,8 @@ type EntryState uint8
 
 const (
     EntryReady   EntryState = iota + 1 // 已完成 Start，可正常读取
-    EntryStopped                       // 已执行 Stop 退役，拒绝读取
+    EntryStopped                       // Stop 按契约正常返回后退役，拒绝读取
+    EntryUnavailable                   // 提供者故障或清理无法确认，拒读但仍保留依赖
 )
 
 // InstanceMeta 是身份的只读描述；复制或自行构造此结构不会获得激活权限。
@@ -168,8 +177,10 @@ type InstanceMeta struct {
     TraceID          string     // 当前运行或请求的 RequestKey
 }
 
-// WithPayload 在调用 Activator.Activate 时向新建的 Component 实例传递当次触发参数。
+// WithPayload 保存本次接纳参数；不自动深拷贝可变对象，真正派发时交给实例。
 func WithPayload(payload any) ActivateOption
+
+// 首版不提供 WithTaskTimeout；Activate ctx 的取消只在接纳前检查。
 
 // PayloadFrom 从 Component 的 ctx 中类型安全地提取 Activate 时传入的参数。
 func PayloadFrom[T any](ctx context.Context) (T, bool)
@@ -221,6 +232,8 @@ func MustGet[T any](ctx context.Context, key ctxkey.Key) T
 
 5. **没有该组件（`ErrComponentNotFound`）**：容器已挂载，但既无该键条目，原生 ctx.Value 也没有该请求级值，返回缺失错误；不伪装成类型不符。启动白名单校验始终先执行，禁止利用 fallback 绕过声明检查。
 
+6. **提供者故障隔离（`ErrComponentUnavailable`）**：条目已登记但处于 EntryUnavailable，返回带提供者与阶段的不可用错误；不能按普通未命中回退到 ctx.Value 绕过故障状态。故障堆栈仅进入内部诊断，不当作业务返回详情。
+
 ### 2. `Provides` 与 `Exposer` 的交付校验
 
 内核先按 `0001` 的规则预留全部主键和资源键，冲突在调用工厂前返回 `ErrDuplicateExposedKey`。一个插件的主键与 `Provides` 不能相互覆盖；同一键也不能有两个提供者。
@@ -252,10 +265,11 @@ v2 不保留 `major/utility/context` 的旧访问器兼容壳。业务需要迁�
 3. 取消 startCtx 或运行 Context 不影响新建 stopCtx；协调期间纯清理不越过总截止。残留实例在总上限之后才开始 Stop 时，另获原配置中的尾部清理窗口，不重复清理旧实例。
 4. 真实 HTTP/gRPC 保留客户端取消、deadline 与 metadata；Grace 内不中断正常请求，之后服务端取消可进入业务。仅取消 Worker lifetimeCtx 不得被误当成请求已取消。
 5. Shutdown 与 Serve 已返回、测试 Handler 仍阻塞时，Stop 仍等待、DB 仍存活。gRPC Unary/Stream 做等价验证。
-6. Gin ContextWithFallback 读同一容器；嵌套 Component 按 ParentInstanceID 归属。自报身份、跨 App、已结束父级与祖先递归均被拒绝。
-7. Detach 只保留容器与追踪 ID，不保留激活凭据；原请求取消不影响任务，但全局 Grace 到期会取消它，即使 Async.Stop 尚未开始。完成信号仍等函数真实返回，Cancel 回收通知挂钩不泄漏。
-8. 两个 App 的容器、身份与 forceCtx 互相隔离；EntryStopped 拦截新读取，但不能撤销业务先前已经持有的裸句柄。
+6. Gin ContextWithFallback 读同一容器；嵌套 Component 按 ParentInstanceID 归属。自报身份、跨 App、已结束父级与祖先递归均被拒绝；目标 Queue 繁忙或有前序等待项时，嵌套调用立即报忙，不产生等待句柄。
+7. 接纳排队后取消原请求，任务仍可正常派发；内核不额外保留请求 Context 或临时错误值，显式 Payload 引用不在自动剥离保证内。父级/App 关闭则未派发项不创建运行 Context、工厂和钩子，CancelErr 与 RunErr 分离；派发后 startCtx/compCtx 仍采用原有启动与 App 生命周期预算，不存在任务 deadline。
+8. Detach 只保留容器与追踪 ID，不保留激活凭据；原请求取消不影响任务，但全局 Grace 到期会取消它，即使 Async.Stop 尚未开始。完成信号仍等函数真实返回，Cancel 回收通知挂钩不泄漏。
+9. 两个 App 的容器、身份与 forceCtx 互相隔离。Worker.Run/Stop panic 后，故障提供者读取报 ErrComponentUnavailable，所依赖的健康资源仍存活；只有按契约停止后才 EntryStopped。验证 ctx.Value fallback 不能绕过隔离，已发出的裸句柄不能被神奇撤销。
 
 ## 待确认
 
-容器、身份、排空与迁移方向已经确认，本篇无剩余阻塞性方案选择。协议适配与取消竞态仍需实现后验证，不把文档确认当成运行验证通过。
+容器、身份、排空与迁移方向、故障提供者隔离，以及排队项的依赖占用和独立 Context 已确认。阶段 0 的协议请求元数据仍需明确，协议适配与取消竞态也须真实测试，不能把文档确认当作实现已通过。

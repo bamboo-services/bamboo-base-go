@@ -188,7 +188,7 @@ plugins/grpc ──> defined + common
 
 ## 开发检查
 
-文档检查覆盖 `docs/**/*.md` 与根 `README.md`，不批量格式化各模块 `AGENTS.md`。Markdownlint 检查结构，Prettier 统一排版；不强制中文段落按固定列宽换行，也不改写代码块内容或正文语气。
+文档检查覆盖 `docs/**/*.md`（含 `docs/plan/`）与根 `README.md`，不批量格式化各模块 `AGENTS.md`。Markdownlint 检查结构，Prettier 统一排版；不强制中文段落按固定列宽换行，也不改写代码块内容或正文语气。
 
 文档工具使用 pnpm 锁定，要求 Node.js 22+、pnpm 12.8.1：
 

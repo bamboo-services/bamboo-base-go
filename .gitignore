@@ -1,46 +1,127 @@
-### IDE ###
-.vscode
-.idea
+# ==============================================================================
+# 操作系统临时与缓存文件 (Operating System Files)
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ==============================================================================
+# 环境变量与敏感凭据 (Environment & Secrets)
+# ==============================================================================
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+
+# ==============================================================================
+# 编辑器与集成开发环境 (IDEs & Editors)
+# ==============================================================================
+.idea/
+.vscode/
 *.sublime-workspace
 *.sublime-project
+.fleet/
+.zed/
+*.swp
+*.swo
+*~
+.#*
 
-### Golang Workspace (本地开发) ###
-go.work
-go.work.sum
+# ==============================================================================
+# Go 构建、测试与性能剖析产物 (Go & Build Artifacts)
+# ==============================================================================
+# 编译二进制输出目录
+/bin/
+/dist/
 
-### Golang ###
+# 二进制可执行文件与动态库
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# 测试与调试产物
 *.test
-*.out
-*.prof
-*.coverprofile
 *.test.out
-*.test.coverprofile
 *.test.prof
+*.test.coverprofile
 *.test.binary
 *.test.binary.gz
 *.test.binary.gz.*
+__debug_bin*
 
-### AI ###
-.omo/
-.zcode/
-.claude/worktrees/
-.claude/settings.local.json
+# 覆盖率与性能分析报告
+*.out
+*.prof
+*.coverprofile
+*.cover
+coverage.txt
+coverage.html
+coverage.out
 
-### 发布临时文件（make release 生成的 AI Release Notes）###
-/.release-notes.md
+# Go 工作区（本地覆盖文件，根据仓库约定）
+go.work
+go.work.sum
 
-### Python（测试脚本缓存）###
-__pycache__/
-*.pyc
-
-### 运行时日志（测试/本地运行产生）###
-.logs/
-
-### 文档开发工具 ###
+# ==============================================================================
+# 前端工具链与依赖缓存 (Node.js & Documentation Tools)
+# ==============================================================================
 node_modules/
 .pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.turbo/
+.cache/
+.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==============================================================================
+# Python 运行与测试缓存 (Python Cache)
+# ==============================================================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# ==============================================================================
+# AI 辅助开发与 Agent 工具痕迹 (AI Agents & Tools)
+# ==============================================================================
+.omo/
+.zcode/
+.codegraph
+.pi/
+.claude/worktrees/
+.claude/settings.local.json
+CLAUDE.local.md
+
+# ==============================================================================
+# 运行时日志与临时文件 (Runtime Logs & Temp Files)
+# ==============================================================================
+logs/
+.logs/
+*.log
+*.tmp
+*.temp
+
+# ==============================================================================
+# CI 与发布临时产物 (CI & Release Artifacts)
+# ==============================================================================
+/.release-notes.md

@@ -15,9 +15,12 @@
 在仓库根目录下，通过以下命令分别在临时真实 consumer 环境（`GOWORK=off`）中使用候选 source fileproxy 运行 `go test`、`vet` 和 `build` 校验（仅证明模板可正常编译，非生产 E2E 全绿）：
 
 ```bash
+bash .github/scripts/check-v2-examples.sh --example readme
 bash .github/scripts/check-v2-examples.sh --example worker-tool
 bash .github/scripts/check-v2-examples.sh --example http-db-cache
 bash .github/scripts/check-v2-examples.sh --example grpc-cron-async
+# 或通过 Makefile 一键回归全部示例：
+make check-examples
 ```
 
 注：`--fixture sqlite-async --race` 为真实 SQL 联动测试入口。

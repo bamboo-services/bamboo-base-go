@@ -48,11 +48,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
-	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	cache "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2"
 	sqlite "github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlite/v2"
@@ -99,7 +97,7 @@ func main() {
 			_ = db.AutoMigrate(&Item{})
 
 			engine.GET("/ping", func(c *gin.Context) {
-				httpresult.SuccessHasData(c, "pong", gin.H{"status": "ok"})
+				httpresult.SuccessWithData(c, "pong", gin.H{"status": "ok"})
 			})
 		}),
 	)
@@ -109,7 +107,7 @@ func main() {
 	}
 
 	// 运行应用（接管 SIGINT / SIGTERM 优雅退出）
-	if err := app.Run(context.Background()); err != nil {
+	if err := app.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "应用退出异常: %v\n", err)
 		os.Exit(1)
 	}
@@ -133,6 +131,7 @@ make lint         # 文档检查 + Go 模块 lint 与 format
 make lint-docs    # Prettier + Markdownlint 检查文档
 make format-docs  # 自动格式化文档
 make proto-check  # 校验 Protobuf 生成代码一致性
+make check-examples # 校验全部示例与 README 快速开始片段独立编译
 ```
 
 ## 许可证

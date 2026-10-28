@@ -63,6 +63,16 @@ type staticInstanceRecord struct {
 }
 
 // App 是应用级生命周期管理器与运行时核心。
+//
+// App 承载整个应用的组件依赖拓扑、状态机迁移、看门狗监督与逆拓扑平滑关机。
+// 实例通过 [New] 创建，在调用 [App.Run] 前由调用方通过 [App.RegisterTool]、
+// [App.RegisterWorker] 和 [App.RegisterComponent] 注册各类组件定义。
+//
+// # 并发语义
+//
+// [App.State] 与 [App.Shutdown] 方法并发安全，支持多个 goroutine 同时调用。
+// 各类组件注册方法（如 [App.RegisterTool]）内部受互斥锁保护，但必须在单线程装配
+// 阶段或 [App.Run] 启动之前调用；在应用启动后调用注册方法将返回 [ErrRegistrationClosed]。
 type App struct {
 	cfg    Config
 	cfgErr error
@@ -101,7 +111,15 @@ type App struct {
 	sigChan chan os.Signal
 }
 
-// New 创建并返回一个新的 App 实例。
+// New 创建并返回一个新的 [App] 实例。
+//
+// New 根据传入的 [Option] 选项解析并计算应用超时预算 [Config]。
+// 若选项校验失败（例如非正数超时或 GraceTimeout 不小于 ShutdownTimeout），
+// 错误将被安全封存，并在后续调用 [App.Run] 或 [App.Shutdown] 时返回。
+//
+// 每次调用 New 均分配全局唯一的 appID，初始化共享组件容器 [sharedContainer]，
+// 并构造关联的关机协调器、Worker 协程看门狗与动态组件激活引擎。
+// opts 中的 nil 选项将被自动跳过。
 func New(opts ...Option) *App {
 	cfg, cfgErr := resolveConfig(opts...)
 
@@ -127,14 +145,32 @@ func New(opts ...Option) *App {
 	return app
 }
 
-// State 返回当前 App 的生命周期状态。
+// State 返回当前 [App] 的生命周期状态 [AppState]。
+//
+// 该方法为只读线程安全操作，内部使用读写锁 [sync.RWMutex] 保护。
+// 返回的状态值表示内核全局状态（如 [StateNew]、[StateRunning]、[StateStopping] 等），
+// 不代表具体某个任务组件的业务执行结果。
 func (a *App) State() AppState {
 	a.stateMu.RLock()
 	defer a.stateMu.RUnlock()
 	return a.state
 }
 
-// RegisterTool 注册一个工具态插件。
+// RegisterTool 注册一个工具态单实例插件（[ModeTool]）。
+//
+// 工具态插件仅实现 [Plugin] 接口（[Plugin.Start] 与 [Plugin.Stop]），
+// 在应用启动时按照拓扑排序优先初始化，为后续启动的 Worker 或 Component
+// 提供只读/共享基础设施资源（如数据库连接、缓存客户端或算法节点）。
+//
+// 参数 info 为组件元信息，方法内部会自动将其 Mode 强制设置为 [ModeTool]
+// 并深拷贝存储；factory 为无参工厂函数，在启动阶段实例化组件。
+//
+// # 错误处理与时序
+//
+//   - 若 factory 为 nil，返回 [ErrNilFactory]；
+//   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
+//
+// 注册阶段不执行工厂调用或拓扑校验，实际依赖解析与实例化延迟至 [App.Run] 执行。
 func (a *App) RegisterTool(info PluginInfo, factory func() Plugin) error {
 	if factory == nil {
 		return ErrNilFactory
@@ -156,7 +192,22 @@ func (a *App) RegisterTool(info PluginInfo, factory func() Plugin) error {
 	return nil
 }
 
-// RegisterWorker 注册一个常驻型 Worker 插件。
+// RegisterWorker 注册一个常驻型后台服务插件（[ModeWorker]）。
+//
+// Worker 插件实现 [RunnablePlugin] 接口，具备常驻事件循环或网络监听能力
+// （如 HTTP Web 服务器、gRPC 服务端、异步任务队列消费者等）。
+// 在应用启动且共享容器冻结后，内核为每个 Worker 启动独立协程调用其 [RunnablePlugin.Run]，
+// 并由看门狗协程进行全周期监督。
+//
+// 参数 info 为组件元信息，方法内部会自动将其 Mode 强制设置为 [ModeWorker]
+// 并深拷贝存储；factory 为无参工厂函数，在启动阶段实例化组件。
+//
+// # 错误处理与时序
+//
+//   - 若 factory 为 nil，返回 [ErrNilFactory]；
+//   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
+//
+// 注册阶段不执行工厂调用或拓扑校验，实际依赖解析与实例化延迟至 [App.Run] 执行。
 func (a *App) RegisterWorker(info PluginInfo, factory func() RunnablePlugin) error {
 	if factory == nil {
 		return ErrNilFactory
@@ -178,7 +229,22 @@ func (a *App) RegisterWorker(info PluginInfo, factory func() RunnablePlugin) err
 	return nil
 }
 
-// RegisterComponent 注册一个按需激发的 Component 插件。
+// RegisterComponent 注册一个按需激发的任务型组件插件（[ModeComponent]）。
+//
+// Component 插件实现 [RunnablePlugin] 接口，不在应用启动时自动实例化，
+// 而是由业务或其他插件通过 [Activator.Activate] 在运行时按需动态激发。
+// 每次激发均调用 factory 构造独立实例，并受 [PluginInfo.Overlap] 并发配额约束。
+//
+// 参数 info 为组件元信息，方法内部会自动将其 Mode 强制设置为 [ModeComponent]
+// 并深拷贝存储；factory 为无参工厂函数，在每次激活时调用。
+// 按照设计规范，Component 不允许静态声明 Provides，若提供将在构建拓扑图时报错。
+//
+// # 错误处理与时序
+//
+//   - 若 factory 为 nil，返回 [ErrNilFactory]；
+//   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
+//
+// 注册阶段仅登记定义与重入策略，实际依赖解析延迟至 [App.Run] 执行。
 func (a *App) RegisterComponent(info PluginInfo, factory func() RunnablePlugin) error {
 	if factory == nil {
 		return ErrNilFactory
@@ -200,12 +266,40 @@ func (a *App) RegisterComponent(info PluginInfo, factory func() RunnablePlugin) 
 	return nil
 }
 
-// Activator 返回当前 App 的组件激活器。
+// Activator 返回当前 [App] 绑定的组件激活器接口 [Activator]。
+//
+// 返回的激活器用于在应用运行期间动态激发已注册的 [ModeComponent] 插件。
+// 即使在应用未启动时也可获取该对象，但实际调用 [Activator.Activate]
+// 必须在 App 处于 [StateRunning] 状态下进行，且调用方上下文须具备可信父级身份。
 func (a *App) Activator() Activator {
 	return a.componentEngine
 }
 
 // Run 启动应用拓扑并阻塞等待运行结束或关机。
+//
+// Run 负责整个应用的确定性启动编排与运行时监督，主要流程如下：
+//
+//  1. 状态流转与单次运行检查：将状态切换为 [StateStarting]。同一 App 实例仅允许
+//     运行一次，重复调用将返回 [ErrAlreadyRun]；在已关闭或停机中的 App 上调用
+//     将返回 [ErrAppClosed]；
+//  2. 拓扑计算与校验：根据全部已注册组件的 Requires 与 Provides 构建依赖图，
+//     并使用 Kahn 算法计算稳定分层拓扑；存在循环依赖时返回 [ErrDependencyCycle]；
+//  3. 信号监听注册：自动注册监听 [syscall.SIGINT] 与 [syscall.SIGTERM] 信号，
+//     捕获后自动触发 [App.Shutdown]；
+//  4. 分层静态启动：按依赖层级从底向顶依次调用 Tool 与 Worker 的工厂函数及 [Plugin.Start]。
+//     启动期间上下文挂载受限白名单视图 [startScopeView]，越权读取未声明依赖将失败；
+//     若插件实现了 [ctxkey.Exposer]，内核将校验并原子发布其暴露的资源键；
+//     启动失败或超时将触发自动停机回滚，并返回包含启动错误的合并错误；
+//  5. 发布就绪状态：冻结共享组件容器为只读，并将状态置为 [StateRunning]；
+//  6. 启动 Worker 看门狗：为所有 Worker 启动独立协程运行 [RunnablePlugin.Run]；
+//     在 Running 期间若任何 Worker 提前退出（包括返回 nil），看门狗将其判定为异常崩溃，
+//     触发应用级平滑关机并记录 [ErrWorkerUnexpectedExit]；
+//  7. 阻塞等待：等待关机协调器完成或 Worker 看门狗错误触发停机，并返回合并后的错误。
+//
+// # 并发与时序语义
+//
+// Run 本身不是线程安全的，不可被多个 goroutine 同时并发执行。
+// 启动完成后，外部 goroutine 可安全调用 [App.Shutdown] 触发优雅关机。
 func (a *App) Run() error {
 	// 1. 状态流转与单次运行权限检查
 	a.stateMu.Lock()
@@ -840,7 +934,27 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 	}
 }
 
-// Shutdown 执行关机协调流程，多次调用共享结果
+// Shutdown 执行关机协调流程，平滑释放应用静态与动态资源。
+//
+// 关机流程严格遵循逆拓扑时序与超时预算控制，主要执行步骤如下：
+//
+//  1. 协调并发控制与状态流转：首次调用将 App 状态原子切换至 [StateStopping]，
+//     后续并发或重复调用共享单次协调的唯一结果通道，等待首次关机执行完毕；
+//  2. 触发取消通知：向正在执行 Start 钩子的插件发送取消信号，并通知动态组件引擎
+//     全局关闸拒绝新激活；同时开启基于 [Config.GraceTimeout] 的强制取消定时器；
+//  3. 逆拓扑分层停机：从顶层消费者到底层提供者逆序遍历所有已启动的静态实例。
+//     若插件实现了 [Quiescer]，先调用 [Quiescer.Quiesce] 拒绝新请求并排空在途流量；
+//     之后调用 [Plugin.Stop] 进行实际资源释放与连接关闭；
+//  4. 动态依赖保持：若底层提供者仍被活跃的动态 Component 任务占用，停机流程将
+//     暂缓停机并等待动态任务完成或关机总超时 [Config.ShutdownTimeout]；
+//  5. 判定最终状态：若所有实例均正常退出，应用状态置为 [StateStopped]；
+//     若存在超时未退或 Stop 发生 panic 的实例，将其作为 [StuckInstance]
+//     安全隔离并保留其底层依赖，应用状态置为 [StateIncomplete]，
+//     并返回合并了 [StopIncompleteError] 的错误。
+//
+// # 幂等性与并发安全
+//
+// 多次并发或串行调用 Shutdown 是幂等且协程安全的，所有调用方均获得相同的结果错误。
 func (a *App) Shutdown() error {
 	a.coordinator.mu.Lock()
 	if a.coordinator.started {

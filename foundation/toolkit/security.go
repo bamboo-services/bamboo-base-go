@@ -7,29 +7,43 @@ import (
 	"github.com/google/uuid"
 )
 
-// GenerateLongKey 生成一个唯一的安全密钥字符串。
+// GenerateLongKey 生成一个唯一的长安全密钥字符串。
 //
-// 该函数通过生成两个 UUID 字符串，并将其组合成一个新的字符串，最终返回一个前缀为 "cs_" 的安全密钥。
-//
-// 安全密钥不包含任何特殊符号，且长度足够长以保证唯一性，适用于会话或认证等场景。
+// 该函数拼接两个 UUIDv4 字符串并去除连字符，加上 "cs_" 前缀，
+// 结果固定为 67 个字符，由小写十六进制字符组成，不含其他特殊符号。
+// 随机源来自 crypto/rand，适用于会话密钥、认证凭据等安全场景。
 //
 // 返回值:
-//   - 返回一个字符串类型的安全密钥，确保其唯一性。
+//   - 形如 "cs_" + 64 位小写十六进制的密钥字符串。
 func GenerateLongKey() string {
 	getKeyValue := uuid.NewString() + uuid.NewString()
 	return "cs_" + strings.ReplaceAll(getKeyValue, "-", "")
 }
 
-// GenerateKey 生成一个唯一的安全密钥字符串，用于标识或加密操作。
+// GenerateKey 生成一个唯一的短安全密钥字符串，用于标识或加密操作。
+//
+// 该函数取单个 UUIDv4 字符串并去除连字符，加上 "cs_" 前缀，
+// 结果固定为 35 个字符，由小写十六进制字符组成；随机量约为
+// [GenerateLongKey] 的一半。随机源来自 crypto/rand。
+//
+// 返回值:
+//   - 形如 "cs_" + 32 位小写十六进制的密钥字符串。
 func GenerateKey() string {
 	getKeyValue := uuid.NewString()
 	return "cs_" + strings.ReplaceAll(getKeyValue, "-", "")
 }
 
-// VerifyKey 验证输入字符串是否符合特定的安全密钥格式。
+// VerifyKey 验证输入字符串是否符合本包生成的安全密钥格式。
 //
-// 输入必须以 "cs_" 开头，后跟 64 或 32 个十六进制字符组成。
-// 返回 true 表示输入符合要求的格式，false 表示格式不匹配或发生错误。
+// 合法格式为 "cs_" 前缀后跟 64 位（[GenerateLongKey]）或
+// 32 位（[GenerateKey]）小写十六进制字符，区分大小写。
+// 该检查仅验证格式，不能证明密钥本身有效。
+//
+// 参数说明:
+//   - input: 待验证的密钥字符串。
+//
+// 返回值:
+//   - 符合格式返回 true，否则返回 false。
 func VerifyKey(input string) bool {
 	// 正则表达式验证：cs_ 后面跟着64个十六进制字符
 	patternFirst := `^cs_[a-f0-9]{64}$`

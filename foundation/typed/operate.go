@@ -4,62 +4,67 @@ import (
 	"strings"
 )
 
-// String 返回底层原生 string。
+// String 返回底层原生 string，使 String 满足 fmt.Stringer。
 func (s String) String() string {
 	return string(s)
 }
 
-// TypedString 返回自身 typed.String，满足 Operable 契约。
+// TypedString 返回自身值，满足 [Operable] 契约，供接口层统一复用。
 func (s String) TypedString() String {
 	return s
 }
 
-// Bytes 返回底层字符串的字节切片拷贝。
+// Bytes 返回底层字符串内容的字节切片副本。
+// 每次调用分配新切片，修改返回值不影响原字符串。
 func (s String) Bytes() []byte {
 	return []byte(s)
 }
 
-// Len 返回字符串的字节长度。
+// Len 返回底层字符串的字节长度，非 Unicode 字符数。
 func (s String) Len() int {
 	return len(s)
 }
 
-// IsEmpty 报告字符串字节长度是否为 0。
+// IsEmpty 报告底层字符串字节长度是否为 0。
 func (s String) IsEmpty() bool {
 	return len(s) == 0
 }
 
-// IsBlank 报告去除首尾空白字符后是否为空。
+// IsBlank 报告去除首尾 Unicode 空白后是否为空。
+// 空字符串与纯空白字符串（如 " \t "）均返回 true。
 func (s String) IsBlank() bool {
 	return len(strings.TrimSpace(string(s))) == 0
 }
 
-// Trim 返回去除首尾空白字符后的 typed.String。
+// Trim 返回去除首尾 Unicode 空白后的新值，规则同 strings.TrimSpace。
 func (s String) Trim() String {
 	return String(strings.TrimSpace(string(s)))
 }
 
-// Upper 返回所有字符转为大写后的 typed.String。
+// Upper 返回所有 Unicode 字符转为大写后的新值。
 func (s String) Upper() String {
 	return String(strings.ToUpper(string(s)))
 }
 
-// Lower 返回所有字符转为小写后的 typed.String。
+// Lower 返回所有 Unicode 字符转为小写后的新值。
 func (s String) Lower() String {
 	return String(strings.ToLower(string(s)))
 }
 
-// Equal 比较两个 typed.String 是否完全一致。
+// Equal 按字节精确比较两个值是否一致，大小写敏感。
 func (s String) Equal(other String) bool {
 	return s == other
 }
 
-// IsValid 校验受控标识符语法规则：
-// 1. 长度必须在 1 到 MaxKeyBytes (128) 字节之间；
-// 2. 首字符必须是 ASCII 字母 (A-Z 或 a-z)；
-// 3. 后续字符仅允许 ASCII 字母、数字 (0-9)、下划线 '_' 与连字符 '-'；
-// 4. 分隔符 ('_' 或 '-') 不能出现在末尾；
-// 5. 分隔符不能连续出现（例如 '__'、'--'、'_-'、'-_' 均视为非法）。
+// IsValid 按受控标识符语法规则校验底层字符串，全部条件满足才返回 true：
+//
+//   - 长度：1 至 [MaxKeyBytes] 字节；
+//   - 首字符：ASCII 字母（A-Z 或 a-z）；
+//   - 其余字符：ASCII 字母、数字（0-9）、下划线 '_' 或连字符 '-'；
+//   - 末字符：不能是下划线或连字符；
+//   - 分隔符：不能连续出现（"__"、"--"、"_-"、"-_" 均非法）。
+//
+// 校验按原始字节执行，不忽略首尾空白，非 ASCII 内容一律不合法。
 func (s String) IsValid() bool {
 	n := len(s)
 	if n < 1 || n > MaxKeyBytes {

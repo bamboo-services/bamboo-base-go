@@ -16,7 +16,13 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
-// LogHandler 自定义 slog Handler，支持彩色控制台输出和 JSON 文件输出。
+// LogHandler 是自定义的 slog.Handler 实现，支持彩色控制台输出与
+// JSON 文件输出双写。
+//
+// 零值不可用，须通过 [NewLogHandler] 构造。Handle 全程持锁串行执行，
+// 因此实例可被多个 goroutine 并发使用；经 [LogHandler.WithAttrs] 与
+// [LogHandler.WithGroup] 派生的 Handler 与原 Handler 共享同一把
+// 互斥锁与底层 Writer。
 type LogHandler struct {
 	opts        slog.HandlerOptions
 	mu          *sync.Mutex
@@ -27,21 +33,18 @@ type LogHandler struct {
 	isDebugMode bool
 }
 
-// HandlerConfig Handler 配置选项。
+// HandlerConfig 是 [NewLogHandler] 的构造配置。
 type HandlerConfig struct {
-	Console     io.Writer  // 控制台输出（可选，默认 os.Stdout）
-	File        io.Writer  // 文件输出（可选）
-	Level       slog.Level // 日志级别
-	IsDebugMode bool       // 是否调试模式
+	Console     io.Writer  // 控制台输出目标；为 nil 时默认使用 os.Stdout。
+	File        io.Writer  // 文件输出目标；为 nil 时不输出文件，仅输出控制台。
+	Level       slog.Level // 最低输出级别，零值表示 slog.LevelInfo。
+	IsDebugMode bool       // 调试模式标记；当前版本仅随实例保存，不影响输出行为。
 }
 
-// NewLogHandler 创建自定义 slog Handler。
+// NewLogHandler 根据配置创建控制台与文件双写的 slog.Handler。
 //
-// 参数说明:
-//   - config: Handler 配置选项
-//
-// 返回值:
-//   - slog.Handler: 自定义 Handler 实例
+// config.Console 为 nil 时默认写入 os.Stdout；config.File 为 nil 时
+// 仅输出控制台。返回值可直接传给 [New] 或 slog.New。
 func NewLogHandler(config HandlerConfig) slog.Handler {
 	console := config.Console
 	if console == nil {
@@ -61,7 +64,9 @@ func NewLogHandler(config HandlerConfig) slog.Handler {
 	}
 }
 
-// Enabled 判断指定级别是否启用。
+// Enabled 判断指定级别是否达到输出阈值。
+//
+// 构造时未显式设置级别（零值）按 slog.LevelInfo 处理。
 func (h *LogHandler) Enabled(_ context.Context, level slog.Level) bool {
 	minLevel := slog.LevelInfo
 	if h.opts.Level != nil {
@@ -70,8 +75,13 @@ func (h *LogHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= minLevel
 }
 
-// Handle 处理日志记录，执行控制台与文件双写输出。
-// 若任一底层 Writer 写入失败，将保留并返回该错误，避免静默吞错。
+// Handle 处理一条日志记录，执行控制台与文件双写输出。
+//
+// 控制台输出彩色文本，文件输出单行 JSON，两路输出均携带从
+// context 的 [ctxkey.RequestKey] 提取的 TraceID；ERROR 级别的
+// 控制台输出附加当前 goroutine 堆栈。若任一底层 Writer 写入失败，
+// 将保留并以 errors.Join 汇总返回该错误，避免静默吞错，
+// 另一路输出仍会执行。
 func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -98,7 +108,9 @@ func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
 	return errors.Join(errs...)
 }
 
-// WithAttrs 添加属性。
+// WithAttrs 返回追加了属性的 Handler 派生副本。
+//
+// 派生副本与原 Handler 共享互斥锁与底层 Writer，原 Handler 不受影响。
 func (h *LogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := make([]slog.Attr, len(h.attrs)+len(attrs))
 	copy(newAttrs, h.attrs)
@@ -115,7 +127,11 @@ func (h *LogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 }
 
-// WithGroup 设置日志组名称（用作 logger name）。
+// WithGroup 返回携带日志组名称的 Handler 派生副本。
+//
+// 组名称在控制台输出中作为 logger 名称渲染（如 [CORE]），
+// 在 JSON 输出中写入 "logger" 字段；派生副本与原 Handler
+// 共享互斥锁与底层 Writer。
 func (h *LogHandler) WithGroup(name string) slog.Handler {
 	return &LogHandler{
 		opts:        h.opts,

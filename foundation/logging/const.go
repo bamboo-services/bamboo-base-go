@@ -1,5 +1,8 @@
 package logging
 
+// Named* 常量定义统一的日志器命名规范，供 [Logger.WithName]
+// 作为名称使用；名称固定为 4 个字符，控制台输出时按职责类别
+// 着色，未在着色表中的名称以紫色显示。
 const (
 	// NamedCONT 表示控制层日志。
 	NamedCONT = "CONT"

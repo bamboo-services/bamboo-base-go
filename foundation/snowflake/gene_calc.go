@@ -2,42 +2,30 @@ package snowflake
 
 import "hash/fnv"
 
-// GeneCalc 基因计算工具
+// GeneCalc 提供基于 FNV-1a 哈希算法的业务基因映射与计算工具。
 //
-// 提供基于 FNV-1a 哈希算法的基因计算方法，用于动态生成基因类型。
-// 适用于需要基于关联 ID（如 UserID）计算基因的场景，实现分片定位。
+// 本类型为无状态的轻量值对象，并发安全，常用于依据关联主实体 ID 或业务特征字符串
+// 计算子实体的基因分类，实现分库分表等路由对齐。
 //
-// 使用方式:
+// 典型用法：
 //
-//	type Order struct {
-//	    UserID  snowflake.SnowflakeID
-//	    OrderNo string
-//	}
-//
-//	func (o *Order) GetGene() snowflake.Gene {
-//	    return snowflake.CalcGene().Hash(o.UserID)
-//	}
+//	calc := snowflake.CalcGene()
+//	userGene := calc.Hash(userID)
+//	orderID, err := node.Generate(userGene)
 type GeneCalc struct{}
 
-// CalcGene 获取 GeneCalc 实例
+// CalcGene 创建并返回一个无状态的基因计算工具 [GeneCalc] 实例。
 //
-// 基因计算基于 FNV-1a 哈希算法，支持基于 ID 或字符串的基因值动态生成。
-// 常用于分片定位和关联 ID 的基因计算场景。
-//
-// 注意：这里的计算的基因范围为 0-63，即 6 位二进制数。（不会受到原始雪花算法基因的影响）
+// 内部计算采用 FNV-1a 64 位哈希并将结果截断至低 6 位（掩码 0x3F），
+// 输出的基因范围恒定处于 [0, 63] 区间内。
 func CalcGene() GeneCalc {
 	return GeneCalc{}
 }
 
-// Hash 基于 SnowflakeID 计算基因（FNV-1a 哈希）
+// Hash 依据单个 [SnowflakeID] 计算并返回对应的 6 位业务基因。
 //
-// 使用 FNV-1a 64位哈希算法，对 ID 字符串进行哈希，取低 6 位作为基因值（0-63）。
-//
-// 参数说明:
-//   - id: 雪花 ID
-//
-// 返回值:
-//   - Gene: 计算出的基因值（0-63），如果计算失败返回 GeneDefault
+// 算法将 ID 的十进制字符串经过 FNV-1a 哈希后取低 6 位作为基因值。
+// 若输入的 id 为零值（[SnowflakeID.IsZero] 为 true），则直接返回 [GeneDefault]。
 func (gc GeneCalc) Hash(id SnowflakeID) Gene {
 	if id.IsZero() {
 		return GeneDefault
@@ -49,16 +37,10 @@ func (gc GeneCalc) Hash(id SnowflakeID) Gene {
 	return Gene(h.Sum64() & 0x3F) // 取低 6 位
 }
 
-// HashMulti 基于多个 SnowflakeID 计算组合基因
+// HashMulti 依据多个 [SnowflakeID] 组合计算并返回对应的 6 位业务基因。
 //
-// 对多个 ID 进行组合哈希，适用于需要基于多个关联实体计算基因的场景。
-// 哈希顺序影响结果，ID 的顺序不同会产生不同的基因值。
-//
-// 参数说明:
-//   - ids: 雪花 ID 列表
-//
-// 返回值:
-//   - Gene: 计算出的组合基因值（0-63），如果计算失败或 IDs 为空返回 GeneDefault
+// 算法按参数传递顺序将多个 ID 的十进制字符串依序写入 FNV-1a 哈希器。
+// 入参顺序敏感，不同顺序将产生不同的计算结果；若未传入任何 ID 参数则返回 [GeneDefault]。
 func (gc GeneCalc) HashMulti(ids ...SnowflakeID) Gene {
 	if len(ids) == 0 {
 		return GeneDefault
@@ -72,15 +54,10 @@ func (gc GeneCalc) HashMulti(ids ...SnowflakeID) Gene {
 	return Gene(h.Sum64() & 0x3F) // 取低 6 位
 }
 
-// HashString 基于字符串计算基因
+// HashString 依据任意字符串内容计算并返回对应的 6 位业务基因。
 //
-// 对任意字符串进行哈希，适用于基于非 ID 字段（如地区编码、分类等）计算基因。
-//
-// 参数说明:
-//   - s: 输入字符串
-//
-// 返回值:
-//   - Gene: 计算出的基因值（0-63），如果字符串为空或计算失败返回 GeneDefault
+// 适用于根据非雪花 ID 字段（如用户账号名、地区编码、业务代号等）计算基因特征的场景。
+// 若输入字符串 s 为空字符串，则直接返回 [GeneDefault]。
 func (gc GeneCalc) HashString(s string) Gene {
 	if s == "" {
 		return GeneDefault

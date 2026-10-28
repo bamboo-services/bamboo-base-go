@@ -17,23 +17,35 @@ import (
 )
 
 var (
-	// ErrClosed 写入器已关闭
+	// ErrClosed 表示写入器已经通过 [RotatingWriter.Close] 关闭。
+	// 关闭之后的 Write 返回该错误，调用方可通过 errors.Is 识别
+	// 并停止写入。
 	ErrClosed = errors.New("rotating writer is closed")
 )
 
-// RotatorConfig 日志切割器配置
+// RotatorConfig 是 [NewRotatingWriter] 的构造配置。
+//
+// 字段为零值或非法值时由构造器填充默认值：Dir 默认 ".logs"，
+// BaseName 默认 "log"，Ext 默认 ".log"，MaxSize 小于等于 0 时
+// 默认 10MB。
 type RotatorConfig struct {
-	Dir      string // 日志目录
-	BaseName string // 基础文件名 (如 "log")
-	Ext      string // 扩展名 (如 ".log")
-	MaxSize  int64  // 最大文件大小 (字节)，默认 10MB
+	Dir      string // 日志目录，构造时自动创建（权限 0755）。
+	BaseName string // 基础文件名（如 "log"），当前文件名为 BaseName+Ext。
+	Ext      string // 扩展名（如 ".log"），直接拼接到文件名末尾。
+	MaxSize  int64  // 单个日志文件的最大字节数，超出后触发切割，默认 10MB。
 }
 
-// RotatingWriter 支持自动切割与归档的日志写入器
-//
+// RotatingWriter 是支持按大小与日期自动切割、并按天归档的日志写入器，
 // 实现 io.Writer 与 io.Closer 接口。
-// 切割后的文件命名格式: log.0.log, log.1.log, log.2.log ... (索引递增，数字越大越新)
-// 归档后的文件命名格式: logger-yyyy-MM-dd.tar.gz
+//
+// 当前写入文件名为 BaseName+Ext（如 "log.log"）；按大小切割后的
+// 文件命名为 BaseName.索引.Ext（如 "log.0.log"），索引递增，
+// 数字越大越新；跨天后当日文件按 BaseName-日期.Ext 重命名保留。
+// 历史文件归档统一命名为 logger-日期.tar.gz（前缀固定为 "logger"，
+// 与 BaseName 无关），归档完成后原始日志文件被删除。
+//
+// 多个 goroutine 可并发调用 Write 与 Close；零值不可用，
+// 须通过 [NewRotatingWriter] 构造。
 type RotatingWriter struct {
 	fileMu      sync.Mutex // 仅保护底层文件句柄、currentSize、currentDate
 	stateMu     sync.Mutex // 保护 closed 标志与内部状态切换
@@ -59,7 +71,13 @@ type RotatingWriter struct {
 	beforeArchiveFileHook func(filePath string)
 }
 
-// NewRotatingWriter 创建日志切割写入器
+// NewRotatingWriter 创建日志切割写入器，并启动每日归档调度器。
+//
+// config 的零值字段按 [RotatorConfig] 文档填充默认值。构造过程会
+// 创建日志目录（0755）并完成启动检查：已有的跨天文件按日期重命名、
+// 超限文件立即切割、历史文件尝试归档；前两类失败时返回错误，
+// 启动阶段的归档失败不使构造失败，而是推迟到 Close 时一并返回。
+// 返回的写入器可被多个 goroutine 并发使用，由调用方负责 Close。
 func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 	if config.Dir == "" {
 		config.Dir = ".logs"
@@ -98,7 +116,12 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 	return w, nil
 }
 
-// Write 写入数据到日志文件
+// Write 将数据追加写入当前日志文件，必要时先执行切割。
+//
+// 写入前按序处理：已关闭时返回 [ErrClosed]；跨天时先将当前文件按
+// 日期重命名并开启新文件，随后异步登记归档；当前文件剩余空间
+// 不足以容纳本次写入时按索引切割。返回底层文件写入的结果，
+// n 为成功写入的字节数。本方法可被多个 goroutine 并发调用。
 func (w *RotatingWriter) Write(p []byte) (n int, err error) {
 	w.stateMu.Lock()
 	if w.closed {
@@ -140,7 +163,12 @@ func (w *RotatingWriter) Write(p []byte) (n int, err error) {
 	return n, err
 }
 
-// Close 关闭日志文件与调度器，等待已登记归档全部完成
+// Close 关闭日志文件与归档调度器，等待已登记归档全部完成。
+//
+// 停止顺序为：停止每日调度器、等待在途归档协程退出、关闭当前文件
+// 句柄；返回值以 errors.Join 汇总文件关闭错误与后台归档记录的错误。
+// 本方法幂等：并发或重复调用都会等待首次关闭完成并返回同一结果；
+// 关闭之后的 Write 返回 [ErrClosed]。
 func (w *RotatingWriter) Close() error {
 	w.stateMu.Lock()
 	if w.closed {

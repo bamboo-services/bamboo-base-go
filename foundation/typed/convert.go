@@ -12,10 +12,13 @@ import (
 )
 
 // ErrNilReceiver 表示对 nil 指针接收器调用解码方法时返回的错误。
+// [String.UnmarshalText]、[String.UnmarshalBinary]、[String.UnmarshalJSON]、
+// [String.UnmarshalXML]、[String.UnmarshalXMLAttr]、[String.Scan] 与
+// [String.Set] 在接收器为 nil 时返回该值，调用方可通过 errors.Is 识别。
 var ErrNilReceiver = errors.New("typed.String: nil receiver")
 
-// MarshalText 实现 encoding.TextMarshaler 接口。
-// 编码前先执行 IsValid 校验。
+// MarshalText 实现 encoding.TextMarshaler，输出底层字符串内容。
+// 输出前先执行 [String.IsValid] 校验，不合法时返回错误。
 func (s String) MarshalText() ([]byte, error) {
 	if !s.IsValid() {
 		return nil, fmt.Errorf("typed.String: invalid key %q", s)
@@ -23,8 +26,9 @@ func (s String) MarshalText() ([]byte, error) {
 	return []byte(s), nil
 }
 
-// UnmarshalText 实现 encoding.TextUnmarshaler 接口。
-// 指针接收器 nil 安全，且仅在 candidate 校验成功后才写回，失败不改变旧值。
+// UnmarshalText 实现 encoding.TextUnmarshaler，校验候选文本并写回。
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) UnmarshalText(text []byte) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -37,8 +41,9 @@ func (s *String) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// MarshalBinary 实现 encoding.BinaryMarshaler 接口。
-// 供 gob 与 Redis 客户端等二进制通道复用，编码前先执行 IsValid 校验。
+// MarshalBinary 实现 encoding.BinaryMarshaler，输出底层字符串字节，
+// 供 gob 与 Redis 客户端等二进制通道复用。
+// 输出前先执行 [String.IsValid] 校验，不合法时返回错误。
 func (s String) MarshalBinary() ([]byte, error) {
 	if !s.IsValid() {
 		return nil, fmt.Errorf("typed.String: invalid key %q", s)
@@ -46,8 +51,9 @@ func (s String) MarshalBinary() ([]byte, error) {
 	return []byte(s), nil
 }
 
-// UnmarshalBinary 实现 encoding.BinaryUnmarshaler 接口。
-// 指针接收器 nil 安全，且仅在 candidate 校验成功后才写回，失败不改变旧值。
+// UnmarshalBinary 实现 encoding.BinaryUnmarshaler，校验候选字节并写回。
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) UnmarshalBinary(data []byte) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -60,8 +66,8 @@ func (s *String) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// MarshalJSON 实现 json.Marshaler 接口。
-// 编码为 JSON 字符串，编码前先执行 IsValid 校验。
+// MarshalJSON 实现 json.Marshaler，编码为 JSON 字符串字面量。
+// 编码前先执行 [String.IsValid] 校验，不合法时返回错误且无部分输出。
 func (s String) MarshalJSON() ([]byte, error) {
 	if !s.IsValid() {
 		return nil, fmt.Errorf("typed.String: invalid key %q", s)
@@ -69,8 +75,9 @@ func (s String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(s))
 }
 
-// UnmarshalJSON 实现 json.Unmarshaler 接口。
-// 严格拒绝 JSON null 与非字符串类型；仅在 candidate 校验成功后写回，失败不改变旧值。
+// UnmarshalJSON 实现 json.Unmarshaler，从 JSON 字符串解码并写回。
+// 严格拒绝 JSON null 与非字符串类型；接收器为 nil 时返回 [ErrNilReceiver]；
+// 仅当候选值通过 [String.IsValid] 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) UnmarshalJSON(raw []byte) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -93,8 +100,8 @@ func (s *String) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// MarshalXML 实现 xml.Marshaler 接口。
-// 编码为 XML 元素，编码前先执行 IsValid 校验。
+// MarshalXML 实现 xml.Marshaler，将底层字符串编码为 XML 元素的字符内容。
+// 编码前先执行 [String.IsValid] 校验，不合法时返回错误。
 func (s String) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if !s.IsValid() {
 		return fmt.Errorf("typed.String: invalid key %q", s)
@@ -102,8 +109,10 @@ func (s String) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(string(s), start)
 }
 
-// UnmarshalXML 实现 xml.Unmarshaler 接口。
-// 解码 XML 元素，拒绝 XML 空元素与嵌套子元素；仅在 candidate 校验成功后写回，失败不改变旧值。
+// UnmarshalXML 实现 xml.Unmarshaler，从 XML 元素的字符内容解码并写回。
+// 拒绝空元素内容与嵌套子元素，元素内容按原文作为候选值、不做空白修剪；
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -143,8 +152,8 @@ func (s *String) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	return nil
 }
 
-// MarshalXMLAttr 实现 xml.MarshalerAttr 接口。
-// 编码为 XML 属性，编码前先执行 IsValid 校验。
+// MarshalXMLAttr 实现 xml.MarshalerAttr，将底层字符串编码为 XML 属性。
+// 编码前先执行 [String.IsValid] 校验，不合法时返回零值 xml.Attr 与错误。
 func (s String) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	if !s.IsValid() {
 		return xml.Attr{}, fmt.Errorf("typed.String: invalid key %q", s)
@@ -155,8 +164,9 @@ func (s String) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	}, nil
 }
 
-// UnmarshalXMLAttr 实现 xml.UnmarshalerAttr 接口。
-// 解码 XML 属性，仅在 candidate 校验成功后写回，失败不改变旧值。
+// UnmarshalXMLAttr 实现 xml.UnmarshalerAttr，从 XML 属性值解码并写回。
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) UnmarshalXMLAttr(attr xml.Attr) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -169,8 +179,8 @@ func (s *String) UnmarshalXMLAttr(attr xml.Attr) error {
 	return nil
 }
 
-// Value 实现 driver.Valuer 接口。
-// 编码为 SQL 字符串，编码前先执行 IsValid 校验。
+// Value 实现 driver.Valuer，将底层字符串输出为 SQL 字符串值。
+// 输出前先执行 [String.IsValid] 校验，不合法时返回错误。
 func (s String) Value() (driver.Value, error) {
 	if !s.IsValid() {
 		return nil, fmt.Errorf("typed.String: invalid key %q", s)
@@ -178,8 +188,10 @@ func (s String) Value() (driver.Value, error) {
 	return string(s), nil
 }
 
-// Scan 实现 sql.Scanner 接口。
-// 拒绝 SQL NULL 与非 string / []byte 类型；仅在 candidate 校验成功后写回，失败不改变旧值。
+// Scan 实现 sql.Scanner，从 SQL 列值解码并写回。
+// 仅接受 string 与 []byte，拒绝 SQL NULL 与其它类型；
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) Scan(src any) error {
 	if s == nil {
 		return ErrNilReceiver
@@ -205,9 +217,10 @@ func (s *String) Scan(src any) error {
 	return nil
 }
 
-// Set 实现 flag.Value 接口。
-// 配合 operate.go 中的 String() 方法使 *typed.String 满足 flag.Value；
-// 仅在 candidate 校验成功后写回，失败不改变旧值。
+// Set 实现 flag.Value，解析命令行参数值并写回。
+// 配合 [String.String] 使 *String 完整满足 [flag.Value]；
+// 接收器为 nil 时返回 [ErrNilReceiver]；仅当候选值通过 [String.IsValid]
+// 校验后才写回，任何失败均不改变接收器原值。
 func (s *String) Set(raw string) error {
 	if s == nil {
 		return ErrNilReceiver

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package testdata;
+
+import "base.proto";
+
+option go_package = "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/grpcresult/internaltest;internaltest";
+
+message ValidAlphaResponse {
+  xBase.BaseResponse header = 1;
+  string payload = 2;
+}
+
+message ValidBetaResponse {
+  string data = 1;
+  xBase.BaseResponse custom_base = 2;
+}
+
+message MissingBaseResponse {
+  string data = 1;
+  int64 count = 2;
+}
+
+message MultipleBaseResponse {
+  xBase.BaseResponse primary = 1;
+  xBase.BaseResponse secondary = 2;
+}

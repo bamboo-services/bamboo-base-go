@@ -4,15 +4,14 @@
 // 	protoc        (unknown)
 // source: base.proto
 
-package xGrpcGenerate
+package generate
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -25,7 +24,7 @@ const (
 // BaseResponse 表示 gRPC 统一响应的元信息部分。
 type BaseResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 请求追踪标识（对应 HTTP 的 X-Request-UUID）。
+	// 请求追踪标识（。
 	Context string `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
 	// 输出标识（如 "Success"、"PARAMETER_ERROR"）。
 	Output string `protobuf:"bytes,2,opt,name=output,proto3" json:"output,omitempty"`
@@ -127,7 +126,7 @@ const file_base_proto_rawDesc = "" +
 	"\rerror_message\x18\x05 \x01(\tH\x00R\ferrorMessage\x88\x01\x01\x12\x1f\n" +
 	"\boverhead\x18\x06 \x01(\x03H\x01R\boverhead\x88\x01\x01B\x10\n" +
 	"\x0e_error_messageB\v\n" +
-	"\t_overheadB\x11Z\x0f.;xGrpcGenerateb\x06proto3"
+	"\t_overheadBMZKgithub.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/generate;generateb\x06proto3"
 
 var (
 	file_base_proto_rawDescOnce sync.Once

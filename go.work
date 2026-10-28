@@ -1,16 +1,26 @@
 go 1.25.11
 
 use (
-	./common
-	./defined
-	./major
+	./application
+	./foundation
 	./plugins/async
+	./plugins/cache
 	./plugins/cron
-	./plugins/database/mysql
-	./plugins/database/oracle
-	./plugins/database/postgres
-	./plugins/database/sqlite
-	./plugins/database/sqlserver
+	./plugins/database
+	./plugins/database/adapter/mysql
+	./plugins/database/adapter/oracle
+	./plugins/database/adapter/postgres
+	./plugins/database/adapter/sqlite
+	./plugins/database/adapter/sqlserver
 	./plugins/email
 	./plugins/grpc
+	./plugins/web-gin
 )
+
+replace github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0 => ./foundation
+
+replace github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0 => ./application
+
+replace github.com/bamboo-services/bamboo-base-go/plugins/database/v2 v2.0.0 => ./plugins/database
+
+replace github.com/bamboo-services/bamboo-base-go/plugins/cache/v2 v2.0.0 => ./plugins/cache

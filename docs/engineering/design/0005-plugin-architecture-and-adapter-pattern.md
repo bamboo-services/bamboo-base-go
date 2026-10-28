@@ -78,7 +78,7 @@ plugins/
 │       │   ├── go.mod        #     require github.com/libtnb/sqlite
 │       │   └── sqlite.go
 │       ├── oracle/           #   module .../plugins/database/adapter/oracle/v2
-│       │   ├── go.mod        #     require github.com/oesand/gorm-oracle
+│       │   ├── go.mod        #     require github.com/oracle-samples/gorm-oracle
 │       │   └── oracle.go
 │       └── sqlserver/        #   module .../plugins/database/adapter/sqlserver/v2
 │           ├── go.mod        #     require gorm.io/driver/sqlserver
@@ -157,7 +157,7 @@ Gin 插件持有自己的 validator 与 translator。框架 bind 包的 Bind/Dat
 
 不能先调用 ShouldBind*，再声称补一次实例校验就完成隔离：Gin 默认路径已经调用 binding.Validator，可能提前拒绝输入或执行别的 App 的规则。因此框架绑定不替换包级 binding.Validator，也不走会隐式调用它的默认绑定路径。业务直接使用 Gin.ShouldBind* 是另一条路径，不保证享有本插件的实例级规则。
 
-HTTP/gRPC 适配器的 forceCtx、调用计数、Stream Context 包装与 Stop 顺序以 [0002](./0002-context-propagation-and-shared-state.md#3-插件注册后怎么一路传给四大-pluginrunner) 为准。HTTP 默认保证普通 Handler；WebSocket/hijacked 需独立受管 Worker，不用普通 HTTP 测试替代其验收。
+HTTP/gRPC 适配器的 forceCtx、调用计数、Stream Context 包装与 Stop 顺序以 [0002](./0002-context-propagation-and-shared-state.md#3-插件注册后怎么一路传给四大-pluginrunner) 为准。HTTP 默认保证普通 Handler；WebSocket/hijacked 需独立受管 Worker，不用普通 HTTP 测试替代其验收。关于请求标识与 Trace：HTTP 严格保持 v1 规则，服务端对每笔 HTTP 请求生成全新 UUID，显式忽略客户端传入的 `X-Request-Id` 与 `X-Request-UUID`，响应头 `X-Request-UUID` 必须与 JSON 响应体 context 中的 UUID 保持完全一致；gRPC 则保持已定 metadata 透传及 Header 与 Trailer 对齐规则，二者契约互不套用。
 
 ### 6. `httpresult` 与 `grpcresult`：消费同一份 `apperr` 决策报错展示
 
@@ -337,8 +337,10 @@ Cron 仅做表达式触发时，robfig/cron 已经足够，且范围更小。继
 4. 用 gocron 的间隔调度接口配置 50ms 周期，激活耗时 120ms 的 Component，验证 OverlapSkip 与独立追踪 ID；显式 Queue 验证 FIFO、队满、Cron 关闭取消未派发 tick。不要把五段 Cron 表达式误当成毫秒调度接口。嵌套子树也须完整收拢。
 5. 两个 Gin 插件为同名标签配置相反规则，框架 Bind 分别按各自实例校验；不得修改 Gin 全局校验器，也不得在解码时隐式调用它。
 6. 真实 HTTP/gRPC 取消与排空按 0002 验证，包括 Serve 已退但 Handler 未退；WebSocket/hijack 不计入默认保证。
-7. 同一份 40014 BodyError 与 50000 ServerInternalError 经两个结果包得到确定映射；覆盖映射表兜底、非法 HTTP 码与内部 Err 不外泄。SuccessWith 的 T 必须是符合 BaseResponse 约束的 Protobuf 指针，误用时明确报编程错误，不能对 any 作无条件成功承诺。
+7. 同一份 40014 BodyError 与 50000 ServerInternalError 经两个结果包得到确定映射；覆盖映射表兜底、非法 HTTP 码与内部 Err 不外泄。SuccessWith 的对象由框架创建，`T` 必须是具体的 Protobuf 指针类型，其顶层包含恰好一个框架 `BaseResponse` 类型的消息字段；框架基于 Protobuf 类型 descriptor 进行精确识别而非猜测业务字段名。缺少、多于、非 Protobuf 或非 pointer 均属于明确的编程错误，禁止对 `any` 作无条件成功承诺。保持 SuccessWith 签名与草稿状态，不自行更改 wire 字段；旧 `code` 成功为 200 保持不变。
 
 ## 待确认
 
-插件归属、真实 Stop、实例级绑定和默认网络边界已经确认。版本与 tag 统一按 [0003](./0003-foundation-module-consolidation.md#异常与兼容)：目录不加 v2 层，module/import 带 /v2，首批全模块 v2.0.0，后续按需发版。无剩余阻塞性方案选择，编码与真实发布验收不作为本轮已完成能力。
+插件归属、真实 Stop、实例级绑定和默认网络边界已经确认。数据库与数据实体模型不维护隐式全局雪花节点，模型主键由受管 Tool 模式的雪花节点提供；上下文或实体拿不到已配置节点时明确报错，实体创建 hook 终止本次写入，不隐式自建节点或降级生成其它 ID。
+
+版本与 tag 统一按 [0003](./0003-foundation-module-consolidation.md#异常与兼容)：目录不加 v2 层，module/import 带 /v2，首批全模块 v2.0.0，后续按需发版。编码、日志归档与真实发布验收不作为本轮已完成能力，本篇保持 draft。

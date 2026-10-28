@@ -2,6 +2,8 @@ package xGrpcMiddle
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -29,118 +31,112 @@ func dummyStreamInterceptor(tag string, recorder *[]string) StreamMiddlewareFunc
 }
 
 func TestUseUnaryBasic(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var recorder []string
-	UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Svc"},
+	reg.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Svc"},
 		dummyUnaryInterceptor("A", &recorder),
 		nil,
 		dummyUnaryInterceptor("B", &recorder),
 	)
 
-	mws := LookupUnary("pkg.Svc")
+	mws := reg.LookupUnary("pkg.Svc")
 	if len(mws) != 2 {
 		t.Errorf("有效中间件数量 = %d, 期望 2", len(mws))
 	}
 }
 
 func TestUseUnaryAppend(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var recorder []string
 	desc := grpc.ServiceDesc{ServiceName: "pkg.Svc"}
-	UseUnary(desc, dummyUnaryInterceptor("A", &recorder))
-	UseUnary(desc, dummyUnaryInterceptor("B", &recorder))
+	reg.UseUnary(desc, dummyUnaryInterceptor("A", &recorder))
+	reg.UseUnary(desc, dummyUnaryInterceptor("B", &recorder))
 
-	mws := LookupUnary("pkg.Svc")
+	mws := reg.LookupUnary("pkg.Svc")
 	if len(mws) != 2 {
 		t.Errorf("追加后中间件数量 = %d, 期望 2", len(mws))
 	}
 }
 
 func TestUseStreamBasic(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var recorder []string
-	UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamSvc"},
+	reg.UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamSvc"},
 		dummyStreamInterceptor("A", &recorder),
 		nil,
 		dummyStreamInterceptor("B", &recorder),
 	)
 
-	mws := LookupStream("pkg.StreamSvc")
+	mws := reg.LookupStream("pkg.StreamSvc")
 	if len(mws) != 2 {
 		t.Errorf("有效中间件数量 = %d, 期望 2", len(mws))
 	}
 }
 
 func TestUseStreamAppend(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var recorder []string
 	desc := grpc.ServiceDesc{ServiceName: "pkg.StreamSvc"}
-	UseStream(desc, dummyStreamInterceptor("A", &recorder))
-	UseStream(desc, dummyStreamInterceptor("B", &recorder))
+	reg.UseStream(desc, dummyStreamInterceptor("A", &recorder))
+	reg.UseStream(desc, dummyStreamInterceptor("B", &recorder))
 
-	mws := LookupStream("pkg.StreamSvc")
+	mws := reg.LookupStream("pkg.StreamSvc")
 	if len(mws) != 2 {
 		t.Errorf("追加后中间件数量 = %d, 期望 2", len(mws))
 	}
 }
 
 func TestUseMultipleServices(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var recorder []string
-	UseUnary(grpc.ServiceDesc{ServiceName: "pkg.A"}, dummyUnaryInterceptor("A1", &recorder))
-	UseUnary(grpc.ServiceDesc{ServiceName: "pkg.B"}, dummyUnaryInterceptor("B1", &recorder), dummyUnaryInterceptor("B2", &recorder))
-	UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamA"}, dummyStreamInterceptor("SA1", &recorder))
+	reg.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.A"}, dummyUnaryInterceptor("A1", &recorder))
+	reg.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.B"}, dummyUnaryInterceptor("B1", &recorder), dummyUnaryInterceptor("B2", &recorder))
+	reg.UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamA"}, dummyStreamInterceptor("SA1", &recorder))
 
-	if mws := LookupUnary("pkg.A"); len(mws) != 1 {
+	if mws := reg.LookupUnary("pkg.A"); len(mws) != 1 {
 		t.Errorf("pkg.A 中间件数量 = %d, 期望 1", len(mws))
 	}
-	if mws := LookupUnary("pkg.B"); len(mws) != 2 {
+	if mws := reg.LookupUnary("pkg.B"); len(mws) != 2 {
 		t.Errorf("pkg.B 中间件数量 = %d, 期望 2", len(mws))
 	}
-	if mws := LookupUnary("pkg.C"); mws != nil {
+	if mws := reg.LookupUnary("pkg.C"); mws != nil {
 		t.Errorf("未注册的 pkg.C 应返回 nil, 实际 = %v", mws)
 	}
-	if mws := LookupStream("pkg.StreamA"); len(mws) != 1 {
+	if mws := reg.LookupStream("pkg.StreamA"); len(mws) != 1 {
 		t.Errorf("pkg.StreamA 中间件数量 = %d, 期望 1", len(mws))
 	}
-	if mws := LookupStream("pkg.StreamB"); mws != nil {
+	if mws := reg.LookupStream("pkg.StreamB"); mws != nil {
 		t.Errorf("未注册的 pkg.StreamB 应返回 nil, 实际 = %v", mws)
 	}
 }
 
 func TestUseAllNilSkipped(t *testing.T) {
-	t.Cleanup(reset)
+	reg := NewRegistry()
 
-	UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Empty"}, nil, nil)
-	if mws := LookupUnary("pkg.Empty"); mws != nil {
+	reg.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Empty"}, nil, nil)
+	if mws := reg.LookupUnary("pkg.Empty"); mws != nil {
 		t.Errorf("全 nil 注册后 LookupUnary 应返回 nil, 实际长度 = %d", len(mws))
 	}
 
-	UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamEmpty"}, nil, nil)
-	if mws := LookupStream("pkg.StreamEmpty"); mws != nil {
+	reg.UseStream(grpc.ServiceDesc{ServiceName: "pkg.StreamEmpty"}, nil, nil)
+	if mws := reg.LookupStream("pkg.StreamEmpty"); mws != nil {
 		t.Errorf("全 nil 注册后 LookupStream 应返回 nil, 实际长度 = %d", len(mws))
 	}
 }
 
 func TestLookupEmpty(t *testing.T) {
-	t.Cleanup(reset)
+	reg := NewRegistry()
 
-	if mws := LookupUnary("any.Service"); mws != nil {
+	if mws := reg.LookupUnary("any.Service"); mws != nil {
 		t.Errorf("空注册表 LookupUnary 应返回 nil, 实际 = %v", mws)
 	}
-	if mws := LookupStream("any.Service"); mws != nil {
+	if mws := reg.LookupStream("any.Service"); mws != nil {
 		t.Errorf("空注册表 LookupStream 应返回 nil, 实际 = %v", mws)
 	}
 }
 
 func TestConcurrentSafe(t *testing.T) {
-	t.Cleanup(reset)
-
+	reg := NewRegistry()
 	var wg sync.WaitGroup
 
 	// 并发写入 Unary
@@ -149,7 +145,7 @@ func TestConcurrentSafe(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var recorder []string
-			UseUnary(
+			reg.UseUnary(
 				grpc.ServiceDesc{ServiceName: "pkg.Concurrent"},
 				dummyUnaryInterceptor("mw", &recorder),
 			)
@@ -162,7 +158,7 @@ func TestConcurrentSafe(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			var recorder []string
-			UseStream(
+			reg.UseStream(
 				grpc.ServiceDesc{ServiceName: "pkg.StreamConcurrent"},
 				dummyStreamInterceptor("smw", &recorder),
 			)
@@ -174,21 +170,91 @@ func TestConcurrentSafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = LookupUnary("pkg.Concurrent")
-			_ = LookupStream("pkg.StreamConcurrent")
+			_ = reg.LookupUnary("pkg.Concurrent")
+			_ = reg.LookupStream("pkg.StreamConcurrent")
 		}()
 	}
 
 	wg.Wait()
 
-	mws := LookupUnary("pkg.Concurrent")
+	mws := reg.LookupUnary("pkg.Concurrent")
 	if len(mws) != 100 {
 		t.Errorf("并发注册后 Unary 中间件数量 = %d, 期望 100", len(mws))
 	}
 
-	smws := LookupStream("pkg.StreamConcurrent")
+	smws := reg.LookupStream("pkg.StreamConcurrent")
 	if len(smws) != 100 {
 		t.Errorf("并发注册后 Stream 中间件数量 = %d, 期望 100", len(smws))
+	}
+}
+
+func TestRegistryIsolation(t *testing.T) {
+	regA := NewRegistry()
+	regB := NewRegistry()
+
+	var recA, recB []string
+	regA.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Isolated"}, dummyUnaryInterceptor("A", &recA))
+	regB.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Isolated"}, dummyUnaryInterceptor("B", &recB))
+
+	mwsA := regA.LookupUnary("pkg.Isolated")
+	mwsB := regB.LookupUnary("pkg.Isolated")
+
+	if len(mwsA) != 1 || len(mwsB) != 1 {
+		t.Fatalf("两注册表长度应各为 1, 实际 A=%d, B=%d", len(mwsA), len(mwsB))
+	}
+
+	// 执行验证中间件互不串
+	_, _ = mwsA[0](context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/pkg.Isolated/Call"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "okA", nil
+	})
+	if len(recA) != 2 || len(recB) != 0 {
+		t.Errorf("regA 执行不应影响 regB，recA=%v, recB=%v", recA, recB)
+	}
+
+	_, _ = mwsB[0](context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/pkg.Isolated/Call"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "okB", nil
+	})
+	if len(recB) != 2 {
+		t.Errorf("regB 执行后 recB 应有记录, recB=%v", recB)
+	}
+}
+
+func TestMiddlewareExecutionChainAndErrorPropagation(t *testing.T) {
+	reg := NewRegistry()
+	type ctxKey struct{}
+
+	mw1 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx = context.WithValue(ctx, ctxKey{}, "value1")
+		return handler(ctx, req)
+	}
+	expectedErr := errors.New("boom")
+	mw2 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		val := ctx.Value(ctxKey{})
+		if val != "value1" {
+			return nil, fmt.Errorf("context not propagated: %v", val)
+		}
+		return nil, expectedErr
+	}
+
+	reg.UseUnary(grpc.ServiceDesc{ServiceName: "pkg.Chain"}, mw1, mw2)
+	mws := reg.LookupUnary("pkg.Chain")
+	if len(mws) != 2 {
+		t.Fatalf("期望 2 个中间件, 实际 %d", len(mws))
+	}
+
+	// 链式调用
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "handler-reached", nil
+	}
+	chain := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return mws[0](ctx, req, &grpc.UnaryServerInfo{}, func(ctx2 context.Context, req2 interface{}) (interface{}, error) {
+			return mws[1](ctx2, req2, &grpc.UnaryServerInfo{}, handler)
+		})
+	}
+
+	_, err := chain(context.Background(), "input")
+	if !errors.Is(err, expectedErr) {
+		t.Errorf("错误传播失败, 期望 %v, 实际 %v", expectedErr, err)
 	}
 }
 

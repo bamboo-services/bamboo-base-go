@@ -1,4 +1,4 @@
-package xEmail
+package email
 
 import (
 	"embed"
@@ -10,7 +10,7 @@ import (
 )
 
 //go:embed template/*.html
-var templateFS embed.FS
+var defaultTemplateFS embed.FS
 
 // TemplateManager 邮件模板管理器
 type TemplateManager struct {
@@ -18,12 +18,10 @@ type TemplateManager struct {
 	names     []string
 }
 
-// newTemplateManager 创建模板管理器
-//
-// 如果 externalDir 不为空，则加载外部模板目录中的模板，
-// 同名模板会覆盖内置模板。
+// newTemplateManager 创建模板管理器。
+// 如果 externalDir 不为空，则加载外部模板目录中的模板，同名模板覆盖内置模板。
 func newTemplateManager(externalDir string) (*TemplateManager, error) {
-	tmpl, err := template.New("").ParseFS(templateFS, "template/*.html")
+	tmpl, err := template.New("").ParseFS(defaultTemplateFS, "template/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("解析内置模板失败: %w", err)
 	}
@@ -42,17 +40,18 @@ func newTemplateManager(externalDir string) (*TemplateManager, error) {
 	return tm, nil
 }
 
-// Render 渲染指定模板
-//
+// Render 渲染指定模板。
 // name 为模板名称（不含 .html 后缀），data 为模板数据。
 func (t *TemplateManager) Render(name string, data any) (string, error) {
-	// 查找指定名称的内容模板
+	if t == nil || t.templates == nil {
+		return "", fmt.Errorf("模板管理器未初始化")
+	}
+
 	contentTmpl := t.templates.Lookup(name)
 	if contentTmpl == nil {
 		return "", fmt.Errorf("模板 %s 不存在", name)
 	}
 
-	// 克隆模板集合并将内容模板注入 "content" 槽位
 	tmp, err := t.templates.Clone()
 	if err != nil {
 		return "", fmt.Errorf("克隆模板失败: %w", err)
@@ -71,13 +70,19 @@ func (t *TemplateManager) Render(name string, data any) (string, error) {
 
 // ListTemplates 返回可用模板名称列表
 func (t *TemplateManager) ListTemplates() []string {
-	return t.names
+	if t == nil {
+		return nil
+	}
+	names := make([]string, len(t.names))
+	copy(names, t.names)
+	return names
 }
 
-// AddDir 添加外部模板目录
-//
-// 外部目录中的同名模板会覆盖内置模板。
+// AddDir 添加外部模板目录。外部目录中的同名模板会覆盖内置模板。
 func (t *TemplateManager) AddDir(dir string) error {
+	if t == nil {
+		return fmt.Errorf("模板管理器未初始化")
+	}
 	info, err := os.Stat(dir)
 	if err != nil {
 		return fmt.Errorf("模板目录不存在: %w", err)
@@ -91,7 +96,7 @@ func (t *TemplateManager) AddDir(dir string) error {
 		return fmt.Errorf("克隆模板失败: %w", err)
 	}
 
-	pattern := dir + "/*.html"
+	pattern := strings.TrimRight(dir, "/\\") + "/*.html"
 	if _, err = externalTmpl.ParseGlob(pattern); err != nil {
 		return fmt.Errorf("解析外部模板失败: %w", err)
 	}
@@ -101,11 +106,12 @@ func (t *TemplateManager) AddDir(dir string) error {
 	return nil
 }
 
-// AddFS 从 embed.FS 加载外部模板，同名模板覆盖内置模板。
-//
-// 与 [TemplateManager.AddDir] 的文件系统依赖不同，模板直接内嵌在二进制中，
-// 适用于单二进制部署场景（无需运行时文件系统目录）。
+// AddFS 从 fs.FS 加载外部模板，同名模板覆盖内置模板。
+// 适用于单二进制部署场景。
 func (t *TemplateManager) AddFS(fsys fs.FS, pattern string) error {
+	if t == nil {
+		return fmt.Errorf("模板管理器未初始化")
+	}
 	externalTmpl, err := t.templates.Clone()
 	if err != nil {
 		return fmt.Errorf("克隆模板失败: %w", err)
@@ -120,16 +126,16 @@ func (t *TemplateManager) AddFS(fsys fs.FS, pattern string) error {
 	return nil
 }
 
-// extractTemplateNames 从模板中提取模板名称
 func extractTemplateNames(tmpl *template.Template) []string {
+	if tmpl == nil {
+		return nil
+	}
 	var names []string
 	for _, t := range tmpl.Templates() {
 		name := t.Name()
 		if name == "" || name == "base" || name == "content" {
 			continue
 		}
-		// 提取 "template/verification.html" -> "verification"
-		// 或 "verification.html" -> "verification" (外部模板)
 		if cleanName, ok := strings.CutSuffix(name, ".html"); ok {
 			cleanName, _ = strings.CutPrefix(cleanName, "template/")
 			if cleanName != "_base" {

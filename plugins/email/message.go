@@ -1,4 +1,4 @@
-package xEmail
+package email
 
 import (
 	"fmt"

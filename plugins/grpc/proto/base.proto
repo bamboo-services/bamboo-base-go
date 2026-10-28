@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package xBase;
 
-option go_package = ".;xGrpcGenerate";
+option go_package = "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/generate;generate";
 
 // BaseResponse 表示 gRPC 统一响应的元信息部分。
 message BaseResponse {

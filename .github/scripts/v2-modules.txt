@@ -1,0 +1,16 @@
+# bamboo-base-go v2 module manifest (dir module_path)
+# Format: <relative_directory> <module_path>
+foundation github.com/bamboo-services/bamboo-base-go/foundation/v2
+application github.com/bamboo-services/bamboo-base-go/application/v2
+plugins/database github.com/bamboo-services/bamboo-base-go/plugins/database/v2
+plugins/cache github.com/bamboo-services/bamboo-base-go/plugins/cache/v2
+plugins/email github.com/bamboo-services/bamboo-base-go/plugins/email/v2
+plugins/web-gin github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2
+plugins/grpc github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2
+plugins/cron github.com/bamboo-services/bamboo-base-go/plugins/cron/v2
+plugins/async github.com/bamboo-services/bamboo-base-go/plugins/async/v2
+plugins/database/adapter/mysql github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/mysql/v2
+plugins/database/adapter/postgres github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/postgres/v2
+plugins/database/adapter/sqlite github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlite/v2
+plugins/database/adapter/sqlserver github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlserver/v2
+plugins/database/adapter/oracle github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/oracle/v2

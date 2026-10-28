@@ -1,10 +1,10 @@
-module github.com/bamboo-services/bamboo-base-go/plugins/email
+module github.com/bamboo-services/bamboo-base-go/plugins/email/v2
 
 go 1.25.0
 
 require (
-	github.com/bamboo-services/bamboo-base-go/common v1.2.3
-	github.com/bamboo-services/bamboo-base-go/defined v1.2.3
+	github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0
+	github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0
 	github.com/wneessen/go-mail v0.8.1
 )
 

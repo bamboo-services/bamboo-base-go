@@ -1,0 +1,107 @@
+name: bamboo-test-integration
+
+services:
+  mysql:
+    image: mysql:8.4.4
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: test_root_password_123!
+      MYSQL_DATABASE: bamboo_test
+      MYSQL_USER: bamboo_user
+      MYSQL_PASSWORD: test_user_password_123!
+    ports:
+      - "127.0.0.1::3306"
+    tmpfs:
+      - /var/lib/mysql:rw
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+    labels:
+      com.bamboo.test.fixture: "true"
+      com.bamboo.test.service: "mysql"
+
+  postgres:
+    image: postgres:17.4-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: bamboo_test
+      POSTGRES_USER: bamboo_user
+      POSTGRES_PASSWORD: test_user_password_123!
+    ports:
+      - "127.0.0.1::5432"
+    tmpfs:
+      - /var/lib/postgresql/data:rw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    labels:
+      com.bamboo.test.fixture: "true"
+      com.bamboo.test.service: "postgres"
+
+  redis:
+    image: redis:7.4.2-alpine
+    restart: "no"
+    command: ["redis-server", "--requirepass", "test_redis_password_123!"]
+    ports:
+      - "127.0.0.1::6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "test_redis_password_123!", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    labels:
+      com.bamboo.test.fixture: "true"
+      com.bamboo.test.service: "redis"
+
+  smtp:
+    image: axllent/mailpit:v1.22.3
+    restart: "no"
+    # 仅本机即用即销的测试 fixture 允许任意凭证认证与明文 AUTH
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1::1025" # SMTP
+      - "127.0.0.1::8025" # Web UI / HTTP API
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1025 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+    labels:
+      com.bamboo.test.fixture: "true"
+      com.bamboo.test.service: "smtp"
+
+  sqlserver:
+    profiles:
+      - sqlserver
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+    restart: "no"
+    environment:
+      ACCEPT_EULA: "${BAMBOO_TEST_SQLSERVER_ACCEPT_EULA:-N}"
+      MSSQL_SA_PASSWORD: test_sqlserver_password_123!
+      MSSQL_PID: Developer
+    ports:
+      - "127.0.0.1::1433"
+    tmpfs:
+      - /var/opt/mssql:rw
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P '$$MSSQL_SA_PASSWORD' -C -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S 127.0.0.1 -U sa -P '$$MSSQL_SA_PASSWORD' -Q 'SELECT 1' || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    labels:
+      com.bamboo.test.fixture: "true"
+      com.bamboo.test.service: "sqlserver"

@@ -1,18 +1,13 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto tidy test vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release
+.PHONY: help proto proto-check check-generated tidy test race vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release
 
 # ============================================================
 # 基础变量
 # ============================================================
 
-# 内部模块列表（非 plugins，用于 vet/test 遍历）
-PACKAGES := major common defined
-
-# 插件列表（用于 vet/test 遍历）
-# 注：database/oracle 依赖 godror（CGO + Oracle Instant Client），不纳入默认遍历，
-#     需要 Oracle 的环境请单独执行 `go test ./plugins/database/oracle/...`。
-PLUGINS := database/mysql database/postgres database/sqlite database/sqlserver cron grpc async email
+GOTOOLCHAIN ?= go1.25.11
+export GOTOOLCHAIN
 
 # ============================================================
 # 帮助信息
@@ -22,10 +17,13 @@ help:
 	@echo "BambooBase - 可用命令"
 	@echo ""
 	@echo "开发命令:"
-	@echo "  make proto                    - 使用 buf 生成 gRPC 代码"
-	@echo "  make tidy                     - 整理 Go 模块依赖"
-	@echo "  make test                     - 测试代码"
-	@echo "  make vet                      - go vet 检查所有模块"
+	@echo "  make proto                    - 使用 buf 生成 gRPC / Protobuf 代码"
+	@echo "  make proto-check              - 校验生成的 gRPC / Protobuf 代码一致性"
+	@echo "  make check-generated          - 校验生成的 gRPC / Protobuf 代码一致性 (别名)"
+	@echo "  make tidy                     - 整理 14 个 v2 模块依赖"
+	@echo "  make test                     - 运行 14 个 v2 模块单元测试"
+	@echo "  make race                     - 运行 14 个 v2 模块竞态检测测试"
+	@echo "  make vet                      - go vet 检查 14 个 v2 模块"
 	@echo "  make lint                     - 文档规范 + 常规 Go 模块检查"
 	@echo "  make lint-docs                - Prettier + Markdownlint 检查文档和计划"
 	@echo "  make format-docs              - 格式化 docs/（含计划）与根 README.md"
@@ -58,26 +56,24 @@ help:
 # ============================================================
 
 test:
-	@for pkg in $(PACKAGES); do \
-		go test -v ./$$pkg/...; \
-	done
-	@for plg in $(PLUGINS); do \
-		go test -v ./plugins/$$plg/...; \
-	done
+	bash .github/scripts/check-go.sh test
 
-proto:
-	buf generate
-
-tidy:
-	go mod tidy
+race:
+	bash .github/scripts/check-go.sh race
 
 vet:
-	@for pkg in $(PACKAGES); do \
-		go vet ./$$pkg/...; \
-	done
-	@for plg in $(PLUGINS); do \
-		go vet ./plugins/$$plg/...; \
-	done
+	bash .github/scripts/check-go.sh vet
+
+tidy:
+	bash .github/scripts/check-go.sh tidy
+
+proto:
+	bash .github/scripts/generate-proto.sh
+
+proto-check:
+	bash .github/scripts/generate-proto.sh --check
+
+check-generated: proto-check
 
 lint: lint-docs lint-go
 

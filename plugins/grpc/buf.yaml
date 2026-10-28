@@ -1,5 +1,6 @@
 version: v2
 modules:
   - path: proto
+  - path: grpcresult/internaltest
 deps:
   - buf.build/protocolbuffers/wellknowntypes

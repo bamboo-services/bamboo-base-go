@@ -1,6 +1,6 @@
 version: v2
 plugins:
-  - protoc_builtin: go
-    out: grpc/generate
+  - local: protoc-gen-go
+    out: .
     opt:
-      - paths=source_relative
+      - module=github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2

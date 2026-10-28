@@ -1,0 +1,947 @@
+[
+  {
+    "output": "NOT_EXIST",
+    "code": 40000,
+    "message": "内容不存在"
+  },
+  {
+    "output": "EXISTED",
+    "code": 40001,
+    "message": "内容已存在"
+  },
+  {
+    "output": "EXPIRED",
+    "code": 40002,
+    "message": "内容已过期"
+  },
+  {
+    "output": "DISABLED",
+    "code": 40003,
+    "message": "内容已禁用"
+  },
+  {
+    "output": "LOCKED",
+    "code": 40004,
+    "message": "内容已锁定"
+  },
+  {
+    "output": "PENDING",
+    "code": 40005,
+    "message": "内容待处理"
+  },
+  {
+    "output": "REJECTED",
+    "code": 40006,
+    "message": "内容已拒绝"
+  },
+  {
+    "output": "CANCELED",
+    "code": 40007,
+    "message": "内容已取消"
+  },
+  {
+    "output": "BAD_REQUEST",
+    "code": 40010,
+    "message": "错误请求"
+  },
+  {
+    "output": "PARAMETER_ERROR",
+    "code": 40011,
+    "message": "参数错误"
+  },
+  {
+    "output": "PARAMETER_EMPTY",
+    "code": 40012,
+    "message": "参数缺失"
+  },
+  {
+    "output": "PARAMETER_TYPE",
+    "code": 40013,
+    "message": "参数类型错误"
+  },
+  {
+    "output": "BODY_ERROR",
+    "code": 40014,
+    "message": "请求体错误"
+  },
+  {
+    "output": "BODY_EMPTY",
+    "code": 40015,
+    "message": "请求体缺失"
+  },
+  {
+    "output": "BODY_TYPE",
+    "code": 40016,
+    "message": "请求体类型错误"
+  },
+  {
+    "output": "HEADER_ERROR",
+    "code": 40017,
+    "message": "请求头错误"
+  },
+  {
+    "output": "HEADER_EMPTY",
+    "code": 40018,
+    "message": "请求头缺失"
+  },
+  {
+    "output": "HEADER_TYPE",
+    "code": 40019,
+    "message": "请求头类型错误"
+  },
+  {
+    "output": "OPERATION_ERROR",
+    "code": 40020,
+    "message": "操作错误"
+  },
+  {
+    "output": "OPERATION_FAILED",
+    "code": 40021,
+    "message": "操作失败"
+  },
+  {
+    "output": "OPERATION_DENIED",
+    "code": 40022,
+    "message": "操作被拒绝"
+  },
+  {
+    "output": "OPERATION_INVALID",
+    "code": 40023,
+    "message": "操作无效"
+  },
+  {
+    "output": "DEVELOPER_ERROR",
+    "code": 40024,
+    "message": "开发者操作错误"
+  },
+  {
+    "output": "REPEAT_OPERATION",
+    "code": 40025,
+    "message": "重复操作"
+  },
+  {
+    "output": "UNSUPPORTED_OPERATION",
+    "code": 40026,
+    "message": "不支持的操作"
+  },
+  {
+    "output": "VALIDATION_ERROR",
+    "code": 40030,
+    "message": "验证错误"
+  },
+  {
+    "output": "FORMAT_ERROR",
+    "code": 40031,
+    "message": "格式错误"
+  },
+  {
+    "output": "LENGTH_ERROR",
+    "code": 40032,
+    "message": "长度错误"
+  },
+  {
+    "output": "RANGE_ERROR",
+    "code": 40033,
+    "message": "范围错误"
+  },
+  {
+    "output": "PATTERN_ERROR",
+    "code": 40034,
+    "message": "格式不匹配"
+  },
+  {
+    "output": "TYPE_MISMATCH",
+    "code": 40035,
+    "message": "类型不匹配"
+  },
+  {
+    "output": "INVALID_VALUE",
+    "code": 40036,
+    "message": "无效值"
+  },
+  {
+    "output": "INVALID_FORMAT",
+    "code": 40037,
+    "message": "无效格式"
+  },
+  {
+    "output": "INVALID_STATE",
+    "code": 40038,
+    "message": "无效状态"
+  },
+  {
+    "output": "INVALID_INPUT",
+    "code": 40039,
+    "message": "无效输入"
+  },
+  {
+    "output": "DATA_ERROR",
+    "code": 40040,
+    "message": "数据错误"
+  },
+  {
+    "output": "DATA_INVALID",
+    "code": 40041,
+    "message": "数据无效"
+  },
+  {
+    "output": "DATA_CONFLICT",
+    "code": 40042,
+    "message": "数据冲突"
+  },
+  {
+    "output": "DATA_DUPLICATE",
+    "code": 40043,
+    "message": "数据重复"
+  },
+  {
+    "output": "DATA_NOT_MATCH",
+    "code": 40044,
+    "message": "数据不匹配"
+  },
+  {
+    "output": "DATA_INCOMPLETE",
+    "code": 40045,
+    "message": "数据不完整"
+  },
+  {
+    "output": "DATA_CORRUPTED",
+    "code": 40046,
+    "message": "数据损坏"
+  },
+  {
+    "output": "DATA_OUT_OF_RANGE",
+    "code": 40047,
+    "message": "数据超出范围"
+  },
+  {
+    "output": "DATA_TOO_LARGE",
+    "code": 40048,
+    "message": "数据过大"
+  },
+  {
+    "output": "DATA_TOO_SMALL",
+    "code": 40049,
+    "message": "数据过小"
+  },
+  {
+    "output": "FILE_UPLOAD_ERROR",
+    "code": 40050,
+    "message": "文件上传错误"
+  },
+  {
+    "output": "FILE_DOWNLOAD_ERROR",
+    "code": 40051,
+    "message": "文件下载错误"
+  },
+  {
+    "output": "FILE_SIZE_EXCEEDED",
+    "code": 40052,
+    "message": "文件大小超限"
+  },
+  {
+    "output": "FILE_TYPE_NOT_ALLOWED",
+    "code": 40053,
+    "message": "文件类型不允许"
+  },
+  {
+    "output": "FILE_NOT_FOUND",
+    "code": 40054,
+    "message": "文件未找到"
+  },
+  {
+    "output": "FILE_READ_ERROR",
+    "code": 40055,
+    "message": "文件读取错误"
+  },
+  {
+    "output": "FILE_WRITE_ERROR",
+    "code": 40056,
+    "message": "文件写入错误"
+  },
+  {
+    "output": "FILE_DELETE_ERROR",
+    "code": 40057,
+    "message": "文件删除错误"
+  },
+  {
+    "output": "FILE_FORMAT_ERROR",
+    "code": 40058,
+    "message": "文件格式错误"
+  },
+  {
+    "output": "FILE_EMPTY",
+    "code": 40059,
+    "message": "文件为空"
+  },
+  {
+    "output": "BUSINESS_ERROR",
+    "code": 40060,
+    "message": "业务错误"
+  },
+  {
+    "output": "TRANSACTION_FAILED",
+    "code": 40061,
+    "message": "事务失败"
+  },
+  {
+    "output": "STATE_ERROR",
+    "code": 40062,
+    "message": "状态错误"
+  },
+  {
+    "output": "FLOW_ERROR",
+    "code": 40063,
+    "message": "流程错误"
+  },
+  {
+    "output": "RULE_VIOLATION",
+    "code": 40064,
+    "message": "规则违反"
+  },
+  {
+    "output": "QUOTA_EXCEEDED",
+    "code": 40065,
+    "message": "配额超限"
+  },
+  {
+    "output": "LIMIT_EXCEEDED",
+    "code": 40066,
+    "message": "限制超出"
+  },
+  {
+    "output": "BALANCE_INSUFFICIENT",
+    "code": 40067,
+    "message": "余额不足"
+  },
+  {
+    "output": "STOCK_INSUFFICIENT",
+    "code": 40068,
+    "message": "库存不足"
+  },
+  {
+    "output": "CONDITION_NOT_MET",
+    "code": 40069,
+    "message": "条件不满足"
+  },
+  {
+    "output": "UNAUTHORIZED",
+    "code": 40100,
+    "message": "未授权"
+  },
+  {
+    "output": "LOGIN_FAILED",
+    "code": 40101,
+    "message": "登录失败"
+  },
+  {
+    "output": "TOKEN_INVALID",
+    "code": 40102,
+    "message": "令牌无效"
+  },
+  {
+    "output": "TOKEN_EXPIRED",
+    "code": 40103,
+    "message": "令牌过期"
+  },
+  {
+    "output": "TOKEN_MISSING",
+    "code": 40104,
+    "message": "令牌缺失"
+  },
+  {
+    "output": "SESSION_EXPIRED",
+    "code": 40105,
+    "message": "会话过期"
+  },
+  {
+    "output": "SESSION_INVALID",
+    "code": 40106,
+    "message": "会话无效"
+  },
+  {
+    "output": "CREDENTIAL_ERROR",
+    "code": 40107,
+    "message": "凭证错误"
+  },
+  {
+    "output": "SIGNATURE_INVALID",
+    "code": 40108,
+    "message": "签名无效"
+  },
+  {
+    "output": "SIGNATURE_EXPIRED",
+    "code": 40109,
+    "message": "签名过期"
+  },
+  {
+    "output": "USER_NOT_FOUND",
+    "code": 40110,
+    "message": "用户不存在"
+  },
+  {
+    "output": "USER_DISABLED",
+    "code": 40111,
+    "message": "用户已禁用"
+  },
+  {
+    "output": "USER_LOCKED",
+    "code": 40112,
+    "message": "用户已锁定"
+  },
+  {
+    "output": "USER_EXPIRED",
+    "code": 40113,
+    "message": "用户已过期"
+  },
+  {
+    "output": "PASSWORD_ERROR",
+    "code": 40114,
+    "message": "密码错误"
+  },
+  {
+    "output": "PASSWORD_EXPIRED",
+    "code": 40115,
+    "message": "密码已过期"
+  },
+  {
+    "output": "PASSWORD_WEAK",
+    "code": 40116,
+    "message": "密码强度不足"
+  },
+  {
+    "output": "PASSWORD_SAME",
+    "code": 40117,
+    "message": "新旧密码相同"
+  },
+  {
+    "output": "ACCOUNT_NOT_EXIST",
+    "code": 40118,
+    "message": "账户不存在"
+  },
+  {
+    "output": "ACCOUNT_FROZEN",
+    "code": 40119,
+    "message": "账户已冻结"
+  },
+  {
+    "output": "CAPTCHA_ERROR",
+    "code": 40120,
+    "message": "验证码错误"
+  },
+  {
+    "output": "CAPTCHA_EXPIRED",
+    "code": 40121,
+    "message": "验证码过期"
+  },
+  {
+    "output": "CAPTCHA_INVALID",
+    "code": 40122,
+    "message": "验证码无效"
+  },
+  {
+    "output": "CAPTCHA_MISSING",
+    "code": 40123,
+    "message": "验证码缺失"
+  },
+  {
+    "output": "CAPTCHA_FREQUENCY",
+    "code": 40124,
+    "message": "验证码发送频繁"
+  },
+  {
+    "output": "SMS_CODE_ERROR",
+    "code": 40125,
+    "message": "短信验证码错误"
+  },
+  {
+    "output": "EMAIL_CODE_ERROR",
+    "code": 40126,
+    "message": "邮箱验证码错误"
+  },
+  {
+    "output": "FORBIDDEN",
+    "code": 40300,
+    "message": "禁止访问"
+  },
+  {
+    "output": "PERMISSION_DENIED",
+    "code": 40301,
+    "message": "权限不足"
+  },
+  {
+    "output": "ACCESS_LIMITED",
+    "code": 40302,
+    "message": "访问受限"
+  },
+  {
+    "output": "ROLE_NOT_FOUND",
+    "code": 40303,
+    "message": "角色不存在"
+  },
+  {
+    "output": "ROLE_DENIED",
+    "code": 40304,
+    "message": "角色被拒绝"
+  },
+  {
+    "output": "RESOURCE_DENIED",
+    "code": 40305,
+    "message": "资源访问被拒绝"
+  },
+  {
+    "output": "IP_BLOCKED",
+    "code": 40306,
+    "message": "IP已被封禁"
+  },
+  {
+    "output": "REGION_BLOCKED",
+    "code": 40307,
+    "message": "地区访问受限"
+  },
+  {
+    "output": "DEVICE_BLOCKED",
+    "code": 40308,
+    "message": "设备已被封禁"
+  },
+  {
+    "output": "ACTION_FORBIDDEN",
+    "code": 40309,
+    "message": "操作被禁止"
+  },
+  {
+    "output": "NOT_FOUND",
+    "code": 40400,
+    "message": "未找到"
+  },
+  {
+    "output": "PAGE_NOT_FOUND",
+    "code": 40401,
+    "message": "页面未找到"
+  },
+  {
+    "output": "RESOURCE_NOT_FOUND",
+    "code": 40402,
+    "message": "资源未找到"
+  },
+  {
+    "output": "API_NOT_FOUND",
+    "code": 40403,
+    "message": "接口未找到"
+  },
+  {
+    "output": "ROUTE_NOT_FOUND",
+    "code": 40404,
+    "message": "路由未找到"
+  },
+  {
+    "output": "SERVICE_NOT_FOUND",
+    "code": 40405,
+    "message": "服务未找到"
+  },
+  {
+    "output": "RECORD_NOT_FOUND",
+    "code": 40406,
+    "message": "记录未找到"
+  },
+  {
+    "output": "CONFIG_NOT_FOUND",
+    "code": 40407,
+    "message": "配置未找到"
+  },
+  {
+    "output": "METHOD_NOT_ALLOWED",
+    "code": 40500,
+    "message": "方法不允许"
+  },
+  {
+    "output": "NOT_ACCEPTABLE",
+    "code": 40600,
+    "message": "不可接受"
+  },
+  {
+    "output": "CONTENT_TYPE_ERROR",
+    "code": 40601,
+    "message": "内容类型错误"
+  },
+  {
+    "output": "ACCEPT_HEADER_ERROR",
+    "code": 40602,
+    "message": "Accept头错误"
+  },
+  {
+    "output": "TIMEOUT",
+    "code": 40800,
+    "message": "请求超时"
+  },
+  {
+    "output": "CONNECT_TIMEOUT",
+    "code": 40801,
+    "message": "连接超时"
+  },
+  {
+    "output": "READ_TIMEOUT",
+    "code": 40802,
+    "message": "读取超时"
+  },
+  {
+    "output": "WRITE_TIMEOUT",
+    "code": 40803,
+    "message": "写入超时"
+  },
+  {
+    "output": "EXECUTE_TIMEOUT",
+    "code": 40804,
+    "message": "执行超时"
+  },
+  {
+    "output": "IDLE_TIMEOUT",
+    "code": 40805,
+    "message": "空闲超时"
+  },
+  {
+    "output": "CONFLICT",
+    "code": 40900,
+    "message": "冲突"
+  },
+  {
+    "output": "VERSION_CONFLICT",
+    "code": 40901,
+    "message": "版本冲突"
+  },
+  {
+    "output": "CONCURRENCY_ERROR",
+    "code": 40902,
+    "message": "并发错误"
+  },
+  {
+    "output": "LOCK_CONFLICT",
+    "code": 40903,
+    "message": "锁冲突"
+  },
+  {
+    "output": "RESOURCE_CONFLICT",
+    "code": 40904,
+    "message": "资源冲突"
+  },
+  {
+    "output": "OPTIMISTIC_LOCK",
+    "code": 40905,
+    "message": "乐观锁冲突"
+  },
+  {
+    "output": "DUPLICATE_ENTRY",
+    "code": 40906,
+    "message": "重复条目"
+  },
+  {
+    "output": "UNIQUE_CONSTRAINT",
+    "code": 40907,
+    "message": "唯一约束冲突"
+  },
+  {
+    "output": "FOREIGN_KEY_ERROR",
+    "code": 40908,
+    "message": "外键约束错误"
+  },
+  {
+    "output": "INTEGRITY_ERROR",
+    "code": 40909,
+    "message": "完整性约束错误"
+  },
+  {
+    "output": "GONE",
+    "code": 41000,
+    "message": "资源已删除"
+  },
+  {
+    "output": "RESOURCE_GONE",
+    "code": 41001,
+    "message": "资源已不存在"
+  },
+  {
+    "output": "DEPRECATED_API",
+    "code": 41002,
+    "message": "接口已废弃"
+  },
+  {
+    "output": "VERSION_EXPIRED",
+    "code": 41003,
+    "message": "版本已过期"
+  },
+  {
+    "output": "PAYLOAD_TOO_LARGE",
+    "code": 41300,
+    "message": "请求体过大"
+  },
+  {
+    "output": "REQUEST_TOO_LARGE",
+    "code": 41301,
+    "message": "请求过大"
+  },
+  {
+    "output": "UPLOAD_TOO_LARGE",
+    "code": 41302,
+    "message": "上传内容过大"
+  },
+  {
+    "output": "UNSUPPORTED_MEDIA",
+    "code": 41500,
+    "message": "不支持的媒体类型"
+  },
+  {
+    "output": "UNSUPPORTED_TYPE",
+    "code": 41501,
+    "message": "不支持的类型"
+  },
+  {
+    "output": "UNPROCESSABLE_ENTITY",
+    "code": 42200,
+    "message": "无法处理的实体"
+  },
+  {
+    "output": "SEMANTIC_ERROR",
+    "code": 42201,
+    "message": "语义错误"
+  },
+  {
+    "output": "LOGIC_ERROR",
+    "code": 42202,
+    "message": "逻辑错误"
+  },
+  {
+    "output": "TOO_MANY_REQUESTS",
+    "code": 42900,
+    "message": "请求过多"
+  },
+  {
+    "output": "RATE_LIMITED",
+    "code": 42901,
+    "message": "请求频率过高"
+  },
+  {
+    "output": "THROTTLE_EXCEEDED",
+    "code": 42902,
+    "message": "限流阈值超出"
+  },
+  {
+    "output": "CONCURRENT_LIMIT",
+    "code": 42903,
+    "message": "并发数超限"
+  },
+  {
+    "output": "DAILY_LIMIT_EXCEEDED",
+    "code": 42904,
+    "message": "日请求量超限"
+  },
+  {
+    "output": "SERVER_INTERNAL_ERROR",
+    "code": 50000,
+    "message": "服务器内部错误"
+  },
+  {
+    "output": "DATABASE_ERROR",
+    "code": 50001,
+    "message": "数据库错误"
+  },
+  {
+    "output": "CACHE_ERROR",
+    "code": 50002,
+    "message": "缓存错误"
+  },
+  {
+    "output": "FILE_ERROR",
+    "code": 50003,
+    "message": "文件错误"
+  },
+  {
+    "output": "STORAGE_ERROR",
+    "code": 50004,
+    "message": "存储错误"
+  },
+  {
+    "output": "REMOTE_ERROR",
+    "code": 50005,
+    "message": "远程调用错误"
+  },
+  {
+    "output": "CONFIG_ERROR",
+    "code": 50006,
+    "message": "配置错误"
+  },
+  {
+    "output": "NETWORK_ERROR",
+    "code": 50007,
+    "message": "网络错误"
+  },
+  {
+    "output": "ENCRYPT_ERROR",
+    "code": 50008,
+    "message": "加密错误"
+  },
+  {
+    "output": "DECRYPT_ERROR",
+    "code": 50009,
+    "message": "解密错误"
+  },
+  {
+    "output": "SERIALIZE_ERROR",
+    "code": 50010,
+    "message": "序列化错误"
+  },
+  {
+    "output": "DESERIALIZE_ERROR",
+    "code": 50011,
+    "message": "反序列化错误"
+  },
+  {
+    "output": "JSON_ERROR",
+    "code": 50012,
+    "message": "JSON处理错误"
+  },
+  {
+    "output": "XML_ERROR",
+    "code": 50013,
+    "message": "XML处理错误"
+  },
+  {
+    "output": "IO_ERROR",
+    "code": 50014,
+    "message": "IO错误"
+  },
+  {
+    "output": "MEMORY_ERROR",
+    "code": 50015,
+    "message": "内存错误"
+  },
+  {
+    "output": "THREAD_ERROR",
+    "code": 50016,
+    "message": "线程错误"
+  },
+  {
+    "output": "POOL_EXHAUSTED",
+    "code": 50017,
+    "message": "连接池耗尽"
+  },
+  {
+    "output": "QUEUE_FULL",
+    "code": 50018,
+    "message": "队列已满"
+  },
+  {
+    "output": "UNKNOWN_ERROR",
+    "code": 50099,
+    "message": "未知错误"
+  },
+  {
+    "output": "THIRD_PARTY_ERROR",
+    "code": 50020,
+    "message": "第三方服务错误"
+  },
+  {
+    "output": "API_CALL_FAILED",
+    "code": 50021,
+    "message": "API调用失败"
+  },
+  {
+    "output": "CALLBACK_ERROR",
+    "code": 50022,
+    "message": "回调错误"
+  },
+  {
+    "output": "WEBHOOK_ERROR",
+    "code": 50023,
+    "message": "Webhook错误"
+  },
+  {
+    "output": "SMS_ERROR",
+    "code": 50024,
+    "message": "短信服务错误"
+  },
+  {
+    "output": "EMAIL_ERROR",
+    "code": 50025,
+    "message": "邮件服务错误"
+  },
+  {
+    "output": "PAYMENT_ERROR",
+    "code": 50026,
+    "message": "支付服务错误"
+  },
+  {
+    "output": "OSS_ERROR",
+    "code": 50027,
+    "message": "对象存储错误"
+  },
+  {
+    "output": "CDN_ERROR",
+    "code": 50028,
+    "message": "CDN服务错误"
+  },
+  {
+    "output": "PUSH_ERROR",
+    "code": 50029,
+    "message": "推送服务错误"
+  },
+  {
+    "output": "GATEWAY_ERROR",
+    "code": 50200,
+    "message": "网关错误"
+  },
+  {
+    "output": "UPSTREAM_ERROR",
+    "code": 50201,
+    "message": "上游服务错误"
+  },
+  {
+    "output": "PROXY_ERROR",
+    "code": 50202,
+    "message": "代理错误"
+  },
+  {
+    "output": "LOAD_BALANCE_ERROR",
+    "code": 50203,
+    "message": "负载均衡错误"
+  },
+  {
+    "output": "SERVICE_UNAVAILABLE",
+    "code": 50300,
+    "message": "服务不可用"
+  },
+  {
+    "output": "SYSTEM_MAINTENANCE",
+    "code": 50301,
+    "message": "系统维护中"
+  },
+  {
+    "output": "RESOURCE_EXHAUSTED",
+    "code": 50302,
+    "message": "资源耗尽"
+  },
+  {
+    "output": "SERVICE_OVERLOAD",
+    "code": 50303,
+    "message": "服务过载"
+  },
+  {
+    "output": "CIRCUIT_BREAKER",
+    "code": 50304,
+    "message": "熔断保护"
+  },
+  {
+    "output": "SERVICE_DEGRADED",
+    "code": 50305,
+    "message": "服务降级"
+  },
+  {
+    "output": "GATEWAY_TIMEOUT",
+    "code": 50400,
+    "message": "网关超时"
+  },
+  {
+    "output": "UPSTREAM_TIMEOUT",
+    "code": 50401,
+    "message": "上游服务超时"
+  }
+]

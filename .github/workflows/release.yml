@@ -80,18 +80,20 @@ jobs:
           set -euo pipefail
           # 所有需要打 tag 的子模块路径
           SUBMODULES=(
-            "defined"
-            "common"
-            "major"
-            "plugins/database/mysql"
-            "plugins/database/postgres"
-            "plugins/database/sqlite"
-            "plugins/database/oracle"
-            "plugins/database/sqlserver"
-            "plugins/cron"
-            "plugins/grpc"
-            "plugins/async"
+            "foundation"
+            "application"
+            "plugins/database"
+            "plugins/cache"
             "plugins/email"
+            "plugins/web-gin"
+            "plugins/grpc"
+            "plugins/cron"
+            "plugins/async"
+            "plugins/database/adapter/mysql"
+            "plugins/database/adapter/postgres"
+            "plugins/database/adapter/sqlite"
+            "plugins/database/adapter/sqlserver"
+            "plugins/database/adapter/oracle"
           )
           # 遍历所有 go.mod，把 base-go 的子模块依赖版本号统一替换为 vX.Y.Z
           # 正则匹配：github.com/bamboo-services/bamboo-base-go/<subpkg> v<major>.<minor>.<patch>[-<suffix>]
@@ -111,7 +113,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           # 校验每个 go.mod 仍能被 go 解析（go list -m 仅解析模块路径，不下载）
-          for mod in defined common major plugins/database/mysql plugins/database/postgres plugins/database/sqlite plugins/database/oracle plugins/database/sqlserver plugins/cron plugins/grpc plugins/async plugins/email; do
+          for mod in "${SUBMODULES[@]}"; do
             echo "🔍 校验 $mod/go.mod"
             (cd "$mod" && go list -m > /dev/null)
           done
@@ -141,7 +143,7 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           # 按依赖顺序打 tag（同 commit，顺序仅为可读性）
-          for mod in defined common major plugins/database/mysql plugins/database/postgres plugins/database/sqlite plugins/database/oracle plugins/database/sqlserver plugins/cron plugins/grpc plugins/async plugins/email; do
+          for mod in "${SUBMODULES[@]}"; do
             sub_tag="${mod}/${TAG}"
             if git rev-parse -q --verify "refs/tags/${sub_tag}" >/dev/null; then
               echo "⚠️  Tag ${sub_tag} 已存在，跳过"
@@ -220,21 +222,23 @@ jobs:
             echo ""
             echo "| 模块 | Tag |"
             echo "|------|-----|"
-            echo "| defined | \`defined/${TAG}\` |"
-            echo "| common | \`common/${TAG}\` |"
-            echo "| major | \`major/${TAG}\` |"
-            echo "| plugins/database/mysql | \`plugins/database/mysql/${TAG}\` |"
-            echo "| plugins/database/postgres | \`plugins/database/postgres/${TAG}\` |"
-            echo "| plugins/database/sqlite | \`plugins/database/sqlite/${TAG}\` |"
-            echo "| plugins/database/oracle | \`plugins/database/oracle/${TAG}\` |"
-            echo "| plugins/database/sqlserver | \`plugins/database/sqlserver/${TAG}\` |"
-            echo "| plugins/cron | \`plugins/cron/${TAG}\` |"
-            echo "| plugins/grpc | \`plugins/grpc/${TAG}\` |"
-            echo "| plugins/async | \`plugins/async/${TAG}\` |"
+            echo "| foundation | \`foundation/${TAG}\` |"
+            echo "| application | \`application/${TAG}\` |"
+            echo "| plugins/database | \`plugins/database/${TAG}\` |"
+            echo "| plugins/cache | \`plugins/cache/${TAG}\` |"
             echo "| plugins/email | \`plugins/email/${TAG}\` |"
+            echo "| plugins/web-gin | \`plugins/web-gin/${TAG}\` |"
+            echo "| plugins/grpc | \`plugins/grpc/${TAG}\` |"
+            echo "| plugins/cron | \`plugins/cron/${TAG}\` |"
+            echo "| plugins/async | \`plugins/async/${TAG}\` |"
+            echo "| plugins/database/adapter/mysql | \`plugins/database/adapter/mysql/${TAG}\` |"
+            echo "| plugins/database/adapter/postgres | \`plugins/database/adapter/postgres/${TAG}\` |"
+            echo "| plugins/database/adapter/sqlite | \`plugins/database/adapter/sqlite/${TAG}\` |"
+            echo "| plugins/database/adapter/sqlserver | \`plugins/database/adapter/sqlserver/${TAG}\` |"
+            echo "| plugins/database/adapter/oracle | \`plugins/database/adapter/oracle/${TAG}\` |"
             echo ""
             echo "下游业务可通过以下方式升级："
             echo '```bash'
-            echo "go get github.com/bamboo-services/bamboo-base-go/major@${TAG}"
+            echo "go get github.com/bamboo-services/bamboo-base-go/application/v2@${TAG}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

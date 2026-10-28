@@ -4,6 +4,7 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
+// ToGrpcStatusCode 将业务错误码转换为对应的 gRPC 状态码。
 func ToGrpcStatusCode(code uint) codes.Code {
 	httpCode := code / 100
 	switch httpCode {

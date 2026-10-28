@@ -210,6 +210,10 @@ func CleanupContext(stopCtx context.Context) (context.Context, context.CancelFun
 // 可从受限 startCtx 取这份内核控制通知，不能把 startCtx 自身作为长期取消根。
 func ForceContext(ctx context.Context) context.Context
 
+// StateFrom 从 ctx 挂载的内核容器只读查询应用当前生命周期阶段；无合法容器或未挂载时返回 (0, false)。
+// 源码封存于私有 container.stateReader 回调，仅供状态观测，不暴露激活 token 也不能当作激活授权。
+func StateFrom(ctx context.Context) (AppState, bool)
+
 // Get 从 ctx 挂载的 SharedContainer 中按 key 读取类型化组件实例（O(1) 查找，未命中时回退 ctx.Value）。
 func Get[T any](ctx context.Context, key ctxkey.Key) (T, *apperr.Error)
 
@@ -272,4 +276,4 @@ v2 不保留 `major/utility/context` 的旧访问器兼容壳。业务需要迁�
 
 ## 待确认
 
-容器、身份、排空与迁移方向、故障提供者隔离，以及排队项的依赖占用和独立 Context 已确认。阶段 0 的协议请求元数据仍需明确，协议适配与取消竞态也须真实测试，不能把文档确认当作实现已通过。
+容器、身份、排空与迁移方向、故障提供者隔离，以及排队项的依赖占用和独立 Context 已确认。阶段 0 的日志与雪花已明确随 App 独立受管；协议请求元数据（耗时沿用微秒仅 Debug 输出、缺失/错误类型为 0、不补假开始时间）已收敛，SuccessWith 对象分配与注入细节仍保持未决，协议适配与取消竞态仍须真实测试，不能把文档确认当作实现已通过。

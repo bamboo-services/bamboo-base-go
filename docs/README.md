@@ -17,11 +17,12 @@
 
 ### 调研模式（`research/`）
 
-| 编号 | 文档                                                                                                         | Scope     | 调研日期   |
-| ---- | ------------------------------------------------------------------------------------------------------------ | --------- | ---------- |
-| 0001 | [v2.0.0 生命周期内核与三模式插件机制调研](./engineering/research/0001-lifecycle-plugin-runtime.md)           | lifecycle | 2026-10-17 |
-| 0002 | [v2.0.0 Context 体系与共享组件传递调研](./engineering/research/0002-context-propagation-and-shared-state.md) | context   | 2026-10-17 |
-| 0003 | [v2.0.0 插件体系分类与第三方库选型调研](./engineering/research/0003-plugin-ecosystem-and-libraries.md)       | plugin    | 2026-10-18 |
+| 编号 | 文档                                                                                                                 | Scope     | 调研日期   |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| 0001 | [v2.0.0 生命周期内核与三模式插件机制调研](./engineering/research/0001-lifecycle-plugin-runtime.md)                   | lifecycle | 2026-10-17 |
+| 0002 | [v2.0.0 Context 体系与共享组件传递调研](./engineering/research/0002-context-propagation-and-shared-state.md)         | context   | 2026-10-17 |
+| 0003 | [v2.0.0 插件体系分类与第三方库选型调研](./engineering/research/0003-plugin-ecosystem-and-libraries.md)               | plugin    | 2026-10-18 |
+| 0004 | [v2.0.0 Oracle GORM 适配驱动依赖与运行环境调研](./engineering/research/0004-oracle-driver-dependency-and-runtime.md) | plugin    | 2026-10-27 |
 
 ### 设计模式（`design/`）
 
@@ -35,12 +36,13 @@
 
 五篇设计已按联动问答修订，阶段仍为 `draft`，不代表代码实现或运行验收通过。已确认静态资源键、嵌套任务归属、真实 Stop/Wait、派生 Key 显式编解码，以及环境预算启动读取后冻结；默认总协调 60s、自然排空 20s、纯清理每次最长 10s。版本映射已由 design/0003 收敛：源码目录不增 v2/ 层，module/import 带小写 /v2，首批所有模块均从 v2.0.0 起步；后续模块按需发版，每个整体 Release 附全量精确版本清单。
 
-v2 全仓实施安排见 [0001 总实施计划](./plan/0001-lifecycle-v2-full-reconstruction.md)，当前为 draft。它承接五篇设计，第 0 阶段中 App 状态与异常、Component 队列规则已确认，其余开工契约继续收敛；计划登记不表示已经授权代码重构。
+v2 全仓实施安排见 [0001 总实施计划（已归档）](./plan/archive/0001-lifecycle-v2-full-reconstruction.md)，状态为 `done`。实施计划已于 2026-10-28 完成总体验收并归档；全量 14 个 v2 目标模块已完全接管旧工作树，全仓质量门禁（test/race/vet/lint-go-all/lint-docs/generate-proto/check-v2-consumers/check-v2-examples）全绿通过，Oracle 与 SQL Server 驱动因缺少物理专属环境诚实保留显式阻塞。
 
 ### 规范模式（`spec/`）
 
-| 编号 | 文档 | Scope | 阶段状态 |
-| ---- | ---- | ----- | -------- |
+| 编号 | 文档                                                                                                        | Scope      | 阶段状态 |
+| ---- | ----------------------------------------------------------------------------------------------------------- | ---------- | -------- |
+| 0001 | [v2.0.0 foundation 能力与测试迁移规范](./engineering/spec/0001-foundation-capability-and-test-inventory.md) | foundation | draft    |
 
 ### 手册模式（`runbook/`）
 

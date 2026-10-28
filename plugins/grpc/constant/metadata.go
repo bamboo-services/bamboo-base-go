@@ -1,5 +1,6 @@
 package xGrpcConst
 
+// Metadata 定义 gRPC 元数据键的强类型别名。
 type Metadata string
 
 // String 返回元数据的字符串表示形式。
@@ -9,6 +10,7 @@ func (md Metadata) String() string {
 	return string(md)
 }
 
+// 常用 gRPC 元数据键常量定义。
 const (
 	MetadataAppAccessID  Metadata = "app-access-id"  // 定义用于传递应用访问标识符的元数据键，通常用于在中间件或拦截器中标识请求方的应用 ID。
 	MetadataAppSecretKey Metadata = "app-secret-key" // 定义用于传递应用密钥的元数据键，通常用于在中间件或拦截器中验证请求方的身份。

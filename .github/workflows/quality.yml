@@ -3,7 +3,7 @@ name: Quality checks
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, feature-v2]
   workflow_dispatch:
 
 permissions:
@@ -25,17 +25,33 @@ jobs:
         run: make lint-docs
 
   go:
-    name: Go lint and format
+    name: Go quality checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.27.1"
+          go-version: "1.25.11"
           cache-dependency-path: "**/go.sum"
       - uses: golangci/golangci-lint-action@v9
         with:
           version-file: .golangci-lint-version
           install-only: true
-      - name: Check all regular modules
+      - name: Check all regular modules (lint & format)
         run: make lint-go
+      - name: Vet all 14 v2 modules
+        run: make vet
+      - name: Test all 14 v2 modules
+        run: make test
+      - name: Test race on all 14 v2 modules
+        run: make race
+      - name: Install protobuf tools to private bin
+        run: |
+          BIN_DIR="${RUNNER_TEMP}/bin"
+          mkdir -p "${BIN_DIR}"
+          curl -sSLf "https://github.com/bufbuild/buf/releases/download/v1.73.0/buf-$(uname -s)-$(uname -m)" -o "${BIN_DIR}/buf"
+          chmod +x "${BIN_DIR}/buf"
+          (cd "${RUNNER_TEMP}" && GOWORK=off GOBIN="${BIN_DIR}" go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11)
+          echo "${BIN_DIR}" >> "${GITHUB_PATH}"
+      - name: Check protobuf generated code consistency
+        run: make proto-check

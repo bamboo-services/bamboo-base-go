@@ -213,17 +213,8 @@ go run .github/scripts/release/release-manifest.go \
 	-modules-file .github/scripts/manifest/v2-modules.txt \
 	-version "v2.0.0" \
 	-commit "4b843b093e1d013b8087867ec28a281327ca2ca5" \
+	-set-module-version "foundation=v2.1.0" \
 	-output .github/selective-manifest.json >/dev/null
-
-if sed --version 2>/dev/null | grep -q GNU; then
-	sed -i 's|"release": "v2.0.0"|"release": "v2.1.0"|' .github/selective-manifest.json
-	sed -i '0,/"version": "v2.0.0"/{s//"version": "v2.1.0"/}' .github/selective-manifest.json
-	sed -i 's|"tag": "foundation/v2.0.0"|"tag": "foundation/v2.1.0"|' .github/selective-manifest.json
-else
-	sed -i '' 's|"release": "v2.0.0"|"release": "v2.1.0"|' .github/selective-manifest.json
-	sed -i '' '1,/"version": "v2.0.0"/s//"version": "v2.1.0"/' .github/selective-manifest.json
-	sed -i '' 's|"tag": "foundation/v2.0.0"|"tag": "foundation/v2.1.0"|' .github/selective-manifest.json
-fi
 
 go run .github/scripts/release/release-manifest.go \
 	-manifest .github/selective-manifest.json >/dev/null

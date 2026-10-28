@@ -61,6 +61,7 @@ func main() {
 	var modulesFile string
 	var versionStr string
 	var commitStr string
+	var setModuleVersion string
 
 	flag.StringVar(&manifestPath, "manifest", "", "Path to release manifest to validate")
 	flag.StringVar(&previousPath, "previous", "", "Optional path to previous release manifest")
@@ -69,6 +70,7 @@ func main() {
 	flag.StringVar(&modulesFile, "modules-file", "", "Optional path to modules.txt to generate manifest from")
 	flag.StringVar(&versionStr, "version", "", "Version for generated manifest (used with -modules-file)")
 	flag.StringVar(&commitStr, "commit", "", "Source commit for generated manifest (used with -modules-file)")
+	flag.StringVar(&setModuleVersion, "set-module-version", "", "Optional override for a specific module version, formatted as <directory>=<version>")
 	flag.Parse()
 
 	var manifest *ReleaseManifest
@@ -93,6 +95,20 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading manifest: %v\n", err)
 			os.Exit(1)
+		}
+	}
+
+	if setModuleVersion != "" {
+		parts := strings.SplitN(setModuleVersion, "=", 2)
+		if len(parts) == 2 {
+			targetDir, targetVer := parts[0], parts[1]
+			manifest.Release = targetVer
+			for i := range manifest.Modules {
+				if manifest.Modules[i].Directory == targetDir {
+					manifest.Modules[i].Version = targetVer
+					manifest.Modules[i].Tag = targetDir + "/" + targetVer
+				}
+			}
 		}
 	}
 

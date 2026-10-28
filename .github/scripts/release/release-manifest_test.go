@@ -346,3 +346,25 @@ func TestCLIOutputSerialization(t *testing.T) {
 		t.Fatalf("expected v2.0.0, got %s", norm.Release)
 	}
 }
+
+func TestGenerateFromModulesFile(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "v2-modules.txt")
+	content := `# comments
+foundation github.com/bamboo-services/bamboo-base-go/foundation/v2
+application github.com/bamboo-services/bamboo-base-go/application/v2
+`
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, err := generateFromModulesFile(tmpFile, "v2.0.0", dummyCommitA)
+	if err != nil {
+		t.Fatalf("generateFromModulesFile failed: %v", err)
+	}
+	if len(manifest.Modules) != 2 {
+		t.Fatalf("expected 2 modules, got %d", len(manifest.Modules))
+	}
+	if manifest.Modules[0].Tag != "foundation/v2.0.0" {
+		t.Fatalf("expected foundation/v2.0.0, got %s", manifest.Modules[0].Tag)
+	}
+}

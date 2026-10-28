@@ -73,8 +73,16 @@ func TestF2_ShutdownDuringStartClaim(t *testing.T) {
 		shutErrCh <- app.Shutdown()
 	}()
 
-	// Give Shutdown time to observe Stopping and wait for Start
-	time.Sleep(100 * time.Millisecond)
+	// 确定性等待 Shutdown 协程完成 StateStopping 状态切换后再释放 Start：
+	// sleep 抢跑在重负载下偶发失效，一旦 Shutdown 迟于 Start 释放才切换状态，
+	// Run 将正常完成启动并返回 nil 而非 ErrStartupInterrupted
+	stateDeadline := time.Now().Add(2 * time.Second)
+	for app.State() == StateStarting {
+		if time.Now().After(stateDeadline) {
+			t.Fatal("timed out waiting for App to leave StateStarting")
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Release Start
 	close(p.releaseStart)

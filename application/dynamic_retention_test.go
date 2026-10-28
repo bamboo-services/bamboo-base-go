@@ -485,6 +485,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 	var runCalled atomic.Bool
 	var stopCalled atomic.Int32
 	var stopCalledBeforeStartReturn atomic.Bool
+	stopEntered := make(chan struct{})
 
 	err = app.RegisterComponent(PluginInfo{
 		Key:      compKey,
@@ -509,6 +510,11 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 				stopCalled.Add(1)
 				if !startFinished.Load() {
 					stopCalledBeforeStartReturn.Store(true)
+				}
+				select {
+				case <-stopEntered:
+				default:
+					close(stopEntered)
 				}
 				return nil
 			},
@@ -605,6 +611,15 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 	case <-runErrCh:
 	case <-time.After(1 * time.Second):
 		t.Fatal("timeout waiting for app.Run to terminate")
+	}
+
+	// 等待引擎任务 goroutine 真实执行迟到 Stop 后再断言计数：
+	// Shutdown 超时返回后 Run 即返回，迟到 Stop 在引擎任务 goroutine 中执行，
+	// 与本断言无 happens-before，重负载下偶发读到 0
+	select {
+	case <-stopEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for component Stop after release")
 	}
 
 	// 释放 Start 返回后绝不能调用 Run

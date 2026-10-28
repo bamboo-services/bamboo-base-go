@@ -5,14 +5,17 @@ name: Release Modules
 #   1. 从 release tag 检出代码
 #   2. 解析 release tag name → 提取版本号 vX.Y.Z
 #   3. 查找上一 root tag（排除子模块 tag 与 pseudo-version tag）→ 供 AI 生成对比范围
-#   4. 在所有子模块 go.mod 中将 bamboo-base-go/<subpkg> 的依赖版本替换为 vX.Y.Z
-#   5. 提交 bump commit
-#   6. 按 defined → common → major → plugins/* 顺序打子模块 tag
-#   7. 推送 commit 和 tags 到默认分支
-#   8. （可选）配置 RELEASE_AI_API_KEY 密钥时：AI 生成并更新 Release Content（gh release edit）
+#   4. 根据 .github/scripts/v2-modules.txt 权威清单，更新所有子模块 go.mod 中的 /v2 依赖到 vX.Y.Z
+#   5. 校验 14 个模块 go.mod 语法有效性
+#   6. 提交 bump commit
+#   7. 生成并用 release-manifest.go 严格校验 Release Manifest
+#   8. 为 14 个子模块打 tag，并实施失败重入与防漂移保护（禁止篡改已有 tag 对应 commit）
+#   9. 推送 commit 和 tags 到默认分支
+#  10. （可选）配置 RELEASE_AI_API_KEY 密钥时：AI 生成并更新 Release Content（gh release edit）
+#  11. 上传精确 release-manifest.json 到 GitHub Release 资产
 #
-# 结果：每个子模块获得一个 <path>/vX.Y.Z tag（如 common/v1.2.0），可被
-#       下游业务通过 `go get github.com/bamboo-services/bamboo-base-go/<path>@vX.Y.Z` 引用。
+# 结果：每个子模块获得一个 <path>/vX.Y.Z tag（如 foundation/v2.0.0），可被
+#       下游业务通过 `go get github.com/bamboo-services/bamboo-base-go/<path>/v2@vX.Y.Z` 引用。
 
 on:
   release:
@@ -47,7 +50,7 @@ jobs:
         id: ver
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          # 仅接受 vX.Y.Z 格式
+          # 仅接受 vX.Y.Z 格式（如 v2.0.0, v2.1.0-rc.1）
           if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
             echo "❌ 非法 tag 格式: $TAG (期望 vX.Y.Z)"
             exit 1
@@ -63,7 +66,7 @@ jobs:
           set -euo pipefail
           TAG="${{ github.event.release.tag_name }}"
           # 从 release tag 的父提交向上找最近的 root tag：
-          #   --match  只认 vX.Y.Z，排除 common/ 等子模块前缀 tag
+          #   --match  只认 v[0-9]*，排除子模块前缀 tag
           #   --exclude 'v*-*' 排除 pseudo-version / 预发布 tag
           PREV=$(git describe --tags --abbrev=0 \
             --match 'v[0-9]*.[0-9]*.[0-9]*' \
@@ -78,45 +81,51 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          # 所有需要打 tag 的子模块路径
-          SUBMODULES=(
-            "foundation"
-            "application"
-            "plugins/database"
-            "plugins/cache"
-            "plugins/email"
-            "plugins/web-gin"
-            "plugins/grpc"
-            "plugins/cron"
-            "plugins/async"
-            "plugins/database/adapter/mysql"
-            "plugins/database/adapter/postgres"
-            "plugins/database/adapter/sqlite"
-            "plugins/database/adapter/sqlserver"
-            "plugins/database/adapter/oracle"
-          )
-          # 遍历所有 go.mod，把 base-go 的子模块依赖版本号统一替换为 vX.Y.Z
-          # 正则匹配：github.com/bamboo-services/bamboo-base-go/<subpkg> v<major>.<minor>.<patch>[-<suffix>]
+          # 从权威清单 .github/scripts/v2-modules.txt 读取 14 个模块
+          declare -a MOD_PATHS
+          declare -a MOD_DIRS
+
+          while read -r mod_dir mod_path; do
+            [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
+            MOD_DIRS+=("$mod_dir")
+            MOD_PATHS+=("$mod_path")
+          done < .github/scripts/v2-modules.txt
+
+          if [ "${#MOD_DIRS[@]}" -ne 14 ]; then
+            echo "❌ 权威模块清单计数异常: 期望 14 个, 实际读取到 ${#MOD_DIRS[@]} 个"
+            exit 1
+          fi
+
+          echo "🔍 开始在所有 go.mod 中精确替换 /v2 模块依赖为 v${VERSION}..."
           find . -name "go.mod" -type f | while read -r modfile; do
-            for sub in "${SUBMODULES[@]}"; do
-              # 把 path 中的 / 转义（用于 sed 模式）
-              sub_esc="${sub//\//\\/}"
-              sed -i -E \
-                "s|(github\.com/bamboo-services/bamboo-base-go/${sub_esc}) v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?|\1 v${VERSION}|g" \
-                "$modfile"
+            for mod_path in "${MOD_PATHS[@]}"; do
+              mod_path_esc="${mod_path//\//\\/}"
+              # 精确匹配形如 `github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0`
+              if sed --version 2>/dev/null | grep -q GNU; then
+                sed -i -E "s|(${mod_path_esc}) +v[0-9]+\.[0-9]+\.[0-9]+[^ ]*|\1 v${VERSION}|g" "$modfile"
+              else
+                sed -i '' -E "s|(${mod_path_esc}) +v[0-9]+\.[0-9]+\.[0-9]+[^ ]*|\1 v${VERSION}|g" "$modfile"
+              fi
             done
           done
-          echo "✅ 已 bump 所有子模块依赖到 v${VERSION}"
+          echo "✅ 已完成所有子模块依赖替换"
 
       - name: Verify go.mod syntax
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          # 校验每个 go.mod 仍能被 go 解析（go list -m 仅解析模块路径，不下载）
-          for mod in "${SUBMODULES[@]}"; do
-            echo "🔍 校验 $mod/go.mod"
-            (cd "$mod" && go list -m > /dev/null)
-          done
+          set -euo pipefail
+          count=0
+          while read -r mod_dir mod_path; do
+            [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
+            echo "🔍 校验 $mod_dir/go.mod"
+            (cd "$mod_dir" && go list -m > /dev/null)
+            ((count++))
+          done < .github/scripts/v2-modules.txt
+
+          if [ "$count" -ne 14 ]; then
+            echo "❌ 语法校验模块数不符: 期望 14 个, 实际处理 $count 个"
+            exit 1
+          fi
+          echo "✅ 14 个模块 go.mod 语法校验全部通过"
 
       - name: Configure git
         run: |
@@ -138,20 +147,87 @@ jobs:
             echo "✅ 已提交 bump commit"
           fi
 
+      - name: Generate & validate release manifest
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "📋 为 commit ${COMMIT_SHA} 生成 Release ${TAG} 清单..."
+
+          python3 -c "
+import json, sys
+
+modules_file = sys.argv[1]
+version = sys.argv[2]
+commit = sys.argv[3]
+out_file = sys.argv[4]
+
+entries = []
+with open(modules_file, 'r') as f:
+    for line in f:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            entries.append({
+                'directory': parts[0],
+                'module': parts[1],
+                'version': version,
+                'tag': f'{parts[0]}/{version}',
+                'sourceCommit': commit
+            })
+
+manifest = {
+    'release': version,
+    'sourceCommit': commit,
+    'modules': entries
+}
+
+with open(out_file, 'w') as f:
+    json.dump(manifest, f, indent=2)
+    f.write('\n')
+" .github/scripts/v2-modules.txt "v${VERSION}" "${COMMIT_SHA}" .github/release-manifest.json
+
+          # 使用已交付的 release-manifest.go 执行严格的白名单与 go.mod 声明校验
+          go run .github/scripts/release-manifest.go \
+            -manifest .github/release-manifest.json \
+            -source-root . \
+            -output .github/release-manifest.json
+
+          echo "✅ Release Manifest 校验 100% 通过且已规范化写入 .github/release-manifest.json"
+
       - name: Create sub-module tags
         env:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          # 按依赖顺序打 tag（同 commit，顺序仅为可读性）
-          for mod in "${SUBMODULES[@]}"; do
-            sub_tag="${mod}/${TAG}"
+          set -euo pipefail
+          count=0
+          current_commit=$(git rev-parse HEAD)
+          while read -r mod_dir mod_path; do
+            [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
+            sub_tag="${mod_dir}/${TAG}"
             if git rev-parse -q --verify "refs/tags/${sub_tag}" >/dev/null; then
-              echo "⚠️  Tag ${sub_tag} 已存在，跳过"
+              existing_commit=$(git rev-parse "refs/tags/${sub_tag}^{commit}")
+              if [ "$existing_commit" = "$current_commit" ]; then
+                echo "ℹ️  Tag ${sub_tag} 已存在且指向当前提交 (${current_commit})，幂等跳过"
+              else
+                echo "❌ 冲突：Tag ${sub_tag} 已存在但指向历史提交 (${existing_commit})，与当前提交 (${current_commit}) 不一致，拒绝覆盖已有 tag！"
+                exit 1
+              fi
             else
               git tag -a "${sub_tag}" -m "Release ${sub_tag}"
               echo "✅ 已打 tag: ${sub_tag}"
             fi
-          done
+            ((count++))
+          done < .github/scripts/v2-modules.txt
+
+          if [ "$count" -ne 14 ]; then
+            echo "❌ 打 tag 模块计数异常: 期望 14 个, 实际处理 $count 个"
+            exit 1
+          fi
 
       - name: Push commit and tags to default branch
         env:
@@ -173,11 +249,6 @@ jobs:
           echo "✅ 已推送所有子模块 tag"
 
       # ---------------- AI 生成 Release Content（可选） ----------------
-      # 仅当仓库配置了 RELEASE_AI_API_KEY 密钥时生效；
-      # 密钥为空 → 优雅跳过，不破坏原有发布流程。
-      # 位置放在最后：tag/bump/推送是发布的关键路径，Release 内容属于展示层、
-      # 非 tag 前置依赖；且 gh 在此处已可用（release 事件 + contents: write）。
-      # continue-on-error：AI 失败不阻断已成功的发布（Release 已有 --generate-notes 兜底）。
       - name: 🤖 AI 生成 Release Content
         id: ai_notes
         continue-on-error: true
@@ -207,6 +278,16 @@ jobs:
           echo "ai=done" >> "$GITHUB_OUTPUT"
           echo "✅ 已用 AI 生成并更新 Release Notes"
 
+      - name: Upload Release Manifest to GitHub Release
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f .github/release-manifest.json ]; then
+            echo "📦 上传 release-manifest.json 到 GitHub Release ${TAG}..."
+            gh release upload "${TAG}" .github/release-manifest.json --clobber 2>/dev/null || true
+          fi
+
       - name: Summary
         env:
           TAG: ${{ steps.ver.outputs.tag }}
@@ -218,26 +299,16 @@ jobs:
             echo ""
             echo "AI 生成状态: ${{ steps.ai_notes.outputs.ai }}"
             echo ""
-            echo "### 子模块 Tag"
+            echo "### 14 个 v2 独立子模块 Tag 清单"
             echo ""
-            echo "| 模块 | Tag |"
-            echo "|------|-----|"
-            echo "| foundation | \`foundation/${TAG}\` |"
-            echo "| application | \`application/${TAG}\` |"
-            echo "| plugins/database | \`plugins/database/${TAG}\` |"
-            echo "| plugins/cache | \`plugins/cache/${TAG}\` |"
-            echo "| plugins/email | \`plugins/email/${TAG}\` |"
-            echo "| plugins/web-gin | \`plugins/web-gin/${TAG}\` |"
-            echo "| plugins/grpc | \`plugins/grpc/${TAG}\` |"
-            echo "| plugins/cron | \`plugins/cron/${TAG}\` |"
-            echo "| plugins/async | \`plugins/async/${TAG}\` |"
-            echo "| plugins/database/adapter/mysql | \`plugins/database/adapter/mysql/${TAG}\` |"
-            echo "| plugins/database/adapter/postgres | \`plugins/database/adapter/postgres/${TAG}\` |"
-            echo "| plugins/database/adapter/sqlite | \`plugins/database/adapter/sqlite/${TAG}\` |"
-            echo "| plugins/database/adapter/sqlserver | \`plugins/database/adapter/sqlserver/${TAG}\` |"
-            echo "| plugins/database/adapter/oracle | \`plugins/database/adapter/oracle/${TAG}\` |"
+            echo "| 模块目录 | 模块路径 | Tag |"
+            echo "|----------|----------|-----|"
+            while read -r mod_dir mod_path; do
+              [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
+              echo "| \`$mod_dir\` | \`$mod_path\` | \`${mod_dir}/${TAG}\` |"
+            done < .github/scripts/v2-modules.txt
             echo ""
-            echo "下游业务可通过以下方式升级："
+            echo "下游业务可通过以下方式引用（例如 application 模块）："
             echo '```bash'
             echo "go get github.com/bamboo-services/bamboo-base-go/application/v2@${TAG}"
             echo '```'

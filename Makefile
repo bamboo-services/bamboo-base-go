@@ -44,12 +44,13 @@ help:
 	@echo "     → 无 AI 配置: gh release create --generate-notes"
 	@echo "  2. GitHub Action 监听 release published 事件"
 	@echo "     → 自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z"
-	@echo "     → 按 defined → common → major → plugins/* 顺序打子 tag"
+	@echo "     → 按 14 个 v2 独立子模块统一依赖并校验 Release Manifest"
+	@echo "     → 为各子模块创建 <module-path>/vX.Y.Z 独立 tag"
 	@echo "     → 推送 commit 和 tags 到默认分支"
 	@echo ""
 	@echo "示例:"
-	@echo "  make release VERSION=v1.2.0"
-	@echo "  make release VERSION=v1.2.0 AI_MODEL=deepseek-chat AI_API_KEY=sk-xxx"
+	@echo "  make release VERSION=v2.0.0"
+	@echo "  make release VERSION=v2.0.0 AI_MODEL=deepseek-chat AI_API_KEY=sk-xxx"
 
 # ============================================================
 # 开发命令
@@ -141,4 +142,4 @@ endif
 	rm -f "$$NOTES_FILE"; \
 	echo "✅ Release $(VERSION) 已创建"; \
 	echo "   👀 查看: https://github.com/bamboo-services/bamboo-base-go/releases/tag/$(VERSION)"; \
-	echo "   ⏳ GitHub Action 将自动为子模块打 tag (defined/common/major/plugins/*/$(VERSION))"
+	echo "   ⏳ GitHub Action 将自动为 14 个子模块打 tag (<module-path>/$(VERSION))"

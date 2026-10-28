@@ -73,7 +73,7 @@ bamboo-base/
 | 注册后台服务 Worker | `application` → `app.RegisterWorker(info, factory)` | 具有长驻事件循环或网络监听的服务（如 Web、gRPC、Worker） |
 | 注册共享组件 Tool | `application` → `app.RegisterTool(info, factory)` | 为其它组件提供只读/共享能力的组件（如 DB、Cache、Logger） |
 | 从 Context 获取共享组件 | `application` → `application.Get[T](ctx, key)` | 类型安全的泛型上下文提取，未注册或类型不符时返回明确错误 |
-| 启动并等待退出 | `application` → `app.Run(ctx)` | 拓扑初始化、看门狗启动、信号捕获与逆拓扑平滑关机 |
+| 启动并等待退出 | `application` → `app.Run()` | 拓扑初始化、看门狗启动、信号捕获与逆拓扑平滑关机 |
 | 构造 Web HTTP 插件 | `plugins/web-gin` → `webgin.New(opts...)` | 构造 Gin Worker，支持 `WithRoute`、`WithRequires` 等 |
 | 返回成功/错误 HTTP 响应 | `plugins/web-gin/httpresult` → `Success()` / `Error()` | 输出标准结构化信封响应并计算状态码 |
 | 绑定 HTTP 请求参数 | `plugins/web-gin/bind` → `Bind[T](c)` | 泛型参数绑定并自动触发实例级校验 |

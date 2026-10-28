@@ -71,7 +71,7 @@ func main() {
 
 	// 注册 SQLite 数据库 Tool
 	dbInfo, dbFac := database.New(
-		database.WithAdapter(sqlite.New("file:app.db?cache=shared")),
+		database.WithAdapter(sqlite.New("file:bamboo-example?mode=memory&cache=shared")),
 	)
 	if err := app.RegisterTool(dbInfo, dbFac); err != nil {
 		fmt.Fprintf(os.Stderr, "注册数据库失败: %v\n", err)
@@ -96,8 +96,23 @@ func main() {
 			}
 			_ = db.AutoMigrate(&Item{})
 
+			cacheMgr, err := application.Get[*cache.Manager](startCtx, ctxkey.CacheManagerKey)
+			if err != nil {
+				return
+			}
+			hitCache := cache.KeyCacheOf[string, int](cacheMgr)
+
 			engine.GET("/ping", func(c *gin.Context) {
-				httpresult.SuccessWithData(c, "pong", gin.H{"status": "ok"})
+				count := 1
+				if val, ok, _ := hitCache.Get(c.Request.Context(), "ping_count"); ok && val != nil {
+					count = *val + 1
+				}
+				_ = hitCache.Set(c.Request.Context(), "ping_count", &count)
+
+				httpresult.SuccessWithData(c, "pong", gin.H{
+					"status": "ok",
+					"count":  count,
+				})
 			})
 		}),
 	)

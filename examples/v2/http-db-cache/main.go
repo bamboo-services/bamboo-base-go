@@ -46,6 +46,7 @@ func main() {
 		webgin.WithAddr("127.0.0.1:8080"),
 		webgin.WithRequires(ctxkey.DatabaseKey, ctxkey.CacheManagerKey),
 		webgin.WithRoute(func(startCtx context.Context, engine *gin.Engine) {
+			// 既可通过 application.Get 提取，亦可使用 database.Get / cache.Get 快捷原语提取
 			db, getDBErr := application.Get[*gorm.DB](startCtx, ctxkey.DatabaseKey)
 			if getDBErr != nil {
 				fmt.Fprintln(os.Stderr, "get db failed in startCtx:", getDBErr)

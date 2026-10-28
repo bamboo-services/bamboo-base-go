@@ -10,13 +10,11 @@ import (
 
 type binderCtxKey struct{}
 
+// 参数绑定与依赖注入错误变量。
 var (
-	// ErrNoBinderInContext 表示未在请求上下文中找到已通过 Inject 注入的 Binder 实例。
-	ErrNoBinderInContext = errors.New("bind: context 中未找到有效的 Binder 实例，请先通过 Inject 注入")
-	// ErrNilEngine 表示构造 Binder 时传入的 validator.Engine 为 nil。
-	ErrNilEngine = errors.New("bind: validator.Engine 不能为 nil")
-	// ErrNilTarget 表示执行绑定操作时传入的目标结构体指针为 nil。
-	ErrNilTarget = errors.New("bind: 目标结构体指针不能为 nil")
+	ErrNoBinderInContext = errors.New("bind: context 中未找到有效的 Binder 实例，请先通过 Inject 注入") // 未在请求上下文中找到已通过 Inject 注入的 Binder 实例。
+	ErrNilEngine         = errors.New("bind: validator.Engine 不能为 nil")                 // 构造 Binder 时传入的 validator.Engine 为 nil。
+	ErrNilTarget         = errors.New("bind: 目标结构体指针不能为 nil")                           // 执行绑定操作时传入的目标结构体指针为 nil。
 )
 
 // Binder 封装私有的参数验证引擎，为 HTTP 请求绑定流程提供结构体校验服务。

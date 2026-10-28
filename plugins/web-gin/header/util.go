@@ -7,11 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 授权标头提取与校验错误变量。
 var (
-	// ErrMissingAuthorization 表示请求标头中缺少必要的 Authorization 认证标头。
-	ErrMissingAuthorization = errors.New("缺少 Authorization 请求头")
-	// ErrInvalidAuthorizationFormat 表示 Authorization 请求标头格式错误，必须以 'Bearer ' 前缀开头。
-	ErrInvalidAuthorizationFormat = errors.New("请求头 Authorization 格式错误，应该以 'Bearer ' 开头")
+	ErrMissingAuthorization       = errors.New("缺少 Authorization 请求头")                    // 请求标头中缺少必要的 Authorization 认证标头。
+	ErrInvalidAuthorizationFormat = errors.New("请求头 Authorization 格式错误，应该以 'Bearer ' 开头") // Authorization 请求标头格式错误，必须以 'Bearer ' 前缀开头。
 )
 
 // GetAuthorization 从 [*gin.Context] 的请求中提取并解析 Bearer 认证令牌。

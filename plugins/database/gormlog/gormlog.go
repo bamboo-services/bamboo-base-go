@@ -15,15 +15,12 @@ import (
 // LogLevel 定义 GORM 日志输出级别。
 type LogLevel int
 
+// GORM 日志输出级别常量定义。
 const (
-	// LevelSilent 静默模式，不输出任何 SQL 或错误日志。
-	LevelSilent LogLevel = iota + 1
-	// LevelError 仅在 SQL 执行发生严重错误时输出日志。
-	LevelError
-	// LevelWarn 输出错误日志以及超出慢查询阈值的告警日志。
-	LevelWarn
-	// LevelInfo 输出所有级别日志，包含每次成功执行的 SQL 详情。
-	LevelInfo
+	LevelSilent LogLevel = iota + 1 // 静默模式，不输出任何 SQL 或错误日志。
+	LevelError                      // 仅在 SQL 执行发生严重错误时输出日志。
+	LevelWarn                       // 输出错误日志以及超出慢查询阈值的告警日志。
+	LevelInfo                       // 输出所有级别日志，包含每次成功执行的 SQL 详情。
 )
 
 // Config 定义 GORM 日志适配器的运行参数。

@@ -21,10 +21,8 @@ import (
 // 该结构体通常由 [Bind] 或 [WithBinder] 创建，属于请求内部的短生命周期临时对象，
 // 不应在多个并发请求或协程间共享。
 type Binding[T any] struct {
-	// Context 保存当前处理请求的 [*gin.Context] 实例。
-	Context *gin.Context
-	// GetData 保存接收反序列化与字段校验结果的目标结构体指针。
-	GetData *T
+	Context *gin.Context // 保存当前处理请求的 [*gin.Context] 实例。
+	GetData *T           // 保存接收反序列化与字段校验结果的目标结构体指针。
 	binder  *Binder
 }
 

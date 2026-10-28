@@ -35,14 +35,9 @@ func (e ErrMessage) String() string {
 // [New] 构造时会复制值快照到 [*Error.Code]，
 // 调用方后续修改原变量不影响已构造的错误。
 type ErrorCode struct {
-	// Code 是 5 位机器错误码，前 3 位对齐 HTTP 状态分组。
-	Code Code
-
-	// Output 是机器可读的输出标识，通常为大写下划线格式。
-	Output Output
-
-	// Message 是对外展示的预定义中文文案。
-	Message Message
+	Code    Code    // 5 位机器错误码，前 3 位对齐 HTTP 状态分组。
+	Output  Output  // 机器可读的输出标识，通常为大写下划线格式。
+	Message Message // 对外展示的预定义中文文案。
 }
 
 // GetCode 返回错误码的机器码。

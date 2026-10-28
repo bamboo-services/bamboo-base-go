@@ -14,24 +14,12 @@ type AppState uint8
 
 // 应用生命周期状态枚举。
 const (
-	// StateNew 是初始创建状态，此时允许调用各类注册方法注册插件。
-	StateNew AppState = iota + 1
-
-	// StateStarting 是启动初始化状态，内核正在计算拓扑并分层调用各插件的 Start 钩子。
-	StateStarting
-
-	// StateRunning 是运行就绪状态，共享容器已冻结，常驻 Worker 已启动运行并受看门狗监督。
-	StateRunning
-
-	// StateStopping 是平滑停机状态，已停止接纳新任务，正在逆序执行 Quiesce 排空与 Stop 资源清理。
-	StateStopping
-
-	// StateStopped 是完全停机状态，表明所有静态组件与动态实例均已确认安全退出。
-	StateStopped
-
-	// StateIncomplete 是不完全停机状态，表明在关机总截止时仍有组件超时未退，
-	// 或 Stop 钩子发生 panic，相关实例已被作为 [StuckInstance] 保护隔离。
-	StateIncomplete
+	StateNew        AppState = iota + 1 // 初始创建状态，此时允许调用各类注册方法注册插件。
+	StateStarting                       // 启动初始化状态，内核正在计算拓扑并分层调用各插件的 Start 钩子。
+	StateRunning                        // 运行就绪状态，共享容器已冻结，常驻 Worker 已启动运行并受看门狗监督。
+	StateStopping                       // 平滑停机状态，已停止接纳新任务，正在逆序执行 Quiesce 排空与 Stop 资源清理。
+	StateStopped                        // 完全停机状态，表明所有静态组件与动态实例均已确认安全退出。
+	StateIncomplete                     // 不完全停机状态，表明在关机总截止时仍有组件超时未退，或 Stop 钩子发生 panic，相关实例已被作为 [StuckInstance] 保护隔离。
 )
 
 // Mode 标识插件的三种运行形态。
@@ -186,41 +174,18 @@ const (
 //
 // 该结构体由 [RunHandle.Wait] 返回，详细记录执行各阶段的耗时与具体错误。
 type RunResult struct {
-	// InstanceID 是该次运行实例的唯一标识。
-	InstanceID string
-
-	// PluginKey 是该次运行对应的插件注册键 [ctxkey.Key]。
-	PluginKey ctxkey.Key
-
-	// Outcome 是最终归宿判定，取值为 [OutcomeSuccess]、[OutcomeFailed] 或 [OutcomeCancelled]。
-	Outcome Outcome
-
-	// Dispatched 表示该实例是否已经取得执行槽并进入构造监督流程（不代表 Start 或 Run 一定执行成功）。
-	Dispatched bool
-
-	// CancelRequested 表示内核是否向该实例发出了取消请求（包含未派发前取消与在途取消）。
-	CancelRequested bool
-
-	// CancelErr 是未执行 Run 时的取消原因；正常执行 Run 时不以此字段冒充 RunErr。
-	CancelErr error
-
-	// FactoryErr 记录调用工厂函数时的 panic 或无效实例错误；发生此错误时不调用 Stop。
-	FactoryErr error
-
-	// StartErr 记录执行 [Plugin.Start] 钩子时返回的错误或捕获的 panic。
-	StartErr error
-
-	// ExposeErr 记录执行 Expose 校验或发布时的错误。
-	ExposeErr error
-
-	// QuiesceErr 记录执行 [Quiescer.Quiesce] 时的错误或 panic。
-	QuiesceErr error
-
-	// RunErr 记录执行 [RunnablePlugin.Run] 时返回的原始错误或 panic。
-	RunErr error
-
-	// StopErr 记录执行 [Plugin.Stop] 清理钩子时返回的错误或 panic。
-	StopErr error
+	InstanceID      string     // 该次运行实例的唯一标识。
+	PluginKey       ctxkey.Key // 该次运行对应的插件注册键 [ctxkey.Key]。
+	Outcome         Outcome    // 最终归宿判定，取值为 [OutcomeSuccess]、[OutcomeFailed] 或 [OutcomeCancelled]。
+	Dispatched      bool       // 该实例是否已经取得执行槽并进入构造监督流程（不代表 Start 或 Run 一定执行成功）。
+	CancelRequested bool       // 内核是否向该实例发出了取消请求（包含未派发前取消与在途取消）。
+	CancelErr       error      // 未执行 Run 时的取消原因；正常执行 Run 时不以此字段冒充 RunErr。
+	FactoryErr      error      // 记录调用工厂函数时的 panic 或无效实例错误；发生此错误时不调用 Stop。
+	StartErr        error      // 记录执行 [Plugin.Start] 钩子时返回的错误或捕获的 panic。
+	ExposeErr       error      // 记录执行 Expose 校验或发布时的错误。
+	QuiesceErr      error      // 记录执行 [Quiescer.Quiesce] 时的错误或 panic。
+	RunErr          error      // 记录执行 [RunnablePlugin.Run] 时返回的原始错误或 panic。
+	StopErr         error      // 记录执行 [Plugin.Stop] 清理钩子时返回的错误或 panic。
 }
 
 // RunHandle 是内核返回给激活调用方的动态组件运行监督句柄。

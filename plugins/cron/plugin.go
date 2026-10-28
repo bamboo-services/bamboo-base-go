@@ -16,16 +16,14 @@ import (
 // DefaultCronPluginKey 是 Cron 插件默认的 Worker 插件在应用拓扑中的主键。
 const DefaultCronPluginKey ctxkey.Key = "plugin_cron"
 
+// 定时调度器错误哨兵。
 var (
 	// ErrNoActivator 表示未显式注入 [application.Activator]。
 	// 调度器强依赖激活器以解耦业务任务执行，禁止隐式启动。
 	ErrNoActivator = errors.New("cron: 未显式注入 application.Activator，禁止隐式启动")
 
-	// ErrInvalidJobTarget 表示任务目标 Component Key 为空或非法。
-	ErrInvalidJobTarget = errors.New("cron: 任务目标 Component Key 无效")
-
-	// ErrInvalidJobSchedule 表示任务调度表达式语法错误或周期时间间隔非法（如小于等于 0）。
-	ErrInvalidJobSchedule = errors.New("cron: 任务调度表达式或间隔非法")
+	ErrInvalidJobTarget   = errors.New("cron: 任务目标 Component Key 无效") // 任务目标 Component Key 为空或非法。
+	ErrInvalidJobSchedule = errors.New("cron: 任务调度表达式或间隔非法")          // 任务调度表达式语法错误或周期时间间隔非法（如小于等于 0）。
 )
 
 type jobKind uint8

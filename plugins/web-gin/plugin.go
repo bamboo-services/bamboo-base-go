@@ -26,15 +26,12 @@ import (
 // DefaultWebGinPluginKey 是 Gin Web Worker 插件注册到应用上下文的默认唯一键。
 const DefaultWebGinPluginKey ctxkey.Key = "plugin_web_gin"
 
+// Gin Web 插件生命周期与状态控制导出的错误变量。
 var (
-	// ErrServerAlreadyStarted 表示服务已在启动流程中或已成功启动，禁止重复调用。
-	ErrServerAlreadyStarted = errors.New("webgin: 服务已启动")
-	// ErrServerClosed 表示服务处于已关闭或正在关闭状态，拒绝接纳新请求。
-	ErrServerClosed = errors.New("webgin: 服务已停止")
-	// ErrNoLifetimeContext 表示缺少有效的应用生命周期上下文，请求无法被安全调度。
-	ErrNoLifetimeContext = errors.New("webgin: 缺少 lifetime context")
-	// ErrStopTimeout 表示服务停机等待已超出预设的超时时限。
-	ErrStopTimeout = errors.New("webgin: 停机等待超时")
+	ErrServerAlreadyStarted = errors.New("webgin: 服务已启动")               // 服务已在启动流程中或已成功启动，禁止重复调用。
+	ErrServerClosed         = errors.New("webgin: 服务已停止")               // 服务处于已关闭或正在关闭状态，拒绝接纳新请求。
+	ErrNoLifetimeContext    = errors.New("webgin: 缺少 lifetime context") // 缺少有效的应用生命周期上下文，请求无法被安全调度。
+	ErrStopTimeout          = errors.New("webgin: 停机等待超时")              // 服务停机等待已超出预设的超时时限。
 )
 
 // RouteRegistrar 定义路由注册回调函数签名。

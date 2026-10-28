@@ -38,14 +38,9 @@ const (
 
 // 节点发号与反序列化过程中的导出错误变量，调用方可通过 errors.Is 识别。
 var (
-	// ErrNilNode 表示在未初始化的 nil [Node] 指针上调用了发号方法。
-	ErrNilNode = errors.New("snowflake: nil node")
-
-	// ErrNilReceiver 表示在 nil 接收器指针上调用了反序列化或数据扫描方法。
-	ErrNilReceiver = errors.New("snowflake: nil receiver")
-
-	// ErrClockBackwards 表示系统时钟发生回退，无法保证发号的时间单调递增性。
-	ErrClockBackwards = errors.New("snowflake: clock moved backwards")
+	ErrNilNode        = errors.New("snowflake: nil node")              // 在未初始化的 nil [Node] 指针上调用了发号方法。
+	ErrNilReceiver    = errors.New("snowflake: nil receiver")          // 在 nil 接收器指针上调用了反序列化或数据扫描方法。
+	ErrClockBackwards = errors.New("snowflake: clock moved backwards") // 系统时钟发生回退，无法保证发号的时间单调递增性。
 )
 
 // Node 是 64 位分布式基因雪花算法的发号节点。

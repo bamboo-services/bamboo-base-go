@@ -13,24 +13,19 @@ import (
 // Driver 代表支持的数据库方言驱动名称。
 type Driver string
 
+// 支持的数据库方言驱动名称常量定义。
 const (
-	// DriverMySQL 代表 MySQL 数据库驱动名称。
-	DriverMySQL Driver = "mysql"
-	// DriverPostgres 代表 PostgreSQL 数据库驱动名称。
-	DriverPostgres Driver = "postgres"
-	// DriverSQLite 代表 SQLite 数据库驱动名称。
-	DriverSQLite Driver = "sqlite"
-	// DriverOracle 代表 Oracle 数据库驱动名称。
-	DriverOracle Driver = "oracle"
-	// DriverSQLServer 代表 SQL Server 数据库驱动名称。
-	DriverSQLServer Driver = "sqlserver"
+	DriverMySQL     Driver = "mysql"     // MySQL 数据库驱动名称。
+	DriverPostgres  Driver = "postgres"  // PostgreSQL 数据库驱动名称。
+	DriverSQLite    Driver = "sqlite"    // SQLite 数据库驱动名称。
+	DriverOracle    Driver = "oracle"    // Oracle 数据库驱动名称。
+	DriverSQLServer Driver = "sqlserver" // SQL Server 数据库驱动名称。
 )
 
+// 方言驱动查找与加载错误变量。
 var (
-	// ErrDriverNotLoaded 在请求的数据库驱动未被注册或未被加载时返回。
-	ErrDriverNotLoaded = errors.New("dialect: driver not loaded")
-	// ErrNilAdapter 在注册的驱动工厂返回了 nil 或 typed nil 适配器时返回。
-	ErrNilAdapter = errors.New("dialect: factory returned nil adapter")
+	ErrDriverNotLoaded = errors.New("dialect: driver not loaded")            // 请求的数据库驱动未被注册或未被加载时返回。
+	ErrNilAdapter      = errors.New("dialect: factory returned nil adapter") // 注册的驱动工厂返回了 nil 或 typed nil 适配器时返回。
 )
 
 // Adapter 定义数据库驱动适配器接口，由各具体数据库驱动子模块实现。

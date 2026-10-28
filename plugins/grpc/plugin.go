@@ -31,17 +31,10 @@ const DefaultGRPCPluginKey ctxkey.Key = "plugin_grpc"
 
 // gRPC 插件生命周期与状态控制导出的错误变量。
 var (
-	// ErrServerAlreadyStarted 表示 gRPC 服务已经启动，禁止重复调用 [Plugin.Start]。
-	ErrServerAlreadyStarted = errors.New("grpc: 服务已启动")
-
-	// ErrServerClosed 表示 gRPC 服务已经停止或正在关机过程中，拒绝接收入站新请求。
-	ErrServerClosed = errors.New("grpc: 服务已停止")
-
-	// ErrNoLifetimeContext 表示缺少可信的生命周期上下文，无法完成服务启动与运行。
-	ErrNoLifetimeContext = errors.New("grpc: 缺少 lifetime context")
-
-	// ErrStopTimeout 表示 gRPC 服务在执行优雅停机排空等待时超过了预设的超时预算。
-	ErrStopTimeout = errors.New("grpc: 停机等待超时")
+	ErrServerAlreadyStarted = errors.New("grpc: 服务已启动")               // 服务已经启动，禁止重复调用 [Plugin.Start]。
+	ErrServerClosed         = errors.New("grpc: 服务已停止")               // 服务已经停止或正在关机过程中，拒绝接收入站新请求。
+	ErrNoLifetimeContext    = errors.New("grpc: 缺少 lifetime context") // 缺少可信的生命周期上下文，无法完成服务启动与运行。
+	ErrStopTimeout          = errors.New("grpc: 停机等待超时")              // 服务在执行优雅停机排空等待时超过了预设的超时预算。
 )
 
 // ServiceRegistrar 是业务向 [grpc.Server] 挂载 gRPC Service 定义的回调函数。

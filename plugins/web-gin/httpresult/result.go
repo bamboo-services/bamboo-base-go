@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 响应信封常量定义。
 const (
-	// DefaultSuccessOutput 是标准成功响应时信封中 output 字段的默认标识短语（"Success"）。
-	DefaultSuccessOutput apperr.Output = "Success"
+	DefaultSuccessOutput apperr.Output = "Success" // 标准成功响应时信封中 output 字段的默认标识短语（"Success"）。
 )
 
 // resolveRequestKey 安全地从 ctx.Request.Context() 提取 RequestKey。

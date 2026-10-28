@@ -12,15 +12,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// 模型钩子与发号器错误变量。
 var (
-	// ErrNilStatement 当 GORM Statement 为 nil 时返回。
-	ErrNilStatement = errors.New("models: gorm statement is nil")
-	// ErrNilContext 当 GORM Statement.Context 为 nil 时返回。
-	ErrNilContext = errors.New("models: statement context is nil")
-	// ErrSnowflakeNodeNotFound 当 context 中无法获取有效雪花算法节点时返回。
-	ErrSnowflakeNodeNotFound = errors.New("models: snowflake node not found in context")
-	// ErrNilSnowflakeNode 当 context 中获取到的雪花节点为 nil 或 typed nil 时返回。
-	ErrNilSnowflakeNode = errors.New("models: snowflake node is nil")
+	ErrNilStatement          = errors.New("models: gorm statement is nil")               // GORM Statement 为 nil 时返回。
+	ErrNilContext            = errors.New("models: statement context is nil")            // GORM Statement.Context 为 nil 时返回。
+	ErrSnowflakeNodeNotFound = errors.New("models: snowflake node not found in context") // context 中无法获取有效雪花算法节点时返回。
+	ErrNilSnowflakeNode      = errors.New("models: snowflake node is nil")               // context 中获取到的雪花节点为 nil 或 typed nil 时返回。
 )
 
 // BaseEntity 是通用实体基类（不包含软删除字段）。

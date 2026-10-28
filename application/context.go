@@ -17,14 +17,9 @@ type EntryState uint8
 
 // 共享容器条目状态枚举。
 const (
-	// EntryReady 表示组件已完成 Start 钩子初始化，处于正常可用状态，允许读取。
-	EntryReady EntryState = iota + 1
-
-	// EntryStopped 表示组件已按契约正常完成 Stop 钩子并退役，禁止继续读取。
-	EntryStopped
-
-	// EntryUnavailable 表示组件提供者发生故障、panic 或清理超时，禁止读取但保留依赖。
-	EntryUnavailable
+	EntryReady       EntryState = iota + 1 // 组件已完成 Start 钩子初始化，处于正常可用状态，允许读取。
+	EntryStopped                           // 组件已按契约正常完成 Stop 钩子并退役，禁止继续读取。
+	EntryUnavailable                       // 组件提供者发生故障、panic 或清理超时，禁止读取但保留依赖。
 )
 
 // InstanceMeta 是插件运行期实例的只读身份元信息。
@@ -32,20 +27,11 @@ const (
 // 该结构体保存在运行期上下文中，可通过 [InstanceMetaFrom] 提取。
 // 复制或自行在外部构造此结构不会获得内核激活权限，仅用于日志追踪与诊断。
 type InstanceMeta struct {
-	// InstanceID 是当前运行实例的全局唯一标识。
-	InstanceID string
-
-	// PluginKey 是当前实例对应的插件注册主键 [ctxkey.Key]。
-	PluginKey ctxkey.Key
-
-	// ParentKey 是激活当前实例的父级插件键；顶层 Worker 为空。
-	ParentKey ctxkey.Key
-
-	// ParentInstanceID 是父级运行实例的唯一标识；顶层 Worker 为空。
-	ParentInstanceID string
-
-	// TraceID 是当前运行或请求的链路追踪标识。
-	TraceID string
+	InstanceID       string     // 当前运行实例的全局唯一标识。
+	PluginKey        ctxkey.Key // 当前实例对应的插件注册主键 [ctxkey.Key]。
+	ParentKey        ctxkey.Key // 激活当前实例的父级插件键；顶层 Worker 为空。
+	ParentInstanceID string     // 父级运行实例的唯一标识；顶层 Worker 为空。
+	TraceID          string     // 当前运行或请求的链路追踪标识。
 }
 
 // 内部私有 Context Key 类型，防止外部伪造

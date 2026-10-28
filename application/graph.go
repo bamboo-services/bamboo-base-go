@@ -10,44 +10,19 @@ import (
 
 // 拓扑图构建与依赖校验错误哨兵。
 var (
-	// ErrEmptyKey 表示插件主键或暴露/依赖的资源键为空。
-	ErrEmptyKey = errors.New("application: empty key")
-
-	// ErrInvalidKey 表示键格式不符合规范（例如未通过 ctxkey.Key.IsValid 校验）。
-	ErrInvalidKey = errors.New("application: invalid key")
-
-	// ErrRequestKeyShared 表示请求级上下文键（如 ctxkey.RequestKey）被错误地声明为共享插件键或暴露键。
-	ErrRequestKeyShared = errors.New("application: request-level key cannot be shared")
-
-	// ErrSelfProvidedKey 表示插件在其 [PluginInfo.Provides] 中列出了其自身的插件主键。
-	ErrSelfProvidedKey = errors.New("application: key listed in its own provides")
-
-	// ErrMissingDependency 表示插件声明的 [PluginInfo.Requires] 依赖键在整个应用中未找到对应的提供者。
-	ErrMissingDependency = errors.New("application: missing dependency")
-
-	// ErrSelfDependency 表示插件将其自身的主键或自身暴露的资源键作为依赖项。
-	ErrSelfDependency = errors.New("application: self dependency")
-
-	// ErrDependencyCycle 表示插件之间存在相互依赖构成的有向循环圈，拓扑排序无法收敛。
-	ErrDependencyCycle = errors.New("application: dependency cycle detected")
-
-	// ErrComponentHasProvides 表示按需激发的 [ModeComponent] 插件错误地声明了静态 [PluginInfo.Provides]。
-	ErrComponentHasProvides = errors.New("application: component cannot have provides")
-
-	// ErrInvalidOverlapKind 表示 Component 声明了未知的重入策略类型 [OverlapKind]。
-	ErrInvalidOverlapKind = errors.New("application: invalid overlap kind")
-
-	// ErrInvalidOverlapCapacity 表示重入策略容量配额不合法（如并发数或队列长度小于 1）。
-	ErrInvalidOverlapCapacity = errors.New("application: invalid overlap capacity")
-
-	// ErrInvalidOverlapConfig 表示重入策略配置冲突（如非队列策略配置了队列长度，或非并发策略配置了并发数）。
-	ErrInvalidOverlapConfig = errors.New("application: invalid overlap config")
-
-	// ErrNonComponentHasOverlap 表示非 Component 插件（如 Tool 或 Worker）错误地配置了 [OverlapPolicy]。
-	ErrNonComponentHasOverlap = errors.New("application: non-component has overlap configured")
-
-	// ErrUnknownMode 表示插件元信息中声明了未知的插件运行形态 [Mode]。
-	ErrUnknownMode = errors.New("application: unknown mode")
+	ErrEmptyKey               = errors.New("application: empty key")                            // 插件主键或暴露/依赖的资源键为空。
+	ErrInvalidKey             = errors.New("application: invalid key")                          // 键格式不符合规范（例如未通过 ctxkey.Key.IsValid 校验）。
+	ErrRequestKeyShared       = errors.New("application: request-level key cannot be shared")   // 请求级上下文键（如 ctxkey.RequestKey）被错误地声明为共享插件键或暴露键。
+	ErrSelfProvidedKey        = errors.New("application: key listed in its own provides")       // 插件在其 [PluginInfo.Provides] 中列出了其自身的插件主键。
+	ErrMissingDependency      = errors.New("application: missing dependency")                   // 插件声明的 [PluginInfo.Requires] 依赖键在整个应用中未找到对应的提供者。
+	ErrSelfDependency         = errors.New("application: self dependency")                      // 插件将其自身的主键或自身暴露的资源键作为依赖项。
+	ErrDependencyCycle        = errors.New("application: dependency cycle detected")            // 插件之间存在相互依赖构成的有向循环圈，拓扑排序无法收敛。
+	ErrComponentHasProvides   = errors.New("application: component cannot have provides")       // 按需激发的 [ModeComponent] 插件错误地声明了静态 [PluginInfo.Provides]。
+	ErrInvalidOverlapKind     = errors.New("application: invalid overlap kind")                 // Component 声明了未知的重入策略类型 [OverlapKind]。
+	ErrInvalidOverlapCapacity = errors.New("application: invalid overlap capacity")             // 重入策略容量配额不合法（如并发数或队列长度小于 1）。
+	ErrInvalidOverlapConfig   = errors.New("application: invalid overlap config")               // 重入策略配置冲突（如非队列策略配置了队列长度，或非并发策略配置了并发数）。
+	ErrNonComponentHasOverlap = errors.New("application: non-component has overlap configured") // 非 Component 插件（如 Tool 或 Worker）错误地配置了 [OverlapPolicy]。
+	ErrUnknownMode            = errors.New("application: unknown mode")                         // 插件元信息中声明了未知的插件运行形态 [Mode]。
 )
 
 // dependencyGraph 拓扑依赖图。

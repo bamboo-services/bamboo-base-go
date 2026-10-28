@@ -12,6 +12,5 @@ func (md Trailer) String() string {
 
 // 常用 gRPC 响应尾部 Trailer 键常量定义。
 const (
-	// TrailerRequestUUID 是在响应 Trailer 阶段回写请求唯一标识符（UUID）的元数据键。
-	TrailerRequestUUID Trailer = "x-request-uuid"
+	TrailerRequestUUID Trailer = "x-request-uuid" // 在响应 Trailer 阶段回写请求唯一标识符（UUID）的元数据键。
 )

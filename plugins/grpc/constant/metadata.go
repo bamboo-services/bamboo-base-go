@@ -12,12 +12,7 @@ func (md Metadata) String() string {
 
 // 常用 gRPC 请求元数据键常量定义。
 const (
-	// MetadataAppAccessID 是用于传递应用访问凭证标识符（Access ID）的元数据键。
-	MetadataAppAccessID Metadata = "app-access-id"
-
-	// MetadataAppSecretKey 是用于传递应用访问密钥（Secret Key）的元数据键。
-	MetadataAppSecretKey Metadata = "app-secret-key"
-
-	// MetadataRequestUUID 是用于在请求元数据中传递分布式链路请求唯一标识符的键。
-	MetadataRequestUUID Metadata = "x-request-uuid"
+	MetadataAppAccessID  Metadata = "app-access-id"  // 用于传递应用访问凭证标识符（Access ID）的元数据键。
+	MetadataAppSecretKey Metadata = "app-secret-key" // 用于传递应用访问密钥（Secret Key）的元数据键。
+	MetadataRequestUUID  Metadata = "x-request-uuid" // 用于在请求元数据中传递分布式链路请求唯一标识符的键。
 )

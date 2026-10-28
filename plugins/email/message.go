@@ -8,14 +8,9 @@ import (
 
 // Attachment 表示随邮件一同发送的二进制或文本附件。
 type Attachment struct {
-	// Filename 为附件显示文件名（如 "report.pdf"）。
-	Filename string
-
-	// ContentType 为附件的 MIME 类型（如 "application/pdf"，可选）。
-	ContentType string
-
-	// Data 为附件的数据读取流，在发信时按需读取。
-	Data io.Reader
+	Filename    string    // 附件显示文件名（如 "report.pdf"）。
+	ContentType string    // 附件的 MIME 类型（如 "application/pdf"，可选）。
+	Data        io.Reader // 附件的数据读取流，在发信时按需读取。
 }
 
 // Message 表示待发送的邮件消息结构体。

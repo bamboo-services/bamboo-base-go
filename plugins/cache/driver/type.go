@@ -6,13 +6,11 @@ package driver
 // 零值空串等价于 [CacheTypeNone]，表示未启用任何内置缓存实现。
 type CacheType string
 
+// 常用缓存后端类型常量定义。
 const (
-	// CacheTypeRedis 使用 Redis 作为缓存后端，适用于分布式与跨进程共享场景。
-	CacheTypeRedis CacheType = "redis"
-	// CacheTypeMemory 使用程序内内存作为缓存后端，适用于单实例或可接受最终一致性的场景。
-	CacheTypeMemory CacheType = "memory"
-	// CacheTypeNone 不启用内置缓存实现，业务侧可自行通过注册机制装配缓存节点。
-	CacheTypeNone CacheType = "none"
+	CacheTypeRedis  CacheType = "redis"  // 使用 Redis 作为缓存后端，适用于分布式与跨进程共享场景。
+	CacheTypeMemory CacheType = "memory" // 使用程序内内存作为缓存后端，适用于单实例或可接受最终一致性的场景。
+	CacheTypeNone   CacheType = "none"   // 不启用内置缓存实现，业务侧可自行通过注册机制装配缓存节点。
 )
 
 // String 返回缓存类型的字符串表示，便于日志输出与错误信息拼接。

@@ -20,6 +20,7 @@ const PluginKey ctxkey.Key = "plugin_async"
 // PoolKey 声明 Async 暴露给应用共享容器的 [Pool] 句柄键。
 const PoolKey ctxkey.Key = "context_async_pool"
 
+// 异步任务协程池错误哨兵。
 var (
 	// ErrPoolClosed 表示协程池已关闭、正在执行停机流程或应用未处于运行状态。
 	// 调用方可通过 [errors.Is] 识别该错误以实施优雅拒绝或降级。
@@ -29,17 +30,10 @@ var (
 	// 调用方可通过 [errors.Is] 捕获该错误以实施削峰重试或业务降级。
 	ErrPoolFull = errors.New("async: pool is full")
 
-	// ErrNilTaskFunc 表示向协程池提交的任务执行函数为 nil。
-	ErrNilTaskFunc = errors.New("async: task function cannot be nil")
-
-	// ErrNotInitialized 表示插件尚未完成初始化启动，底层协程池未就绪。
-	ErrNotInitialized = errors.New("async: plugin not initialized")
-
-	// ErrInvalidPoolCapacity 表示协程池配置容量非法，容量必须大于 0。
-	ErrInvalidPoolCapacity = errors.New("async: pool capacity must be positive")
-
-	// ErrInvalidContext 表示提交任务的上下文不满足准入条件（未就绪、跨容器或无授权）。
-	ErrInvalidContext = errors.New("async: invalid parent context for pool")
+	ErrNilTaskFunc         = errors.New("async: task function cannot be nil")     // 向协程池提交的任务执行函数为 nil。
+	ErrNotInitialized      = errors.New("async: plugin not initialized")          // 插件尚未完成初始化启动，底层协程池未就绪。
+	ErrInvalidPoolCapacity = errors.New("async: pool capacity must be positive")  // 协程池配置容量非法，容量必须大于 0。
+	ErrInvalidContext      = errors.New("async: invalid parent context for pool") // 提交任务的上下文不满足准入条件（未就绪、跨容器或无授权）。
 )
 
 // Pool 定义对外暴露的异步任务协程池接口，支持并发安全地提交与观测任务。

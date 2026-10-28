@@ -15,20 +15,11 @@ import (
 
 // Config 描述缓存模块的配置参数，包含后端选择、连接参数与存储选项。
 type Config struct {
-	// TypeVal 指定当前启用的缓存实现类型（如 [CacheTypeRedis] 或 [CacheTypeMemory]）。
-	TypeVal Type
-
-	// Redis 保存 Redis 模式下的网络连接、鉴权与连接池参数。
-	Redis RedisOptions
-
-	// Memory 保存内存模式下的分片、淘汰与容量参数。
-	Memory MemoryOptions
-
-	// FromEnv 标识是否启用了从环境变量自动识别与填充配置。
-	FromEnv bool
-
-	// Logger 传入应用日志实例，用于打印缓存内部调试与生命周期日志。
-	Logger *logging.Logger
+	TypeVal Type            // 指定当前启用的缓存实现类型（如 [CacheTypeRedis] 或 [CacheTypeMemory]）。
+	Redis   RedisOptions    // 保存 Redis 模式下的网络连接、鉴权与连接池参数。
+	Memory  MemoryOptions   // 保存内存模式下的分片、淘汰与容量参数。
+	FromEnv bool            // 标识是否启用了从环境变量自动识别与填充配置。
+	Logger  *logging.Logger // 传入应用日志实例，用于打印缓存内部调试与生命周期日志。
 
 	validationErr error
 }
@@ -38,44 +29,22 @@ type Option func(*Config)
 
 // RedisOptions 定义 Redis 后端的网络连接、鉴权与连接池参数。
 type RedisOptions struct {
-	// Addr 是 Redis 服务的网络地址，格式为 "host:port"，如 "localhost:6379"。
-	Addr string
-
-	// Username 是 Redis 6+ ACL 认证用户名，未开启 ACL 时留空。
-	Username string
-
-	// Password 是 Redis 连接认证密码，无密码时留空。
-	Password string
-
-	// DB 是 Redis 数据库序号，默认为 0。
-	DB int
-
-	// PoolSize 是客户端连接池最大连接数，0 表示使用客户端默认值。
-	PoolSize int
-
-	// MinIdleConns 是连接池保持的最小空闲连接数。
-	MinIdleConns int
-
-	// DialTimeout 是建立网络连接的超时时间。
-	DialTimeout time.Duration
-
-	// ReadTimeout 是执行读操作的超时时间。
-	ReadTimeout time.Duration
-
-	// WriteTimeout 是执行写操作的超时时间。
-	WriteTimeout time.Duration
+	Addr         string        // Redis 服务的网络地址，格式为 "host:port"，如 "localhost:6379"。
+	Username     string        // Redis 6+ ACL 认证用户名，未开启 ACL 时留空。
+	Password     string        // Redis 连接认证密码，无密码时留空。
+	DB           int           // Redis 数据库序号，默认为 0。
+	PoolSize     int           // 客户端连接池最大连接数，0 表示使用客户端默认值。
+	MinIdleConns int           // 连接池保持的最小空闲连接数。
+	DialTimeout  time.Duration // 建立网络连接的超时时间。
+	ReadTimeout  time.Duration // 执行读操作的超时时间。
+	WriteTimeout time.Duration // 执行写操作的超时时间。
 }
 
 // MemoryOptions 定义程序内分片内存后端的容量与淘汰参数。
 type MemoryOptions struct {
-	// DefaultTTL 是未显式指定写入 TTL 时的默认过期时间；0 表示永不过期。
-	DefaultTTL time.Duration
-
-	// MaxEntries 是每个分片允许容纳的最大条目数；0 表示无上限。
-	MaxEntries int
-
-	// ShardCount 是内部并发分片数，必须为 2 的幂；0 表示使用默认 16 分片。
-	ShardCount int
+	DefaultTTL time.Duration // 未显式指定写入 TTL 时的默认过期时间；0 表示永不过期。
+	MaxEntries int           // 每个分片允许容纳的最大条目数；0 表示无上限。
+	ShardCount int           // 内部并发分片数，必须为 2 的幂；0 表示使用默认 16 分片。
 }
 
 // RedisOption 是 [RedisOptions] 的二级选项。

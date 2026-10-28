@@ -12,20 +12,11 @@ import (
 // 内核将其包装为 StuckInstance 记录在关机账本中，并作为 [StopIncompleteError]
 // 的组成部分返回。
 type StuckInstance struct {
-	// PluginKey 是发生残留的插件主键 [ctxkey.Key]。
-	PluginKey ctxkey.Key
-
-	// InstanceID 是发生残留的实例唯一标识。
-	InstanceID string
-
-	// Stage 是残留发生时的生命周期阶段，如 "run"、"start"、"quiesce"、"stop" 或 "stop-panic"。
-	Stage string
-
-	// RetainedDeps 是为保护该残留实例而特意保留、未执行 Stop 的底层依赖键列表。
-	RetainedDeps []ctxkey.Key
-
-	// Err 是导致残留的原始错误或原因（如 [context.DeadlineExceeded] 或捕获的 panic 错误）。
-	Err error
+	PluginKey    ctxkey.Key   // 发生残留的插件主键 [ctxkey.Key]。
+	InstanceID   string       // 发生残留的实例唯一标识。
+	Stage        string       // 残留发生时的生命周期阶段，如 "run"、"start"、"quiesce"、"stop" 或 "stop-panic"。
+	RetainedDeps []ctxkey.Key // 为保护该残留实例而特意保留、未执行 Stop 的底层依赖键列表。
+	Err          error        // 导致残留的原始错误或原因（如 [context.DeadlineExceeded] 或捕获的 panic 错误）。
 }
 
 // StopIncompleteError 是应用平滑关机时存在残留实例或无法确认清理完成时返回的结构化错误。
@@ -33,8 +24,7 @@ type StuckInstance struct {
 // 此时应用状态将被置为 [StateIncomplete]，表明并非所有资源都已干净卸载。
 // 错误内部包含全部残留实例的快照清单 [StopIncompleteError.StuckInstances]，供排障诊断。
 type StopIncompleteError struct {
-	// StuckInstances 是本轮关机中所有未确认停止的实例残留列表。
-	StuckInstances []StuckInstance
+	StuckInstances []StuckInstance // 本轮关机中所有未确认停止的实例残留列表。
 }
 
 // Error 返回结构化关机残留错误的文本描述。

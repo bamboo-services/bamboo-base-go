@@ -7,20 +7,17 @@ import "strings"
 // 当前仅支持 [SortAsc] 与 [SortDesc] 两个取值。
 type PageSort string
 
+// 分页排序方向常量定义。
 const (
-	// SortAsc 表示升序排序方向。
-	SortAsc PageSort = "asc"
-	// SortDesc 表示降序排序方向。
-	SortDesc PageSort = "desc"
+	SortAsc  PageSort = "asc"  // 升序排序方向。
+	SortDesc PageSort = "desc" // 降序排序方向。
 )
 
+// 默认分页参数常量定义。
 const (
-	// DefaultPageNumber 是默认页码，按行业约定从 1 开始计数。
-	DefaultPageNumber int64 = 1
-	// DefaultPageSize 是默认每页包含的条目数。
-	DefaultPageSize int64 = 20
-	// DefaultPageMaxSize 是系统允许的最大单页条目数上限。
-	DefaultPageMaxSize int64 = 200
+	DefaultPageNumber  int64 = 1   // 默认页码，按行业约定从 1 开始计数。
+	DefaultPageSize    int64 = 20  // 默认每页包含的条目数。
+	DefaultPageMaxSize int64 = 200 // 系统允许的最大单页条目数上限。
 )
 
 // PageConfig 定义分页规范化配置。
@@ -33,14 +30,10 @@ const (
 //
 // 建议在服务启动阶段按业务场景配置后复用，避免在业务代码中分散硬编码。
 type PageConfig struct {
-	// DefaultPage 是请求未指定页码或页码非法时的默认回退页码。
-	DefaultPage int64
-	// DefaultSize 是请求未指定每页条目数或数量非法时的默认回退容量。
-	DefaultSize int64
-	// MaxSize 是单页允许的最大条目数上限，超出时自动截断。
-	MaxSize int64
-	// DefaultSort 是请求未指定或排序非法时的默认排序方向。
-	DefaultSort PageSort
+	DefaultPage int64    // 请求未指定页码或页码非法时的默认回退页码。
+	DefaultSize int64    // 请求未指定每页条目数或数量非法时的默认回退容量。
+	MaxSize     int64    // 单页允许的最大条目数上限，超出时自动截断。
+	DefaultSort PageSort // 请求未指定或排序非法时的默认排序方向。
 }
 
 // DefaultPageConfig 是 SDK 预置的默认分页配置。
@@ -59,12 +52,9 @@ var DefaultPageConfig = PageConfig{
 // 在执行数据库查询前推荐调用 [PageRequest.Normalize] 或 [PageRequest.NormalizeWithConfig]
 // 完成参数合法性修正。
 type PageRequest struct {
-	// Page 是当前请求的页码，从 1 开始计数。
-	Page int64 `json:"page" form:"page" binding:"omitempty,min=1" label:"页码" description:"当前页码，从 1 开始计数。"`
-	// Size 是每页条目数，默认上限由配置控制。
-	Size int64 `json:"size" form:"size" binding:"omitempty,min=1,max=200" label:"每页条目数" description:"每页包含的条目数，最大为 200。"`
-	// Sort 是排序方向，支持 asc（升序）与 desc（降序）。
-	Sort PageSort `json:"sort" form:"sort" binding:"omitempty,enum_string=asc desc" label:"排序方式" description:"排序方式，asc 表示升序，desc 表示降序。"`
+	Page int64    `json:"page" form:"page" binding:"omitempty,min=1" label:"页码" description:"当前页码，从 1 开始计数。"`                            // 当前请求的页码，从 1 开始计数。
+	Size int64    `json:"size" form:"size" binding:"omitempty,min=1,max=200" label:"每页条目数" description:"每页包含的条目数，最大为 200。"`              // 每页条目数，默认上限由配置控制。
+	Sort PageSort `json:"sort" form:"sort" binding:"omitempty,enum_string=asc desc" label:"排序方式" description:"排序方式，asc 表示升序，desc 表示降序。"` // 排序方向，支持 asc（升序）与 desc（降序）。
 }
 
 // PageProvider 定义分页参数提供者接口。
@@ -165,16 +155,11 @@ func (r PageRequest) OrderDirection() string {
 //
 // 类型参数 T 通常为数据项切片（例如 []UserDTO），也可以是任意分页结果容器。
 type PageResponse[T any] struct {
-	// CurrentPage 是当前页码。
-	CurrentPage int64 `json:"current_page" label:"当前页码" description:"当前页码，从 1 开始计数。"`
-	// TotalPages 是根据总条目数与每页容量计算出的总页数。
-	TotalPages int64 `json:"total_pages" label:"总页数" description:"总页数，根据总条目数和每页条目数计算得出。"`
-	// TotalItems 是数据列表的总记录数。
-	TotalItems int64 `json:"total_items" label:"总条目数" description:"列表总条目数。"`
-	// Size 是每页条目数。
-	Size int64 `json:"size" label:"每页条目数" description:"每页包含的条目数。"`
-	// Items 是当前页包含的数据条目内容。
-	Items T `json:"items" label:"当前页条目" description:"当前页包含的条目数据。"`
+	CurrentPage int64 `json:"current_page" label:"当前页码" description:"当前页码，从 1 开始计数。"`      // 当前页码。
+	TotalPages  int64 `json:"total_pages" label:"总页数" description:"总页数，根据总条目数和每页条目数计算得出。"` // 根据总条目数与每页容量计算出的总页数。
+	TotalItems  int64 `json:"total_items" label:"总条目数" description:"列表总条目数。"`              // 数据列表的总记录数。
+	Size        int64 `json:"size" label:"每页条目数" description:"每页包含的条目数。"`                  // 每页条目数。
+	Items       T     `json:"items" label:"当前页条目" description:"当前页包含的条目数据。"`               // 当前页包含的数据条目内容。
 }
 
 // NewPage 构造分页响应。

@@ -39,12 +39,9 @@ type (
 
 // 常量与函数别名：可直接引用 driver 包常量与工具函数。
 const (
-	// CacheTypeRedis 使用 Redis 作为缓存后端，适用于分布式与跨进程共享场景。
-	CacheTypeRedis = driver.CacheTypeRedis
-	// CacheTypeMemory 使用程序内内存作为缓存后端，适用于单实例或可接受最终一致性的场景。
-	CacheTypeMemory = driver.CacheTypeMemory
-	// CacheTypeNone 不启用内置缓存实现，业务侧可自行装配缓存节点。
-	CacheTypeNone = driver.CacheTypeNone
+	CacheTypeRedis  = driver.CacheTypeRedis  // 使用 Redis 作为缓存后端，适用于分布式与跨进程共享场景。
+	CacheTypeMemory = driver.CacheTypeMemory // 使用程序内内存作为缓存后端，适用于单实例或可接受最终一致性的场景。
+	CacheTypeNone   = driver.CacheTypeNone   // 不启用内置缓存实现，业务侧可自行装配缓存节点。
 )
 
 // EncodeKey 等价于 [driver.EncodeKey]。

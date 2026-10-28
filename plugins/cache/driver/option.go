@@ -13,14 +13,10 @@ type SetConfig struct {
 	//   - 未被任何选项覆盖时，保留 [ApplySet] 的 base 入参（即实例默认 TTL）
 	TTL time.Duration
 
-	// NX 仅当键不存在时写入（与 XX 互斥，同传时 NX 优先）。
-	NX bool
-	// XX 仅当键已存在时写入（与 NX 互斥，同传时 NX 优先）。
-	XX bool
-	// KeepTTL 保留原有 TTL 不重设（覆盖值但不改变过期时间）。
-	KeepTTL bool
-	// NoSlide 写入但不续期（不滑动 TTL）。
-	NoSlide bool
+	NX      bool // 仅当键不存在时写入（与 XX 互斥，同传时 NX 优先）。
+	XX      bool // 仅当键已存在时写入（与 NX 互斥，同传时 NX 优先）。
+	KeepTTL bool // 保留原有 TTL 不重设（覆盖值但不改变过期时间）。
+	NoSlide bool // 写入但不续期（不滑动 TTL）。
 }
 
 // ApplySet 将实例默认 TTL 与选项列表合成最终 [SetConfig]。

@@ -8,15 +8,11 @@ import (
 // 常用时间格式常量，取值为 time 包的参考时间布局，
 // 可作为 [Format]、[FormatNow] 与 [Parse] 的 layout 参数。
 const (
-	// TimeFormatDate 日期布局，形如 2006-01-02。
-	TimeFormatDate = "2006-01-02"
-	// TimeFormatDateTime 日期时间布局，形如 2006-01-02 15:04:05。
-	TimeFormatDateTime = "2006-01-02 15:04:05"
-	// TimeFormatTime 时间布局，形如 15:04:05。
-	TimeFormatTime = "15:04:05"
-	// TimeFormatISO8601 ISO 8601 带时区布局，
-	// 形如 2006-01-02T15:04:05Z07:00。
-	TimeFormatISO8601 = "2006-01-02T15:04:05Z07:00"
+	TimeFormatDate     = "2006-01-02"                // 日期布局，形如 2006-01-02。
+	TimeFormatDateTime = "2006-01-02 15:04:05"       // 日期时间布局，形如 2006-01-02 15:04:05。
+	TimeFormatTime     = "15:04:05"                  // 时间布局，形如 15:04:05。
+	TimeFormatISO8601  = "2006-01-02T15:04:05Z07:00" // ISO 8601 带时区布局，形如 2006-01-02T15:04:05Z07:00。
+
 	// TimeFormatUnix 该值不是 time 包参考时间的合法布局，传入
 	// [Format] 或 [Parse] 无法得到 Unix 时间戳，保留仅为兼容既有
 	// 引用；需要 Unix 时间戳请使用 [NowUnix] 等函数。

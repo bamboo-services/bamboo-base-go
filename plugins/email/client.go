@@ -19,63 +19,30 @@ import (
 // PluginKey 是 Email 插件在应用拓扑图中的固定唯一标识。
 const PluginKey ctxkey.Key = "plugin_email"
 
+// 邮件客户端与发信错误哨兵。
 var (
-	// ErrStopped 表示邮件客户端已被停止或正在停机排空，拒绝接纳新的发信请求。
-	ErrStopped = errors.New("email: client has been stopped")
-
-	// ErrRecipientEmpty 表示收件人地址列表为空。
-	ErrRecipientEmpty = errors.New("email: recipient address cannot be empty")
-
-	// ErrSubjectEmpty 表示邮件主题为空。
-	ErrSubjectEmpty = errors.New("email: subject cannot be empty")
-
-	// ErrTemplateEmpty 表示模板发信时指定的模板名称为空。
-	ErrTemplateEmpty = errors.New("email: template name cannot be empty")
-
-	// ErrNotInitialized 表示邮件插件尚未完成 Start 阶段的初始化。
-	ErrNotInitialized = errors.New("email: plugin not initialized")
-
-	// ErrMissingHost 表示配置中缺少 SMTP 主机地址。
-	ErrMissingHost = errors.New("email: missing SMTP host")
-
-	// ErrMissingUser 表示配置中缺少 SMTP 认证用户名。
-	ErrMissingUser = errors.New("email: missing SMTP username")
-
-	// ErrMissingPass 表示配置中缺少 SMTP 认证密码。
-	ErrMissingPass = errors.New("email: missing SMTP password")
-
-	// ErrMissingFrom 表示配置中缺少发件人邮箱地址。
-	ErrMissingFrom = errors.New("email: missing sender address")
-
-	// ErrInvalidPort 表示 SMTP 端口号超出合法范围（必须介于 1 到 65535 之间）。
-	ErrInvalidPort = errors.New("email: invalid SMTP port (must be between 1 and 65535)")
+	ErrStopped        = errors.New("email: client has been stopped")                         // 邮件客户端已被停止或正在停机排空，拒绝接纳新的发信请求。
+	ErrRecipientEmpty = errors.New("email: recipient address cannot be empty")               // 收件人地址列表为空。
+	ErrSubjectEmpty   = errors.New("email: subject cannot be empty")                         // 邮件主题为空。
+	ErrTemplateEmpty  = errors.New("email: template name cannot be empty")                   // 模板发信时指定的模板名称为空。
+	ErrNotInitialized = errors.New("email: plugin not initialized")                          // 邮件插件尚未完成 Start 阶段的初始化。
+	ErrMissingHost    = errors.New("email: missing SMTP host")                               // 配置中缺少 SMTP 主机地址。
+	ErrMissingUser    = errors.New("email: missing SMTP username")                           // 配置中缺少 SMTP 认证用户名。
+	ErrMissingPass    = errors.New("email: missing SMTP password")                           // 配置中缺少 SMTP 认证密码。
+	ErrMissingFrom    = errors.New("email: missing sender address")                          // 配置中缺少发件人邮箱地址。
+	ErrInvalidPort    = errors.New("email: invalid SMTP port (must be between 1 and 65535)") // SMTP 端口号超出合法范围（必须介于 1 到 65535 之间）。
 )
 
 // Config 包含邮件客户端的连接与认证配置。
 type Config struct {
-	// Host 为 SMTP 服务器地址（域名或 IP）。
-	Host string
-
-	// Port 为 SMTP 服务端口（常用端口如 25、465、587，缺省时默认为 587）。
-	Port int
-
-	// Username 为 SMTP 身份验证用户名。
-	Username string
-
-	// Password 为 SMTP 身份验证密码或应用授权码。
-	Password string
-
-	// FromName 为发件人显示名称（可选，如 "Bamboo Service"）。
-	FromName string
-
-	// FromAddr 为发件人邮箱地址（必填）。
-	FromAddr string
-
-	// TLSType 为 TLS 连接加密策略（支持 "none"、"starttls" 与 "tls"，缺省默认为 "starttls"）。
-	TLSType string
-
-	// TemplateDir 为可选的外部 HTML 模板根目录。
-	TemplateDir string
+	Host        string // SMTP 服务器地址（域名或 IP）。
+	Port        int    // SMTP 服务端口（常用端口如 25、465、587，缺省时默认为 587）。
+	Username    string // SMTP 身份验证用户名。
+	Password    string // SMTP 身份验证密码或应用授权码。
+	FromName    string // 发件人显示名称（可选，如 "Bamboo Service"）。
+	FromAddr    string // 发件人邮箱地址（必填）。
+	TLSType     string // TLS 连接加密策略（支持 "none"、"starttls" 与 "tls"，缺省默认为 "starttls"）。
+	TemplateDir string // 可选的外部 HTML 模板根目录。
 }
 
 // Option 定义邮件插件的全局函数式配置选项。

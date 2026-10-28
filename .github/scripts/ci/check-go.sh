@@ -2,14 +2,20 @@
 set -euo pipefail
 
 # check-go.sh - 遍历 v2 精确 14 个模块执行 test / race / vet / tidy
-# 严格按照 .github/scripts/v2-modules.txt 清单逐 module 执行，fail-fast 退出。
+# 严格按照 .github/scripts/manifest/v2-modules.txt 清单逐 module 执行，fail-fast 退出。
 # 根目录仅作为安装占位，不参与测试。
 # 兼容 macOS 自带 Bash 3.2+。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-MANIFEST="${SCRIPT_DIR}/v2-modules.txt"
-WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+MANIFEST="${REPO_ROOT}/.github/scripts/manifest/v2-modules.txt"
+if [ ! -f "${MANIFEST}" ] && [ -f "${SCRIPT_DIR}/v2-modules.txt" ]; then
+	MANIFEST="${SCRIPT_DIR}/v2-modules.txt"
+fi
+WRAPPER="${REPO_ROOT}/.github/scripts/proxy/with-local-modules.sh"
+if [ ! -f "${WRAPPER}" ] && [ -f "${SCRIPT_DIR}/with-local-modules.sh" ]; then
+	WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+fi
 
 # 如果未处于局部代理环境且未处于 mock 测试（未设置 LOG_FILE），通过 with-local-modules.sh 装配候选代理透明重入
 if [ "${BAMBOO_INSIDE_LOCAL_MODULES:-0}" -eq 0 ] && [ -z "${LOG_FILE:-}" ] && [ -f "${WRAPPER}" ]; then

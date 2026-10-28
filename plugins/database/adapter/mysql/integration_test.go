@@ -76,7 +76,7 @@ func (w *witnessWorker) Stop(_ context.Context) error {
 func TestIntegration_MySQL(t *testing.T) {
 	dsn := strings.TrimSpace(os.Getenv("BAMBOO_TEST_MYSQL_DSN"))
 	if dsn == "" {
-		t.Skip("skipping MySQL integration test: BAMBOO_TEST_MYSQL_DSN not set (run via .github/scripts/integration-env.sh env)")
+		t.Skip("skipping MySQL integration test: BAMBOO_TEST_MYSQL_DSN not set (run via .github/scripts/env/integration-env.sh env)")
 	}
 
 	// 1. 构造真实 App，配置合理的短关机超时避免默认 20s/60s 拖长用例

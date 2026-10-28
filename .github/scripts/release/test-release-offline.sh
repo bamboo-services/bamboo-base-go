@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 TEST_VERSION="v2.9.9"
 TARGET_VER="${TEST_VERSION#v}"
@@ -49,7 +49,7 @@ git config user.email "test-bot@bamboo-base.local"
 # Case 1: 验证权威清单解析与非空循环
 # ------------------------------------------------------------
 echo ""
-echo "🔍 2. [Case 1] 验证 .github/scripts/v2-modules.txt 权威清单解析..."
+echo "🔍 2. [Case 1] 验证 .github/scripts/manifest/v2-modules.txt 权威清单解析..."
 declare -a MOD_DIRS
 declare -a MOD_PATHS
 
@@ -57,7 +57,7 @@ while read -r mod_dir mod_path; do
 	[[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
 	MOD_DIRS+=("$mod_dir")
 	MOD_PATHS+=("$mod_path")
-done <.github/scripts/v2-modules.txt
+done <.github/scripts/manifest/v2-modules.txt
 
 if [ "${#MOD_DIRS[@]}" -ne 14 ]; then
 	echo "❌ 权威清单模块数异常: 期望 14, 实际 ${#MOD_DIRS[@]}" >&2
@@ -149,10 +149,10 @@ manifest = {
 with open(out_file, 'w') as f:
     json.dump(manifest, f, indent=2)
     f.write('\n')
-" .github/scripts/v2-modules.txt "${TEST_VERSION}" "${BUMP_COMMIT}" .github/release-manifest.json
+" .github/scripts/manifest/v2-modules.txt "${TEST_VERSION}" "${BUMP_COMMIT}" .github/release-manifest.json
 
 # 调用已交付的 release-manifest.go 执行严格准入
-go run .github/scripts/release-manifest.go \
+go run .github/scripts/release/release-manifest.go \
 	-manifest .github/release-manifest.json \
 	-source-root . \
 	-output .github/release-manifest.json >/dev/null
@@ -283,7 +283,7 @@ with open('.github/selective-manifest.json', 'w') as f:
     f.write('\n')
 "
 
-go run .github/scripts/release-manifest.go \
+go run .github/scripts/release/release-manifest.go \
 	-manifest .github/selective-manifest.json >/dev/null
 
 echo "   ✅ 按需发版清单成功通过 release-manifest 准入校验。"

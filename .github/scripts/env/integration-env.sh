@@ -11,7 +11,7 @@ set -eu
 # 4. 导出专属 BAMBOO_TEST_* 变量，严禁污染或读取业务生产 DATABASE_* 变量与 .env 文件。
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../.." && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../../.." && pwd)
 COMPOSE_FILE="$REPO_ROOT/test/integration/compose.yml"
 PROJECT_NAME="bamboo-test-integration"
 FIXTURE_LABEL="com.bamboo.test.fixture=true"
@@ -69,41 +69,41 @@ verify_local_docker() {
 	# 3. tcp / http / https：严格校验 authority 必须为 127.0.0.1 或 localhost 加合法数字端口 (1..65535)，无 userinfo、无多余路径/查询/hash
 	safe_endpoint=0
 	case "$target_endpoint" in
-		unix:///*)
-			safe_endpoint=1
+	unix:///*)
+		safe_endpoint=1
+		;;
+	npipe:////./pipe/* | npipe://./pipe/*)
+		safe_endpoint=1
+		;;
+	tcp://* | http://* | https://*)
+		auth="${target_endpoint#*://}"
+		# 禁止包含 userinfo (@) 以及任何路径、查询或哈希 (/, ?, #)
+		case "$auth" in
+		*[@/?#]*)
+			safe_endpoint=0
 			;;
-		npipe:////./pipe/*|npipe://./pipe/*)
-			safe_endpoint=1
-			;;
-		tcp://*|http://*|https://*)
-			auth="${target_endpoint#*://}"
-			# 禁止包含 userinfo (@) 以及任何路径、查询或哈希 (/, ?, #)
-			case "$auth" in
-				*[@/?#]*)
-					safe_endpoint=0
-					;;
-				127.0.0.1:*|localhost:*)
-					port="${auth#*:}"
-					# 端口必须为纯数字且长度合理 (1-5位)，并在 1..65535 范围内
-					case "$port" in
-						*[!0-9]*|"")
-							safe_endpoint=0
-							;;
-						*)
-							if [ "${#port}" -le 5 ] && [ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null; then
-								safe_endpoint=1
-							fi
-							;;
-					esac
-					;;
-				*)
-					safe_endpoint=0
-					;;
+		127.0.0.1:* | localhost:*)
+			port="${auth#*:}"
+			# 端口必须为纯数字且长度合理 (1-5位)，并在 1..65535 范围内
+			case "$port" in
+			*[!0-9]* | "")
+				safe_endpoint=0
+				;;
+			*)
+				if [ "${#port}" -le 5 ] && [ "$port" -ge 1 ] 2>/dev/null && [ "$port" -le 65535 ] 2>/dev/null; then
+					safe_endpoint=1
+				fi
+				;;
 			esac
 			;;
 		*)
 			safe_endpoint=0
 			;;
+		esac
+		;;
+	*)
+		safe_endpoint=0
+		;;
 	esac
 
 	if [ "$safe_endpoint" -ne 1 ]; then
@@ -324,25 +324,25 @@ EOF
 # 主入口解析
 action="${1:-help}"
 case "$action" in
-	up)
-		shift
-		cmd_up "$@"
-		;;
-	status)
-		cmd_status
-		;;
-	env)
-		cmd_env
-		;;
-	down)
-		cmd_down
-		;;
-	help|-h|--help)
-		cmd_help
-		;;
-	*)
-		echo "[ERROR] 未知命令: $action" >&2
-		cmd_help >&2
-		exit 1
-		;;
+up)
+	shift
+	cmd_up "$@"
+	;;
+status)
+	cmd_status
+	;;
+env)
+	cmd_env
+	;;
+down)
+	cmd_down
+	;;
+help | -h | --help)
+	cmd_help
+	;;
+*)
+	echo "[ERROR] 未知命令: $action" >&2
+	cmd_help >&2
+	exit 1
+	;;
 esac

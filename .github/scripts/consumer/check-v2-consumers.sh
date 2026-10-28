@@ -6,9 +6,15 @@ set -euo pipefail
 # 验证 v2 模块在脱离 go.work (GOWORK=off) 独立通过 local-module-proxy 消费时的完整性、依赖隔离性与编译/测试状态。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-MANIFEST_FILE="${SCRIPT_DIR}/v2-modules.txt"
-WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+MANIFEST_FILE="${REPO_ROOT}/.github/scripts/manifest/v2-modules.txt"
+if [ ! -f "${MANIFEST_FILE}" ] && [ -f "${SCRIPT_DIR}/v2-modules.txt" ]; then
+	MANIFEST_FILE="${SCRIPT_DIR}/v2-modules.txt"
+fi
+WRAPPER="${REPO_ROOT}/.github/scripts/proxy/with-local-modules.sh"
+if [ ! -f "${WRAPPER}" ] && [ -f "${SCRIPT_DIR}/with-local-modules.sh" ]; then
+	WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+fi
 
 USAGE="Usage: $0 [--manifest path] [--version vX.Y.Z] [--flags 'go test flags'] [--skip-tests] [--check-isolation] [--module dir]"
 
@@ -246,7 +252,11 @@ trap cleanup_verify EXIT INT TERM
 
 # 运行 local-module-proxy 生成器收集 SHA256 证据，绝不吞错误
 PROXY_LOG="${TMP_PROXY_VERIFY}/proxy_generator.log"
-if ! go run "${SCRIPT_DIR}/local-module-proxy.go" \
+PROXY_GENERATOR="${REPO_ROOT}/.github/scripts/proxy/local-module-proxy.go"
+if [ ! -f "${PROXY_GENERATOR}" ] && [ -f "${SCRIPT_DIR}/local-module-proxy.go" ]; then
+	PROXY_GENERATOR="${SCRIPT_DIR}/local-module-proxy.go"
+fi
+if ! go run "${PROXY_GENERATOR}" \
 	-repo-root "${REPO_ROOT}" \
 	-out-dir "${TMP_PROXY_VERIFY}" \
 	-modules "${ALL_MODULES_CSV}" \

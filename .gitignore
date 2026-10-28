@@ -108,6 +108,7 @@ __pycache__/
 .zcode/
 .codegraph
 .pi/
+.agents/
 .claude/worktrees/
 .claude/settings.local.json
 CLAUDE.local.md

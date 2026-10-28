@@ -5,7 +5,7 @@ name: Release Modules
 #   1. 从 release tag 检出代码
 #   2. 解析 release tag name → 提取版本号 vX.Y.Z
 #   3. 查找上一 root tag（排除子模块 tag 与 pseudo-version tag）→ 供 AI 生成对比范围
-#   4. 根据 .github/scripts/v2-modules.txt 权威清单，更新所有子模块 go.mod 中的 /v2 依赖到 vX.Y.Z
+#   4. 根据 .github/scripts/manifest/v2-modules.txt 权威清单，更新所有子模块 go.mod 中的 /v2 依赖到 vX.Y.Z
 #   5. 校验 14 个模块 go.mod 语法有效性
 #   6. 提交 bump commit
 #   7. 生成并用 release-manifest.go 严格校验 Release Manifest
@@ -81,7 +81,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          # 从权威清单 .github/scripts/v2-modules.txt 读取 14 个模块
+          # 从权威清单 .github/scripts/manifest/v2-modules.txt 读取 14 个模块
           declare -a MOD_PATHS
           declare -a MOD_DIRS
 
@@ -89,7 +89,7 @@ jobs:
             [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
             MOD_DIRS+=("$mod_dir")
             MOD_PATHS+=("$mod_path")
-          done < .github/scripts/v2-modules.txt
+          done < .github/scripts/manifest/v2-modules.txt
 
           if [ "${#MOD_DIRS[@]}" -ne 14 ]; then
             echo "❌ 权威模块清单计数异常: 期望 14 个, 实际读取到 ${#MOD_DIRS[@]} 个"
@@ -119,7 +119,7 @@ jobs:
             echo "🔍 校验 $mod_dir/go.mod"
             (cd "$mod_dir" && go list -m > /dev/null)
             ((count++))
-          done < .github/scripts/v2-modules.txt
+          done < .github/scripts/manifest/v2-modules.txt
 
           if [ "$count" -ne 14 ]; then
             echo "❌ 语法校验模块数不符: 期望 14 个, 实际处理 $count 个"
@@ -189,10 +189,10 @@ manifest = {
 with open(out_file, 'w') as f:
     json.dump(manifest, f, indent=2)
     f.write('\n')
-" .github/scripts/v2-modules.txt "v${VERSION}" "${COMMIT_SHA}" .github/release-manifest.json
+" .github/scripts/manifest/v2-modules.txt "v${VERSION}" "${COMMIT_SHA}" .github/release-manifest.json
 
           # 使用已交付的 release-manifest.go 执行严格的白名单与 go.mod 声明校验
-          go run .github/scripts/release-manifest.go \
+          go run .github/scripts/release/release-manifest.go \
             -manifest .github/release-manifest.json \
             -source-root . \
             -output .github/release-manifest.json
@@ -222,7 +222,7 @@ with open(out_file, 'w') as f:
               echo "✅ 已打 tag: ${sub_tag}"
             fi
             ((count++))
-          done < .github/scripts/v2-modules.txt
+          done < .github/scripts/manifest/v2-modules.txt
 
           if [ "$count" -ne 14 ]; then
             echo "❌ 打 tag 模块计数异常: 期望 14 个, 实际处理 $count 个"
@@ -271,7 +271,7 @@ with open(out_file, 'w') as f:
             exit 0
           fi
           echo "🤖 AI 生成 Release Content: $PREV_TAG...$TAG (model=$RELEASE_AI_MODEL)"
-          .github/scripts/generate-release-notes.sh \
+          .github/scripts/release/generate-release-notes.sh \
             --from "$PREV_TAG" --to "$TAG" \
             --output .release-notes.md
           gh release edit "$TAG" --notes-file .release-notes.md
@@ -306,7 +306,7 @@ with open(out_file, 'w') as f:
             while read -r mod_dir mod_path; do
               [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
               echo "| \`$mod_dir\` | \`$mod_path\` | \`${mod_dir}/${TAG}\` |"
-            done < .github/scripts/v2-modules.txt
+            done < .github/scripts/manifest/v2-modules.txt
             echo ""
             echo "下游业务可通过以下方式引用（例如 application 模块）："
             echo '```bash'

@@ -6,7 +6,7 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../../.." && pwd)
-WRAPPER="$REPO_ROOT/.github/scripts/with-local-modules.sh"
+WRAPPER="$REPO_ROOT/.github/scripts/proxy/with-local-modules.sh"
 
 echo "=== 测试 1: 参数解析与未知 flag / 缺值校验 ==="
 if "$WRAPPER" --unknown-flag -- true >/dev/null 2>&1; then

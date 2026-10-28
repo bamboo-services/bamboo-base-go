@@ -6,7 +6,7 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/../../.." && pwd)
-SCRIPT="$REPO_ROOT/.github/scripts/integration-env.sh"
+SCRIPT="$REPO_ROOT/.github/scripts/env/integration-env.sh"
 COMPOSE_FILE="$REPO_ROOT/test/integration/compose.yml"
 
 echo "=== 测试 1: 脚本基本权限与 help 命令 ==="

@@ -17,10 +17,13 @@ bamboo-base/
 ├── README.md                     # 项目说明文档
 ├── .github/
 │   ├── scripts/
-│   │   ├── check-go.sh           # 14 模块 test/race/vet/tidy fail-fast 执行脚本
-│   │   ├── generate-proto.sh     # Protobuf 代码生成与一致性检查
-│   │   ├── lint-go.sh            # golangci-lint 与代码格式校验
-│   │   └── v2-modules.txt        # 14 个 v2 模块权威清单
+│   │   ├── ci/                   # CI 质量门禁（check-go, lint-go, generate-proto）
+│   │   ├── release/              # 发布流程、Release Notes 与 Manifest 校验
+│   │   ├── proxy/                # 本地模块 GOPROXY 代理基础设施 (with-local-modules, local-module-proxy)
+│   │   ├── consumer/             # 独立消费端与示例模板编译校验 (check-v2-consumers, check-v2-examples)
+│   │   ├── env/                  # 本地集成测试环境容器管控 (integration-env)
+│   │   ├── manifest/             # 14 个 v2 模块权威清单 (v2-modules.txt)
+│   │   └── tests/                # 脚本自测试套件
 │   └── workflows/
 │       ├── quality.yml           # CI 门禁检查 Workflow
 │       └── release.yml           # 统一发布 Workflow

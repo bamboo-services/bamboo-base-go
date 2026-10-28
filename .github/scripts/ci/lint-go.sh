@@ -2,7 +2,7 @@
 # 从实际 go.mod 生成临时 Workspace，不依赖被忽略的开发者本地配置。
 set -eu
 
-root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)
 cd "$root"
 
 usage() {

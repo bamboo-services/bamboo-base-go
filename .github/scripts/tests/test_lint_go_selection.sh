@@ -3,7 +3,7 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH='' cd -- "$script_dir/../../.." && pwd)
-script="$repo_root/.github/scripts/lint-go.sh"
+script="$repo_root/.github/scripts/ci/lint-go.sh"
 
 tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/lint-go-test.XXXXXX")
 trap 'rm -rf "$tmpdir"' 0

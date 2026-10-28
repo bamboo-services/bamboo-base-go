@@ -42,7 +42,7 @@ help:
 	@echo ""
 	@echo "发布流程:"
 	@echo "  1. make release VERSION=vX.Y.Z [AI_MODEL=... AI_API_KEY=...]"
-	@echo "     → 有 AI 配置: 调用 .github/scripts/generate-release-notes.sh 生成中文 Notes"
+	@echo "     → 有 AI 配置: 调用 .github/scripts/release/generate-release-notes.sh 生成中文 Notes"
 	@echo "     → 无 AI 配置: gh release create --generate-notes"
 	@echo "  2. GitHub Action 监听 release published 事件"
 	@echo "     → 自动 bump 所有子模块 go.mod 依赖到 vX.Y.Z"
@@ -59,22 +59,22 @@ help:
 # ============================================================
 
 test:
-	bash .github/scripts/check-go.sh test
+	bash .github/scripts/ci/check-go.sh test
 
 race:
-	bash .github/scripts/check-go.sh race
+	bash .github/scripts/ci/check-go.sh race
 
 vet:
-	bash .github/scripts/check-go.sh vet
+	bash .github/scripts/ci/check-go.sh vet
 
 tidy:
-	bash .github/scripts/check-go.sh tidy
+	bash .github/scripts/ci/check-go.sh tidy
 
 proto:
-	bash .github/scripts/generate-proto.sh
+	bash .github/scripts/ci/generate-proto.sh
 
 proto-check:
-	bash .github/scripts/generate-proto.sh --check
+	bash .github/scripts/ci/generate-proto.sh --check
 
 check-generated: proto-check
 
@@ -88,19 +88,19 @@ format-docs:
 	pnpm run format:docs
 
 lint-go:
-	sh .github/scripts/lint-go.sh default
+	sh .github/scripts/ci/lint-go.sh default
 
 lint-go-oracle:
-	sh .github/scripts/lint-go.sh oracle
+	sh .github/scripts/ci/lint-go.sh oracle
 
 lint-go-all:
-	sh .github/scripts/lint-go.sh all
+	sh .github/scripts/ci/lint-go.sh all
 
 check-examples:
-	bash .github/scripts/check-v2-examples.sh --example all
+	bash .github/scripts/consumer/check-v2-examples.sh --example all
 
 check-readme-example:
-	bash .github/scripts/check-v2-examples.sh --example readme
+	bash .github/scripts/consumer/check-v2-examples.sh --example readme
 
 # ============================================================
 # 发布命令
@@ -117,7 +117,7 @@ RELEASE_NOTES_FILE ?= .release-notes.md
 # --- make release VERSION=vX.Y.Z [AI_MODEL=...] [AI_API_KEY=...] ---
 # 在 GitHub 上创建 Release，触发 .github/workflows/release.yml
 # Action 会自动为每个子模块打 <path>/vX.Y.Z tag 并更新下游 go.mod 依赖
-# 提供 AI_API_KEY 时：调用 .github/scripts/generate-release-notes.sh 生成中文 Release Notes
+# 提供 AI_API_KEY 时：调用 .github/scripts/release/generate-release-notes.sh 生成中文 Release Notes
 #                   （失败自动回退 --generate-notes）
 # 未提供时：回退现有 gh release create --generate-notes
 release:
@@ -136,7 +136,7 @@ endif
 		if RELEASE_AI_API_KEY="$(AI_API_KEY)" \
 		   RELEASE_AI_MODEL="$(AI_MODEL)" \
 		   RELEASE_AI_BASE_URL="$(AI_BASE_URL)" \
-		   .github/scripts/generate-release-notes.sh \
+		   .github/scripts/release/generate-release-notes.sh \
 		     --from "$$PREV_TAG" --to HEAD --output "$$NOTES_FILE"; then \
 			NOTES_OPTS="--notes-file $$NOTES_FILE"; \
 			echo "   📝 已生成 AI Release Notes: $$NOTES_FILE"; \

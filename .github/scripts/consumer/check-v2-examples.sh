@@ -2,9 +2,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-MANIFEST_FILE="${SCRIPT_DIR}/v2-modules.txt"
-WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+MANIFEST_FILE="${REPO_ROOT}/.github/scripts/manifest/v2-modules.txt"
+if [ ! -f "${MANIFEST_FILE}" ] && [ -f "${SCRIPT_DIR}/v2-modules.txt" ]; then
+	MANIFEST_FILE="${SCRIPT_DIR}/v2-modules.txt"
+fi
+WRAPPER="${REPO_ROOT}/.github/scripts/proxy/with-local-modules.sh"
+if [ ! -f "${WRAPPER}" ] && [ -f "${SCRIPT_DIR}/with-local-modules.sh" ]; then
+	WRAPPER="${SCRIPT_DIR}/with-local-modules.sh"
+fi
 SELF_SCRIPT="${BASH_SOURCE[0]}"
 
 USAGE="Usage: $0 (--example worker-tool|http-db-cache|grpc-cron-async|readme|all | --fixture sqlite-async|http-db-cache) [--race] [--help]"

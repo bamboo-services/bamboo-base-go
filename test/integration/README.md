@@ -24,28 +24,30 @@
 
 ## 2. 夹具管理命令
 
-通过 `.github/scripts/integration-env.sh` 管理：
+通过 `.github/scripts/env/integration-env.sh` 管理：
 
 ```bash
 # 1. 启动默认测试夹具 (MySQL, PostgreSQL, Redis, SMTP)
-./.github/scripts/integration-env.sh up
+./.github/scripts/env/integration-env.sh up
 
 # 2. 查看容器与健康检查状态
-./.github/scripts/integration-env.sh status
+./.github/scripts/env/integration-env.sh status
 
 # 3. 导出专用环境变量给后续 Go 测试进程
-eval $(./.github/scripts/integration-env.sh env)
+eval $(./.github/scripts/env/integration-env.sh env)
 
 # 4. 停止并精准清理属于测试夹具的容器与卷
-./.github/scripts/integration-env.sh down
+./.github/scripts/env/integration-env.sh down
 ```
 
 ### 可选组件与受限状态
 
 - **SQLServer**：
+
   ```bash
-  BAMBOO_TEST_SQLSERVER_ACCEPT_EULA=Y ./.github/scripts/integration-env.sh up --with-sqlserver
+  BAMBOO_TEST_SQLSERVER_ACCEPT_EULA=Y ./.github/scripts/env/integration-env.sh up --with-sqlserver
   ```
+
 - **Oracle**：
   明确标注暂未具备真实测试环境。
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Find repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 USAGE="Usage: $0 [--modules m1,m2] [--version vX.Y.Z] -- <command> [args...]"
 
@@ -139,6 +139,12 @@ if [ "${DETECTED_GOWORK}" = "off" ]; then
 	CURRENT_DIR="$(pwd)"
 	cp -R "${CURRENT_DIR}/." "${TMP_OFF_DIR}/"
 
+	# Strip stale local candidate checksums from temporary copy so evolving local candidates do not mismatch
+	if [ -f "${TMP_OFF_DIR}/go.sum" ]; then
+		grep -v "github.com/bamboo-services/bamboo-base-go" "${TMP_OFF_DIR}/go.sum" >"${TMP_OFF_DIR}/go.sum.tmp" 2>/dev/null || true
+		mv "${TMP_OFF_DIR}/go.sum.tmp" "${TMP_OFF_DIR}/go.sum"
+	fi
+
 	(
 		cd "${TMP_OFF_DIR}"
 		env \
@@ -148,7 +154,7 @@ if [ "${DETECTED_GOWORK}" = "off" ]; then
 			GONOSUMDB="${RESOLVED_GONOSUMDB}" \
 			GOMODCACHE="${TMP_MODCACHE_DIR}" \
 			GOWORK="off" \
-			go mod download 2>/dev/null || true
+			go mod tidy -e 2>/dev/null || go mod download 2>/dev/null || true
 	)
 
 	(

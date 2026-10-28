@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto proto-check check-generated tidy test race vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release check-examples check-readme-example
+.PHONY: help proto proto-check check-generated tidy test race vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release check-examples check-readme-example test-scripts
 
 # ============================================================
 # 基础变量
@@ -32,6 +32,7 @@ help:
 	@echo "  make lint-go-all              - 包含 Oracle 的全部模块检查"
 	@echo "  make check-examples           - 校验全部模板示例与根 README 快速开始片段独立编译"
 	@echo "  make check-readme-example     - 单独校验根 README 快速开始片段独立编译"
+	@echo "  make test-scripts             - 运行全部 scripts 自身自测试套件 (Go 单测 + 回归脚本)"
 	@echo ""
 	@echo "发布命令:"
 	@echo "  make release VERSION=<tag>    - 创建 GitHub Release (触发 Action 给子模块打 tag)"
@@ -101,6 +102,9 @@ check-examples:
 
 check-readme-example:
 	bash .github/scripts/consumer/check-v2-examples.sh --example readme
+
+test-scripts:
+	bash .github/scripts/tests/run-all-tests.sh
 
 # ============================================================
 # 发布命令

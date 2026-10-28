@@ -132,6 +132,7 @@ make lint-docs    # Prettier + Markdownlint 检查文档
 make format-docs  # 自动格式化文档
 make proto-check  # 校验 Protobuf 生成代码一致性
 make check-examples # 校验全部示例与 README 快速开始片段独立编译
+make test-scripts # 运行全部 scripts 自身自测试套件 (Go 单测 + 回归脚本)
 ```
 
 ## 许可证

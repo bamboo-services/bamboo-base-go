@@ -136,4 +136,5 @@ make lint                     # 文档门禁 + Go 规范检查
 make lint-docs                # Prettier + Markdownlint 文档校验
 make format-docs              # 格式化文档
 make lint-go                  # 运行 golangci-lint 与代码格式检查
+make test-scripts             # 运行全部 scripts 自身自测试套件 (Go 单测 + 回归脚本)
 ```

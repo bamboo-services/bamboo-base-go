@@ -16,11 +16,11 @@ set -euo pipefail
 # 从 tests/ 上三级回到仓库根（tests → scripts → .github → 根）
 cd "$(dirname "$0")/../../.."
 
-echo "🧪 启动 mock server..."
-python3 .github/scripts/tests/mock_openai.py 8099 &
+echo "🧪 启动 mock server (Go 实现)..."
+go run .github/scripts/tests/mock_openai.go 8099 &
 MOCK_PID=$!
 trap 'kill $MOCK_PID 2>/dev/null || true' EXIT
-sleep 0.5
+sleep 1
 
 # 1. jq 解析路径：生成到文件并断言内容
 echo "🧪 [1/3] mock 生成 Release Notes（jq 路径）..."

@@ -116,44 +116,12 @@ echo "   ✅ Bump commit 已创建: ${BUMP_COMMIT}"
 # ------------------------------------------------------------
 echo ""
 echo "📋 4. [Case 3] 验证 release-manifest 生成与校验器接线..."
-python3 -c "
-import json, sys
 
-modules_file = sys.argv[1]
-version = sys.argv[2]
-commit = sys.argv[3]
-out_file = sys.argv[4]
-
-entries = []
-with open(modules_file, 'r') as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        parts = line.split()
-        if len(parts) >= 2:
-            entries.append({
-                'directory': parts[0],
-                'module': parts[1],
-                'version': version,
-                'tag': f'{parts[0]}/{version}',
-                'sourceCommit': commit
-            })
-
-manifest = {
-    'release': version,
-    'sourceCommit': commit,
-    'modules': entries
-}
-
-with open(out_file, 'w') as f:
-    json.dump(manifest, f, indent=2)
-    f.write('\n')
-" .github/scripts/manifest/v2-modules.txt "${TEST_VERSION}" "${BUMP_COMMIT}" .github/release-manifest.json
-
-# 调用已交付的 release-manifest.go 执行严格准入
+# 调用已交付的 release-manifest.go 直接根据权威清单生成并严格准入
 go run .github/scripts/release/release-manifest.go \
-	-manifest .github/release-manifest.json \
+	-modules-file .github/scripts/manifest/v2-modules.txt \
+	-version "${TEST_VERSION}" \
+	-commit "${BUMP_COMMIT}" \
 	-source-root . \
 	-output .github/release-manifest.json >/dev/null
 
@@ -241,47 +209,21 @@ echo "   ✅ 5.2 防漂移保护验证通过：严禁覆盖或移动已有 tag�
 # ------------------------------------------------------------
 echo ""
 echo "🔀 7. [Case 6] 验证按需发版模式（子模块独立版本号）..."
-python3 -c "
-import json
+go run .github/scripts/release/release-manifest.go \
+	-modules-file .github/scripts/manifest/v2-modules.txt \
+	-version "v2.0.0" \
+	-commit "4b843b093e1d013b8087867ec28a281327ca2ca5" \
+	-output .github/selective-manifest.json >/dev/null
 
-canonical = {
-    'foundation': 'github.com/bamboo-services/bamboo-base-go/foundation/v2',
-    'application': 'github.com/bamboo-services/bamboo-base-go/application/v2',
-    'plugins/database': 'github.com/bamboo-services/bamboo-base-go/plugins/database/v2',
-    'plugins/cache': 'github.com/bamboo-services/bamboo-base-go/plugins/cache/v2',
-    'plugins/email': 'github.com/bamboo-services/bamboo-base-go/plugins/email/v2',
-    'plugins/web-gin': 'github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2',
-    'plugins/grpc': 'github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2',
-    'plugins/cron': 'github.com/bamboo-services/bamboo-base-go/plugins/cron/v2',
-    'plugins/async': 'github.com/bamboo-services/bamboo-base-go/plugins/async/v2',
-    'plugins/database/adapter/mysql': 'github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/mysql/v2',
-    'plugins/database/adapter/postgres': 'github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/postgres/v2',
-    'plugins/database/adapter/sqlite': 'github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlite/v2',
-    'plugins/database/adapter/sqlserver': 'github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlserver/v2',
-    'plugins/database/adapter/oracle': 'github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/oracle/v2',
-}
-
-entries = []
-for mod, path in canonical.items():
-    v = 'v2.1.0' if mod == 'foundation' else 'v2.0.0'
-    entries.append({
-        'directory': mod,
-        'module': path,
-        'version': v,
-        'tag': f'{mod}/{v}',
-        'sourceCommit': '4b843b093e1d013b8087867ec28a281327ca2ca5'
-    })
-
-manifest = {
-    'release': 'v2.1.0',
-    'sourceCommit': '4b843b093e1d013b8087867ec28a281327ca2ca5',
-    'modules': entries
-}
-
-with open('.github/selective-manifest.json', 'w') as f:
-    json.dump(manifest, f, indent=2)
-    f.write('\n')
-"
+if sed --version 2>/dev/null | grep -q GNU; then
+	sed -i 's|"release": "v2.0.0"|"release": "v2.1.0"|' .github/selective-manifest.json
+	sed -i '0,/"version": "v2.0.0"/{s//"version": "v2.1.0"/}' .github/selective-manifest.json
+	sed -i 's|"tag": "foundation/v2.0.0"|"tag": "foundation/v2.1.0"|' .github/selective-manifest.json
+else
+	sed -i '' 's|"release": "v2.0.0"|"release": "v2.1.0"|' .github/selective-manifest.json
+	sed -i '' '1,/"version": "v2.0.0"/s//"version": "v2.1.0"/' .github/selective-manifest.json
+	sed -i '' 's|"tag": "foundation/v2.0.0"|"tag": "foundation/v2.1.0"|' .github/selective-manifest.json
+fi
 
 go run .github/scripts/release/release-manifest.go \
 	-manifest .github/selective-manifest.json >/dev/null

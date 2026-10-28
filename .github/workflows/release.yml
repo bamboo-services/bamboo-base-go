@@ -156,44 +156,11 @@ jobs:
           COMMIT_SHA=$(git rev-parse HEAD)
           echo "📋 为 commit ${COMMIT_SHA} 生成 Release ${TAG} 清单..."
 
-          python3 -c "
-import json, sys
-
-modules_file = sys.argv[1]
-version = sys.argv[2]
-commit = sys.argv[3]
-out_file = sys.argv[4]
-
-entries = []
-with open(modules_file, 'r') as f:
-    for line in f:
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        parts = line.split()
-        if len(parts) >= 2:
-            entries.append({
-                'directory': parts[0],
-                'module': parts[1],
-                'version': version,
-                'tag': f'{parts[0]}/{version}',
-                'sourceCommit': commit
-            })
-
-manifest = {
-    'release': version,
-    'sourceCommit': commit,
-    'modules': entries
-}
-
-with open(out_file, 'w') as f:
-    json.dump(manifest, f, indent=2)
-    f.write('\n')
-" .github/scripts/manifest/v2-modules.txt "v${VERSION}" "${COMMIT_SHA}" .github/release-manifest.json
-
-          # 使用已交付的 release-manifest.go 执行严格的白名单与 go.mod 声明校验
+          # 使用 release-manifest.go 直接从权威清单生成、校验并规范化写入 .github/release-manifest.json
           go run .github/scripts/release/release-manifest.go \
-            -manifest .github/release-manifest.json \
+            -modules-file .github/scripts/manifest/v2-modules.txt \
+            -version "v${VERSION}" \
+            -commit "${COMMIT_SHA}" \
             -source-root . \
             -output .github/release-manifest.json
 

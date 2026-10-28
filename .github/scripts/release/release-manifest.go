@@ -58,22 +58,42 @@ func main() {
 	var previousPath string
 	var sourceRoot string
 	var outputPath string
+	var modulesFile string
+	var versionStr string
+	var commitStr string
 
 	flag.StringVar(&manifestPath, "manifest", "", "Path to release manifest to validate")
 	flag.StringVar(&previousPath, "previous", "", "Optional path to previous release manifest")
 	flag.StringVar(&sourceRoot, "source-root", "", "Optional path to source repo root for go.mod verification")
 	flag.StringVar(&outputPath, "output", "", "Optional output path to write normalized manifest (defaults to stdout)")
+	flag.StringVar(&modulesFile, "modules-file", "", "Optional path to modules.txt to generate manifest from")
+	flag.StringVar(&versionStr, "version", "", "Version for generated manifest (used with -modules-file)")
+	flag.StringVar(&commitStr, "commit", "", "Source commit for generated manifest (used with -modules-file)")
 	flag.Parse()
 
-	if manifestPath == "" {
-		fmt.Fprintln(os.Stderr, "error: -manifest path is required")
-		os.Exit(1)
-	}
+	var manifest *ReleaseManifest
+	var err error
 
-	manifest, err := readManifest(manifestPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading manifest: %v\n", err)
-		os.Exit(1)
+	if modulesFile != "" {
+		if versionStr == "" || commitStr == "" {
+			fmt.Fprintln(os.Stderr, "error: -version and -commit are required when using -modules-file")
+			os.Exit(1)
+		}
+		manifest, err = generateFromModulesFile(modulesFile, versionStr, commitStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error generating manifest from %s: %v\n", modulesFile, err)
+			os.Exit(1)
+		}
+	} else {
+		if manifestPath == "" {
+			fmt.Fprintln(os.Stderr, "error: -manifest or -modules-file is required")
+			os.Exit(1)
+		}
+		manifest, err = readManifest(manifestPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading manifest: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	var previous *ReleaseManifest
@@ -127,6 +147,36 @@ func readManifest(manifestPath string) (*ReleaseManifest, error) {
 		return nil, fmt.Errorf("extra content after json in %s", manifestPath)
 	}
 	return &manifest, nil
+}
+
+func generateFromModulesFile(modulesPath, version, commit string) (*ReleaseManifest, error) {
+	data, err := os.ReadFile(modulesPath)
+	if err != nil {
+		return nil, err
+	}
+	var entries []ModuleEntry
+	lines := strings.Split(string(data), "\n")
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			entries = append(entries, ModuleEntry{
+				Directory:    parts[0],
+				Module:       parts[1],
+				Version:      version,
+				Tag:          parts[0] + "/" + version,
+				SourceCommit: commit,
+			})
+		}
+	}
+	return &ReleaseManifest{
+		Release:      version,
+		SourceCommit: commit,
+		Modules:      entries,
+	}, nil
 }
 
 // ValidateManifest 校验发布清单的合法性，可选比对上一版本清单并验证源码树中的 go.mod 声明。

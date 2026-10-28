@@ -655,3 +655,78 @@ func TestComponentEngine_StopPanic_RetainsDepsAndTriggersAppShutdown(t *testing.
 		t.Fatalf("expected stage 'stop-panic', got %s", stuckList[0].Stage)
 	}
 }
+
+// 8. Wait 契约：Wait 携终态返回即并发槽位已释放，立刻再次激活同键组件必须成功；
+// Skip 不得再收到 ErrComponentSkipped，Allow 不得再收到 ErrConcurrencyLimitExceeded
+func TestComponentEngine_Wait_ReturnsImpliesSlotReleased(t *testing.T) {
+	app := New()
+	app.stateMu.Lock()
+	app.state = StateRunning
+	app.stateMu.Unlock()
+
+	engine := newComponentEngine(app)
+	workerKey := ctxkey.Key("worker_slot_contract")
+	skipKey := ctxkey.Key("comp_contract_skip")
+	allowKey := ctxkey.Key("comp_contract_allow")
+	workerID := "worker_slot_contract_1"
+	engine.registerWorker(workerID, workerKey)
+
+	engine.RegisterComponentDef(PluginInfo{
+		Key:     skipKey,
+		Overlap: OverlapPolicy{Kind: OverlapSkip},
+	}, func() RunnablePlugin {
+		return &testComponentFixture{}
+	})
+	engine.RegisterComponentDef(PluginInfo{
+		Key:     allowKey,
+		Overlap: OverlapPolicy{Kind: OverlapAllow, MaxConcurrency: 1},
+	}, func() RunnablePlugin {
+		return &testComponentFixture{}
+	})
+
+	workerCtx := newWorkerTestContext(app, workerID, workerKey)
+
+	// Skip 策略：Wait 返回后立刻再次激活必须成功
+	hs1, errs1 := engine.Activate(workerCtx, skipKey)
+	if errs1 != nil || hs1 == nil {
+		t.Fatalf("skip first activate failed: %v", errs1)
+	}
+	if _, waitErr := hs1.Wait(context.Background()); waitErr != nil {
+		t.Fatalf("skip first wait failed: %v", waitErr)
+	}
+	hs2, errs2 := engine.Activate(workerCtx, skipKey)
+	if errs2 != nil || hs2 == nil {
+		t.Fatalf("expected immediate re-activate after Wait for skip policy, got %v", errs2)
+	}
+	if _, waitErr := hs2.Wait(context.Background()); waitErr != nil {
+		t.Fatalf("skip second wait failed: %v", waitErr)
+	}
+
+	// Allow(max=1) 策略：Wait 返回后立刻再次激活必须成功
+	ha1, erra1 := engine.Activate(workerCtx, allowKey)
+	if erra1 != nil || ha1 == nil {
+		t.Fatalf("allow first activate failed: %v", erra1)
+	}
+	if _, waitErr := ha1.Wait(context.Background()); waitErr != nil {
+		t.Fatalf("allow first wait failed: %v", waitErr)
+	}
+
+	// 白盒断言：发布终态时槽位计数已归零，而非依赖后续 defer 异步释放
+	engine.mu.RLock()
+	allowSlot := engine.slots[allowKey]
+	engine.mu.RUnlock()
+	allowSlot.mu.Lock()
+	active := allowSlot.activeCount
+	allowSlot.mu.Unlock()
+	if active != 0 {
+		t.Fatalf("expected allow slot activeCount=0 right after Wait, got %d", active)
+	}
+
+	ha2, erra2 := engine.Activate(workerCtx, allowKey)
+	if erra2 != nil || ha2 == nil {
+		t.Fatalf("expected immediate re-activate after Wait for allow policy, got %v", erra2)
+	}
+	if _, waitErr := ha2.Wait(context.Background()); waitErr != nil {
+		t.Fatalf("allow second wait failed: %v", waitErr)
+	}
+}

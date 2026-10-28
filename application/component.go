@@ -39,7 +39,7 @@ func newComponentInstance(id string, compKey ctxkey.Key, parentID string, parent
 }
 
 // executePipeline 封装单一已取得执行槽的 Component 实例完整生命周期
-// 阶段：factory -> Start -> Run -> wait children -> Stop -> publishResult
+// 阶段：factory -> Start -> Run -> wait children -> Stop -> releaseSlot -> publishResult
 func (e *componentEngine) executePipeline(
 	item *componentQueueItem,
 	def PluginInfo,
@@ -59,6 +59,13 @@ func (e *componentEngine) executePipeline(
 			releaseSlotOnce()
 		}
 	}()
+
+	// terminate 统一终态收尾：必须先释放执行槽再发布结果，
+	// 保证 Wait 返回时该实例占用的并发配额已可复用（可立即重新激活同键组件）
+	terminate := func(res RunResult, ci *componentInstance, hasCleaned bool) {
+		releaseSlotOnce()
+		e.finishTask(item, res, ci, hasCleaned)
+	}
 
 	instID := item.instanceID
 	compKey := item.compKey
@@ -97,15 +104,13 @@ func (e *componentEngine) executePipeline(
 	if facErr != nil {
 		res.Outcome = OutcomeFailed
 		res.FactoryErr = facErr
-		e.finishTask(item, res, nil, false)
-		e.forgetTask(item)
+		terminate(res, nil, false)
 		return
 	}
 	if rawInst == nil || isTypedNil(rawInst) {
 		res.Outcome = OutcomeFailed
 		res.FactoryErr = fmt.Errorf("%w: plugin %s", ErrNilPlugin, compKey)
-		e.finishTask(item, res, nil, false)
-		e.forgetTask(item)
+		terminate(res, nil, false)
 		return
 	}
 
@@ -150,8 +155,7 @@ func (e *componentEngine) executePipeline(
 		res.Outcome = OutcomeCancelled
 		res.CancelRequested = true
 		res.CancelErr = preStartCancelErr
-		e.finishTask(item, res, nil, false)
-		e.forgetTask(item)
+		terminate(res, nil, false)
 		return
 	}
 
@@ -236,8 +240,7 @@ func (e *componentEngine) executePipeline(
 		}
 
 		res.Outcome = OutcomeFailed
-		e.finishTask(item, res, compInst, true)
-		e.forgetTask(item)
+		terminate(res, compInst, true)
 		return
 	}
 
@@ -294,8 +297,7 @@ func (e *componentEngine) executePipeline(
 		}
 
 		res.Outcome = OutcomeCancelled
-		e.finishTask(item, res, compInst, true)
-		e.forgetTask(item)
+		terminate(res, compInst, true)
 		return
 	}
 
@@ -384,8 +386,7 @@ func (e *componentEngine) executePipeline(
 		res.Outcome = OutcomeSuccess
 	}
 
-	e.finishTask(item, res, compInst, true)
-	e.forgetTask(item)
+	terminate(res, compInst, true)
 }
 
 func isContextCanceledError(err error) bool {

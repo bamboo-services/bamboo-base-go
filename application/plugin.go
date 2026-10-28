@@ -199,6 +199,11 @@ type RunHandle interface {
 	//
 	// 入参 ctx 控制等待本身的超时或取消，若 ctx 超时或取消，返回零值 [RunResult] 与 ctx.Err()；
 	// 若实例本身执行失败或取消，Wait 将返回真实的 [RunResult] 以及由账单计算得到的综合错误。
+	//
+	// 契约保证：Wait 携真实终态返回时，该实例占用的并发槽位与依赖资源均已释放，
+	// 调用方可立即重新激活同键组件（不会因此收到 [ErrComponentSkipped]、
+	// [ErrConcurrencyLimitExceeded] 或 [ErrQueueFull]）；
+	// Stop panic 场景不发布终态、不关闭句柄，Wait 将持续等待直至调用方 ctx 超时或取消。
 	Wait(ctx context.Context) (RunResult, error)
 }
 

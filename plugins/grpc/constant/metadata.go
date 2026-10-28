@@ -1,18 +1,23 @@
 package xGrpcConst
 
-// Metadata 定义 gRPC 元数据键的强类型别名。
+// Metadata 定义 gRPC 元数据（Metadata）键的强类型别名。
 type Metadata string
 
-// String 返回元数据的字符串表示形式。
+// String 返回元数据键的基础字符串表示形式。
 //
-// 该方法实现了 `fmt.Stringer` 接口，直接将 `Trailer` 类型转换为 `string` 类型返回。
+// 该方法实现了 [fmt.Stringer] 接口，直接将 [Metadata] 类型转换为 string 返回。
 func (md Metadata) String() string {
 	return string(md)
 }
 
-// 常用 gRPC 元数据键常量定义。
+// 常用 gRPC 请求元数据键常量定义。
 const (
-	MetadataAppAccessID  Metadata = "app-access-id"  // 定义用于传递应用访问标识符的元数据键，通常用于在中间件或拦截器中标识请求方的应用 ID。
-	MetadataAppSecretKey Metadata = "app-secret-key" // 定义用于传递应用密钥的元数据键，通常用于在中间件或拦截器中验证请求方的身份。
-	MetadataRequestUUID  Metadata = "x-request-uuid" // 定义用于传递请求唯一标识符的元数据键，通常用于在中间件或拦截器中标识请求的唯一性。
+	// MetadataAppAccessID 是用于传递应用访问凭证标识符（Access ID）的元数据键。
+	MetadataAppAccessID Metadata = "app-access-id"
+
+	// MetadataAppSecretKey 是用于传递应用访问密钥（Secret Key）的元数据键。
+	MetadataAppSecretKey Metadata = "app-secret-key"
+
+	// MetadataRequestUUID 是用于在请求元数据中传递分布式链路请求唯一标识符的键。
+	MetadataRequestUUID Metadata = "x-request-uuid"
 )

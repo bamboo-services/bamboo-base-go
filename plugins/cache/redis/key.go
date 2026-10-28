@@ -9,7 +9,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// KeyCache [driver.KeyCache] 的 Redis 实现。
+// KeyCache 是 [driver.KeyCache] 的 Redis 存储实现。
 type KeyCache[K any, V any] struct {
 	rdb   *goredis.Client
 	codec driver.Codec

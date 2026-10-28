@@ -23,24 +23,29 @@ import (
 	"github.com/google/uuid"
 )
 
-// DefaultWebGinPluginKey 是 Gin Web 插件默认的 Worker 插件 Key。
+// DefaultWebGinPluginKey 是 Gin Web Worker 插件注册到应用上下文的默认唯一键。
 const DefaultWebGinPluginKey ctxkey.Key = "plugin_web_gin"
 
 var (
-	// ErrServerAlreadyStarted 当重复调用 Start 时返回。
+	// ErrServerAlreadyStarted 表示服务已在启动流程中或已成功启动，禁止重复调用。
 	ErrServerAlreadyStarted = errors.New("webgin: 服务已启动")
-	// ErrServerClosed 当服务已停止或正在关闭时返回。
+	// ErrServerClosed 表示服务处于已关闭或正在关闭状态，拒绝接纳新请求。
 	ErrServerClosed = errors.New("webgin: 服务已停止")
-	// ErrNoLifetimeContext 当未设置可信 lifetimeCtx 即尝试运行或处理请求时返回。
+	// ErrNoLifetimeContext 表示缺少有效的应用生命周期上下文，请求无法被安全调度。
 	ErrNoLifetimeContext = errors.New("webgin: 缺少 lifetime context")
-	// ErrStopTimeout 当服务优雅停机超时时返回。
+	// ErrStopTimeout 表示服务停机等待已超出预设的超时时限。
 	ErrStopTimeout = errors.New("webgin: 停机等待超时")
 )
 
-// RouteRegistrar 定义路由注册回调函数签名，接收 Start 时的上下文与私有 Gin 引擎。
+// RouteRegistrar 定义路由注册回调函数签名。
+//
+// 回调在插件启动流程中执行，接收当前启动上下文与私有的 [*gin.Engine] 实例。
+// 业务组件可通过此回调向 Gin 引擎注册路由分组、处理函数与局部中间件。
 type RouteRegistrar func(context.Context, *gin.Engine)
 
-// Option 为 Gin Web 插件的配置函数。
+// Option 定义配置 Gin Web 插件选项的函数类型。
+//
+// 传入 nil 的选项函数在配置解析阶段将被静默忽略。
 type Option func(*config)
 
 type config struct {
@@ -58,7 +63,10 @@ type config struct {
 	shutdownWait        time.Duration
 }
 
-// WithAddr 设置监听地址（如 "127.0.0.1:8080" 或 "127.0.0.1:0"）。
+// WithAddr 设置 HTTP 服务的 TCP 监听地址（例如 "127.0.0.1:8080" 或 "127.0.0.1:0"）。
+//
+// 若传入空字符串，该配置项将被忽略；若未显式调用本选项，将尝试从环境变量 HOST 与
+// PORT 读取监听地址，两者均未配置时默认回退为 "localhost:1118"。
 func WithAddr(addr string) Option {
 	return func(c *config) {
 		if addr != "" {
@@ -68,7 +76,10 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithKey 设置插件的唯一标识 Key。
+// WithKey 设置插件在应用容器中的唯一标识键 [ctxkey.Key]。
+//
+// 若传入的键不合法（[ctxkey.Key.IsValid] 返回 false），则保留原有的键设置，
+// 默认键为 [DefaultWebGinPluginKey]。
 func WithKey(k ctxkey.Key) Option {
 	return func(c *config) {
 		if k.IsValid() {
@@ -77,7 +88,9 @@ func WithKey(k ctxkey.Key) Option {
 	}
 }
 
-// WithName 设置插件的人类可读名称。
+// WithName 设置插件的人类可读名称，主要用于日志记录和拓扑诊断。
+//
+// 若传入空字符串，该配置项将被忽略，默认名称为 "WebGinWorker"。
 func WithName(name string) Option {
 	return func(c *config) {
 		if name != "" {
@@ -86,14 +99,19 @@ func WithName(name string) Option {
 	}
 }
 
-// WithRequires 设置插件所依赖的键。
+// WithRequires 设置当前插件在启动前所依赖的其他共享组件键列表。
+//
+// 框架拓扑排序将依据此依赖关系确定启动次序。多次调用将累加依赖项。
 func WithRequires(keys ...ctxkey.Key) Option {
 	return func(c *config) {
 		c.requires = append(c.requires, keys...)
 	}
 }
 
-// WithRoute 注册路由挂载回调，回调将在 Start 时依次回调。
+// WithRoute 注册业务路由挂载回调 [RouteRegistrar]。
+//
+// 注册的回调函数将在插件执行 [Plugin.Start] 时依次回调。若传入 nil，
+// 该回调将被忽略。可多次调用以注册多个独立的路由模块。
 func WithRoute(fn RouteRegistrar) Option {
 	return func(c *config) {
 		if fn != nil {
@@ -102,7 +120,11 @@ func WithRoute(fn RouteRegistrar) Option {
 	}
 }
 
-// WithValidatorRegistrar 注册自定义验证器扩展回调，回调将在 Start 创建私有验证器引擎后、初始化 Binder 之前执行。
+// WithValidatorRegistrar 注册自定义验证器扩展回调函数。
+//
+// 回调函数在插件执行 [Plugin.Start] 并创建私有 [*validator.Engine] 实例后、
+// 初始化绑定器之前执行。业务可通过此函数注册领域特定的参数校验规则。
+// 若回调返回错误，[Plugin.Start] 流程将立即终止并返回该错误。传入 nil 时忽略。
 func WithValidatorRegistrar(fn func(*validator.Engine) error) Option {
 	return func(c *config) {
 		if fn != nil {
@@ -111,14 +133,24 @@ func WithValidatorRegistrar(fn func(*validator.Engine) error) Option {
 	}
 }
 
-// WithLogger 设置显式传入的 Logger 实例，不使用全局 Default。
+// WithLogger 设置插件专用的日志记录器实例。
+//
+// 若未显式配置，插件内部日志输出将被禁用，绝不退回或污染全局日志实例。
 func WithLogger(logger *logging.Logger) Option {
 	return func(c *config) {
 		c.logger = logger
 	}
 }
 
-// WithTimeouts 设置 HTTP 基础超时。
+// WithTimeouts 设置 HTTP 服务的基础超时时间参数。
+//
+// 各参数含义如下：
+//   - read：从连接读取完整请求（含请求体）的最大允许持续时间；
+//   - write：向连接写入完整响应的最大允许持续时间；
+//   - idle：启用 Keep-Alive 时等待下一个新请求的最大空闲时间；
+//   - shutdown：调用停机时等待现有网络连接与服务退出的最长等待时长。
+//
+// 默认值分别为：读超时 30 秒、写超时 30 秒、空闲超时 60 秒、停机等待 15 秒。
 func WithTimeouts(read, write, idle, shutdown time.Duration) Option {
 	return func(c *config) {
 		c.readTimeout = read
@@ -195,7 +227,10 @@ func (g *requestGate) waitDrained(ctx context.Context) error {
 	}
 }
 
-// Plugin 实现 application.RunnablePlugin，作为 Gin Web Worker 插件。
+// Plugin 实现 [application.RunnablePlugin] 接口，代表由应用框架托管的 Gin Web Worker 插件。
+//
+// 实例通过构造工厂创建，生命周期由应用框架统一编排，内部状态受互斥锁保护，
+// 支持多协程安全并发查询状态。
 type Plugin struct {
 	cfg config
 
@@ -223,7 +258,10 @@ type Plugin struct {
 	namedLog *logging.LogNamedLogger
 }
 
-// New 返回 Worker 的应用注册信息以及 RunnablePlugin 构造工厂（构造期不进行任何 I/O）。
+// New 构造 Gin Web 插件的注册元信息 [application.PluginInfo] 与延迟工厂函数。
+//
+// 构造过程仅完成配置解析与防御性副本复制，不产生任何网络监听、I/O 或资源分配副作用。
+// 返回的工厂函数每次调用均生成相互独立的 [*Plugin] 实例。
 func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlugin) {
 	cfg := config{
 		key:          DefaultWebGinPluginKey,
@@ -294,7 +332,10 @@ func resolveAddr(c *config) string {
 	return host + ":" + port
 }
 
-// Addr 返回已监听的实际网络地址（未 Start 则返回配置地址或解析默认地址）。
+// Addr 返回底层网络监听器绑定的实际地址字符串（例如 "127.0.0.1:8080"）。
+//
+// 若插件尚未调用 [Plugin.Start] 绑定监听器，则返回配置中指定的地址或经环境变量解析的预设地址。
+// 该方法可被多个 goroutine 并发安全调用。
 func (p *Plugin) Addr() string {
 	p.stateMu.Lock()
 	ln := p.listener
@@ -305,7 +346,18 @@ func (p *Plugin) Addr() string {
 	return resolveAddr(&p.cfg)
 }
 
-// Start 完成 Gin 实例创建（私有新实例、无全局 gin.SetMode 污染）、独立 Validator 与 Binder 初始化、中间件与路由装配及端口监听。
+// Start 执行插件启动前的资源准备与服务初始化。
+//
+// 该方法依次执行以下关键动作：
+//   - 校验启动状态，防止并发或重复启动，重复启动返回 [ErrServerAlreadyStarted]；
+//   - 派生实例独立的强制取消上下文，关联框架强制停止信号；
+//   - 创建全新的私有 [*gin.Engine] 实例并开启 ContextWithFallback；
+//   - 初始化私有 [*validator.Engine] 并执行用户注册的自定义验证器扩展；
+//   - 构造私有 [bind.Binder] 并挂载核心基础中间件（异常恢复、响应兜底、CORS 与请求桥接）；
+//   - 调用全部业务注册的路由回调函数挂载路由；
+//   - 绑定并启动底层 TCP 监听器（若监听失败，自动释放所有已申请的资源并返回错误）。
+//
+// 该方法不阻塞等待网络请求，真正的服务监听循环由 [Plugin.Run] 接管。
 func (p *Plugin) Start(ctx context.Context) error {
 	p.stateMu.Lock()
 	if p.starting || p.started {
@@ -414,7 +466,14 @@ func (p *Plugin) Start(ctx context.Context) error {
 	return nil
 }
 
-// Run 封存可信运行 lifetimeCtx，并开始阻塞监听服务。
+// Run 封存应用生命周期上下文并启动阻塞式的 HTTP 服务事件循环。
+//
+// 参数 lifetimeCtx 为应用生命周期上下文，包含宿主应用的共享依赖容器与上下文凭据。
+// 若尚未成功执行 [Plugin.Start] 即调用此方法，将直接返回错误。
+//
+// 当底层 HTTP 服务由于 [Plugin.Stop]、[http.Server.Shutdown] 或 [http.Server.Close] 退出时，
+// 若退出原因为普通的 [http.ErrServerClosed]，本方法返回 nil 表示正常退出；
+// 其余非预期的网络中断或运行时异常将原样返回。
 func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	p.stateMu.Lock()
 	srv := p.server
@@ -436,15 +495,27 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	return nil
 }
 
-// Quiesce 入口关闸，关闭新请求准入。不取消业务 Handler，不调用 Stop。
+// Quiesce 关闭 HTTP 请求准入门禁，进入静默就绪状态。
+//
+// 关闸后到达的新 HTTP 请求将被内部准入中间件拦截并直接返回 503 Service Unavailable 错误；
+// 当前已接纳且正在处理中的存量请求不受影响，继续正常执行。
+// 该方法不会主动中断网络连接，也不会调用 [Plugin.Stop]。
 func (p *Plugin) Quiesce(ctx context.Context) error {
 	p.gate.closeGate()
 	return nil
 }
 
-// Stop 真实优雅关机。先关闭准入，触发 http.Server.Shutdown；外层超时可中断网络等待，但必须继续等飞行中 Handler 真正退完。
-// 监听 App Force 信号或外层 ctx 超时，必要时调用 Server.Close 推进底层传输中断。
-// 重复调用 Stop 共享同一次结果。
+// Stop 执行平滑优雅关机流程。
+//
+// 该方法包含以下协作阶段：
+//   - 确保入口门禁关闭，拒绝新请求进入；
+//   - 启动 [http.Server.Shutdown] 停止接收新连接并尝试排空空闲连接；
+//   - 同时监听停机超时上下文 ctx 与应用层强制取消信号，一旦超时或收到强制信号，
+//     立即调用底层传输层的 Close 方法中断网络传输；
+//   - 触发内部强制取消分支，通知当前所有执行中的业务 Handler 协同退出；
+//   - 阻塞等待准入门禁中所有处于飞行中的请求彻底执行完毕并退出，绝不因超时虚假返回。
+//
+// 多次重复调用此方法并发安全，且共享同一次执行结果。
 func (p *Plugin) Stop(ctx context.Context) error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)
@@ -558,8 +629,13 @@ func (p *Plugin) requestBridgeMiddleware() gin.HandlerFunc {
 	}
 }
 
-// BridgeRequest 派生请求上下文：委托 application.BridgeRequest 挂载内核容器与可信父实例身份，
-// 并挂载起始时间 UserStartTimeKey（time.Time 格式供耗时统计）与 RequestKey。
+// BridgeRequest 派生请求上下文，将底层 HTTP 请求上下文与框架应用上下文进行深度桥接。
+//
+// 该函数在请求上下文上注入以下元数据：
+//   - 注入当前请求起始时间戳（以 [ctxkey.UserStartTimeKey] 保存），供下游耗时统计；
+//   - 委托 [application.BridgeRequest] 挂载应用级共享容器、追踪键及父实例信任凭据。
+//
+// 若传入的 reqCtx 为 nil，内部将自动回退为 [context.Background]。
 func BridgeRequest(reqCtx context.Context, lifetimeCtx context.Context, id string) context.Context {
 	if reqCtx == nil {
 		reqCtx = context.Background()

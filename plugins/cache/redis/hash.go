@@ -11,7 +11,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// HashCache [driver.HashCache] 的 Redis 实现。
+// HashCache 是 [driver.HashCache] 的 Redis 存储实现。
 //
 // 使用 Redis Hash 命令操作。field 通过 [driver.KeyEncoder] 转为 string 作为 Redis hash field。
 type HashCache[K any, F comparable, V any, S any] struct {

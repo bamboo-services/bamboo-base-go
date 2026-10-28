@@ -21,45 +21,45 @@ type config struct {
 	connMaxIdleTime time.Duration
 }
 
-// Option 定义 Database 插件的配置函数。
+// Option 定义数据库插件的函数式配置选项。
 type Option func(*config)
 
-// WithAdapter 显式注入具体数据库驱动适配器。
+// WithAdapter 显式指定具体数据库驱动适配器实例。
 func WithAdapter(adapter dialect.Adapter) Option {
 	return func(c *config) {
 		c.adapter = adapter
 	}
 }
 
-// FromEnv 声明在启动期从环境变量解析数据库方言与配置。
+// FromEnv 声明在插件启动阶段从环境变量动态解析驱动方言与数据库连接参数。
 func FromEnv() Option {
 	return func(c *config) {
 		c.fromEnv = true
 	}
 }
 
-// WithLogger 显式配置 logging.Logger 实例。
+// WithLogger 配置数据库插件关联的结构化日志记录器 [*logging.Logger]。
 func WithLogger(logger *logging.Logger) Option {
 	return func(c *config) {
 		c.logger = logger
 	}
 }
 
-// WithLogConfig 配置 GORM 日志参数。
+// WithLogConfig 配置 GORM 日志行为参数（如慢查询阈值与日志输出级别）。
 func WithLogConfig(cfg gormlog.Config) Option {
 	return func(c *config) {
 		c.logConfig = cfg
 	}
 }
 
-// WithGormConfig 允许注入自定义基础 gorm.Config。
+// WithGormConfig 允许注入自定义的基础 [*gorm.Config] 实例。
 func WithGormConfig(cfg *gorm.Config) Option {
 	return func(c *config) {
 		c.gormConfig = cfg
 	}
 }
 
-// WithMaxOpenConns 配置底层连接池最大打开连接数。
+// WithMaxOpenConns 配置底层连接池最大打开物理连接数。
 func WithMaxOpenConns(n int) Option {
 	return func(c *config) {
 		c.maxOpenConns = n
@@ -73,14 +73,14 @@ func WithMaxIdleConns(n int) Option {
 	}
 }
 
-// WithConnMaxLifetime 配置底层连接最大存活时间。
+// WithConnMaxLifetime 配置底层物理连接可被复用的最大存活时长。
 func WithConnMaxLifetime(d time.Duration) Option {
 	return func(c *config) {
 		c.connMaxLifetime = d
 	}
 }
 
-// WithConnMaxIdleTime 配置底层连接最大空闲时间。
+// WithConnMaxIdleTime 配置底层连接池中连接的最大空闲时长。
 func WithConnMaxIdleTime(d time.Duration) Option {
 	return func(c *config) {
 		c.connMaxIdleTime = d

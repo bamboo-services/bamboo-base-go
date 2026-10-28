@@ -7,7 +7,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
-// KeyCache [driver.KeyCache] 的内存实现。
+// KeyCache 是 [driver.KeyCache] 的内存分片存储实现。
 type KeyCache[K any, V any] struct {
 	store *Store
 	codec driver.Codec

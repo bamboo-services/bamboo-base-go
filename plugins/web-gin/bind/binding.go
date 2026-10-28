@@ -16,15 +16,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Binding 支持泛型目标结构的链式绑定器。
+// Binding 提供面向具体泛型目标结构体 T 的链式参数绑定器。
+//
+// 该结构体通常由 [Bind] 或 [WithBinder] 创建，属于请求内部的短生命周期临时对象，
+// 不应在多个并发请求或协程间共享。
 type Binding[T any] struct {
+	// Context 保存当前处理请求的 [*gin.Context] 实例。
 	Context *gin.Context
+	// GetData 保存接收反序列化与字段校验结果的目标结构体指针。
 	GetData *T
 	binder  *Binder
 }
 
-// Data 显式读取并反序列化 JSON 请求体，并由独立 Engine 校验。
-// 绝不调用 ShouldBindBodyWithJSON 或 Gin 全局 validator。
+// Data 读取并反序列化 JSON 请求体数据到目标结构体，并自动触发实例级校验。
+//
+// 该方法内部读取并缓冲请求体字节，支持在后续流程中再次读取请求体。
+// 若请求体为空、JSON 反序列化失败或结构体验证未通过，将自动写回统一错误响应、
+// 调用 [gin.Context.Abort] 并返回 nil；校验完全通过时返回 GetData 指针。
 func (b *Binding[T]) Data() *T {
 	if !b.ensureReady() {
 		return nil
@@ -55,7 +63,10 @@ func (b *Binding[T]) Data() *T {
 	return b.GetData
 }
 
-// XML 显式读取并反序列化 XML 请求体并校验。
+// XML 读取并反序列化 XML 请求体数据到目标结构体，并自动触发实例级校验。
+//
+// 该方法内部读取并重置请求体数据。若 XML 反序列化失败或字段校验未通过，
+// 将自动写回统一错误响应并调用 [gin.Context.Abort]，最终返回 nil；通过时返回 GetData。
 func (b *Binding[T]) XML() *T {
 	if !b.ensureReady() {
 		return nil
@@ -81,8 +92,11 @@ func (b *Binding[T]) XML() *T {
 	return b.GetData
 }
 
-// Query 从 URL Query 参数映射到目标结构体并校验。
-// 遵循 form 标签或字段名，支持 slice、指针、基础类型及 time.Time (time_format 标签)。
+// Query 从 HTTP 请求的 URL Query 参数映射到目标结构体，并自动触发实例级校验。
+//
+// 映射过程优先遵循结构体字段的 form 标签，未标注时使用字段名。
+// 支持基础标量类型、指针、切片以及带有 time_format 与 time_utc 标签的 [time.Time]。
+// 若类型转换失败或字段校验未通过，将写回统一错误响应并调用 [gin.Context.Abort]，返回 nil。
 func (b *Binding[T]) Query() *T {
 	if !b.ensureReady() {
 		return nil
@@ -103,8 +117,10 @@ func (b *Binding[T]) Query() *T {
 	return b.GetData
 }
 
-// URI 从 Gin Params (路径参数) 映射到目标结构体并校验。
-// 遵循 uri 标签或字段名。
+// URI 从 Gin 路由路径参数（[gin.Context.Params]）映射到目标结构体，并自动触发实例级校验。
+//
+// 映射过程遵循结构体字段的 uri 标签，未标注时使用字段名。
+// 若参数解析失败或字段校验未通过，将写回统一错误响应并调用 [gin.Context.Abort]，返回 nil。
 func (b *Binding[T]) URI() *T {
 	if !b.ensureReady() {
 		return nil
@@ -130,8 +146,10 @@ func (b *Binding[T]) URI() *T {
 	return b.GetData
 }
 
-// Header 从 HTTP 请求头映射到目标结构体并校验。
-// 遵循 header 标签或字段名，支持 HTTP 头部规范及大小写不敏感匹配。
+// Header 从 HTTP 请求标头中提取数据并映射到目标结构体，并自动触发实例级校验。
+//
+// 映射过程遵循结构体字段的 header 标签，支持标准 Canonical 标头名以及大小写不敏感匹配。
+// 若标头解析失败或字段校验未通过，将写回统一错误响应并调用 [gin.Context.Abort]，返回 nil。
 func (b *Binding[T]) Header() *T {
 	if !b.ensureReady() {
 		return nil
@@ -152,8 +170,10 @@ func (b *Binding[T]) Header() *T {
 	return b.GetData
 }
 
-// Form 从 PostForm / MultipartForm 映射到目标结构体并校验。
-// 遵循 form 标签或字段名。
+// Form 从 HTTP 请求的 PostForm 或 MultipartForm 表单中映射数据并执行校验。
+//
+// 映射过程遵循结构体字段的 form 标签。
+// 若表单解析失败或字段校验未通过，将写回统一错误响应并调用 [gin.Context.Abort]，返回 nil。
 func (b *Binding[T]) Form() *T {
 	if !b.ensureReady() {
 		return nil

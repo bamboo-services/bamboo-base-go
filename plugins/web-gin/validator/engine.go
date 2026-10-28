@@ -12,14 +12,20 @@ import (
 	zh_translations "github.com/go-playground/validator/v10/translations/zh"
 )
 
-// Engine 封装独立的 validator.Validate 实例与其私有中文翻译器。
-// 每实例完全独立，不持有任何全局状态或 global validator/extractor。
+// Engine 封装独立的 [*v10.Validate] 校验实例与其私有的中文翻译器。
+//
+// 每一个 Engine 实例互相完全隔离，不持有任何全局状态或全局单例引用，
+// 并自动内置了中文语言环境翻译与 8 项领域自定义规则。
 type Engine struct {
 	validate *v10.Validate
 	trans    ut.Translator
 }
 
-// New 构造新的独立验证器引擎，初始化私有 v10 与中文 translator，并注册内置规则与翻译。
+// New 构造全新的独立参数验证引擎实例。
+//
+// 构造过程初始化私有的 [*v10.Validate] 实例与 "zh" 中文翻译器，
+// 将结构体验证标签名设为 "binding"，配置字段名提取规则（优先 label，其次 json），
+// 并自动注册内置的 8 项领域扩展规则及其中文翻译。
 func New() (*Engine, error) {
 	v := v10.New()
 	v.SetTagName("binding")
@@ -60,7 +66,11 @@ func New() (*Engine, error) {
 	return engine, nil
 }
 
-// Validate 对目标结构体或数据进行校验。
+// Validate 对传入的目标结构体指针或数据对象执行字段校验。
+//
+// 若验证器尚未初始化（接收器或内部引擎为 nil），返回错误；
+// 若数据校验失败，返回包含违规详情的 [v10.ValidationErrors] 错误；校验通过返回 nil。
+// 该方法可被多个 goroutine 并发安全调用。
 func (e *Engine) Validate(obj any) error {
 	if e == nil || e.validate == nil {
 		return errors.New("validator: 验证器未初始化")
@@ -68,8 +78,11 @@ func (e *Engine) Validate(obj any) error {
 	return e.validate.Struct(obj)
 }
 
-// RegisterValidation 为当前实例注册自定义验证规则。
-// 规则在使用前注册，不承诺运行中改规则的并发安全性。
+// RegisterValidation 为当前验证引擎实例注册自定义验证规则函数。
+//
+// 参数 tag 为验证标签名称，fn 为具体的校验逻辑回调。
+// 该方法仅对当前 Engine 实例生效，不影响任何其他引擎。
+// 必须在服务初始化单协程阶段完成注册，不承诺运行期并发修改规则的线程安全。
 func (e *Engine) RegisterValidation(tag string, fn v10.Func) error {
 	if e == nil || e.validate == nil {
 		return errors.New("validator: 验证器未初始化")
@@ -77,7 +90,9 @@ func (e *Engine) RegisterValidation(tag string, fn v10.Func) error {
 	return e.validate.RegisterValidation(tag, fn)
 }
 
-// TranslateError 将验证错误转换为字段到中文错误文案的映射。
+// TranslateError 将验证失败返回的错误转换为以字段名为键、本地化中文提示为值的键值映射表。
+//
+// 若传入的 err 为 nil 或非 [v10.ValidationErrors] 类型，返回空 map。
 func (e *Engine) TranslateError(err error) map[string]string {
 	result := make(map[string]string)
 	if err == nil || e == nil || e.trans == nil {
@@ -95,8 +110,10 @@ func (e *Engine) TranslateError(err error) map[string]string {
 	return result
 }
 
-// HandleError 将验证或绑定错误安全转换为 HTTP 响应写回客户端。
-// 详细实现见 error.go。
+// HandleError 将参数绑定或校验错误安全转换为统一 HTTP 错误响应并写回客户端。
+//
+// 该方法执行本地化翻译、敏感字段值脱敏、构造 [ValidationErrorDetail] 明细列表，
+// 并通过 [httpresult.Error] 输出安全的 JSON 信封响应。
 func (e *Engine) HandleError(ctx *gin.Context, err error) {
 	e.handleErrorInternal(ctx, err)
 }

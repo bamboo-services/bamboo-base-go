@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// DriverName 定义 Oracle 方言驱动名称。
+// DriverName 定义 Oracle 方言驱动在全局注册表中的标识名称。
 const DriverName = "oracle"
 
 // adapter 实现 dialect.Adapter 接口。
@@ -24,10 +24,11 @@ func init() {
 	dialect.Register(dialect.DriverOracle, FromEnv)
 }
 
-// New 接收显式 DSN 构造 Oracle dialect.Adapter。
+// New 接收显式 DSN 字符串构造 Oracle 数据库方言适配器 [dialect.Adapter]。
 //
-// 该函数不建立网络连接。如果 DSN 为空或格式非法，将错误推迟至 Open 返回，
-// 且保证返回的错误信息不包含敏感密码。
+// 该函数为纯构造操作，不建立底层网络连接。支持 URL 格式（oracle:// 或 oracledb://）、
+// godror logfmt 格式以及 Easy Connect 简写格式。如果 DSN 为空或格式非法，
+// 错误将延迟推迟至 [dialect.Adapter.Open] 方法调用时返回，且保证错误信息不泄露敏感密码。
 func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
@@ -47,9 +48,9 @@ func New(dsn string) dialect.Adapter {
 	}
 }
 
-// FromEnv 从环境变量构造 Oracle dialect.Adapter。
+// FromEnv 从标准环境变量构造 Oracle 数据库方言适配器 [dialect.Adapter]。
 //
-// 优先使用 DATABASE_DSN；若未设置，则从环境变量中按 godror logfmt 格式拼装：
+// 函数优先读取 DATABASE_DSN；若未设置，则从环境变量中按 godror logfmt 格式拼装：
 // user="..." password="..." connectString="host:port/service" [libDir="..."]
 //
 // 读取的环境变量:
@@ -58,9 +59,10 @@ func New(dsn string) dialect.Adapter {
 //   - DATABASE_HOST (默认 "localhost")
 //   - DATABASE_PORT (默认 "1521")
 //   - DATABASE_SERVICE_NAME (默认 "ORCLPDB1")
-//   - DATABASE_LIB_DIR (默认空；设置时拼入 libDir="...")
+//   - DATABASE_LIB_DIR (可选，指定时追加 libDir="...")
 //
-// 缺配置或解析错误保存于 adapter 中并在 Open 时返回，避免在构造或 init 期产生网络连接或 panic。
+// 任何配置缺失或解析错误均保存于适配器实例中并推迟至 [dialect.Adapter.Open] 时返回，
+// 避免在构造或 init 期产生网络 I/O 或不可控 panic。
 func FromEnv() dialect.Adapter {
 	if rawDSN, ok := env.Lookup(env.DatabaseDSN); ok && strings.TrimSpace(string(rawDSN)) != "" {
 		trimmed := strings.TrimSpace(string(rawDSN))

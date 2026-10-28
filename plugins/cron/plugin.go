@@ -13,15 +13,18 @@ import (
 	"github.com/go-co-op/gocron/v2"
 )
 
-// DefaultCronPluginKey 是 Cron 插件默认的 Worker 插件 Key。
+// DefaultCronPluginKey 是 Cron 插件默认的 Worker 插件在应用拓扑中的主键。
 const DefaultCronPluginKey ctxkey.Key = "plugin_cron"
 
 var (
-	// ErrNoActivator 当未注入 application.Activator 时在 Start 返回。
+	// ErrNoActivator 表示未显式注入 [application.Activator]。
+	// 调度器强依赖激活器以解耦业务任务执行，禁止隐式启动。
 	ErrNoActivator = errors.New("cron: 未显式注入 application.Activator，禁止隐式启动")
-	// ErrInvalidJobTarget 当任务目标 Component Key 无效时返回。
+
+	// ErrInvalidJobTarget 表示任务目标 Component Key 为空或非法。
 	ErrInvalidJobTarget = errors.New("cron: 任务目标 Component Key 无效")
-	// ErrInvalidJobSchedule 当任务调度表达式或间隔非法时返回。
+
+	// ErrInvalidJobSchedule 表示任务调度表达式语法错误或周期时间间隔非法（如小于等于 0）。
 	ErrInvalidJobSchedule = errors.New("cron: 任务调度表达式或间隔非法")
 )
 
@@ -39,7 +42,8 @@ type jobDef struct {
 	targetKey ctxkey.Key
 }
 
-// Option 为 Cron 插件配置项。
+// Option 为 Cron 插件的全局函数式配置选项。
+// 传入 nil 时将被 [New] 安全忽略。
 type Option func(*config)
 
 type config struct {
@@ -52,7 +56,8 @@ type config struct {
 	location  *time.Location
 }
 
-// WithKey 设置插件 Key。
+// WithKey 设置插件在应用拓扑中的组件 Key。
+// 若 key 非法，则忽略并保持默认值 [DefaultCronPluginKey]。
 func WithKey(key ctxkey.Key) Option {
 	return func(c *config) {
 		if key.IsValid() {
@@ -61,7 +66,8 @@ func WithKey(key ctxkey.Key) Option {
 	}
 }
 
-// WithName 设置插件人类可读名称。
+// WithName 设置插件在应用生命周期中的人类可读名称。
+// 若 name 为空字符串，则忽略并保持默认名称 "plugin_cron"。
 func WithName(name string) Option {
 	return func(c *config) {
 		if name != "" {
@@ -70,7 +76,8 @@ func WithName(name string) Option {
 	}
 }
 
-// WithRequires 显式声明插件额外依赖的共享资源（目标 Component 动态 Key 绝不在此声明）。
+// WithRequires 显式声明插件额外依赖的共享资源。
+// 严禁将调度任务的目标 Component Key 在此声明；目标组件属于动态激活对象，由 Activator 按需调度。
 func WithRequires(keys ...ctxkey.Key) Option {
 	return func(c *config) {
 		for _, k := range keys {
@@ -81,21 +88,24 @@ func WithRequires(keys ...ctxkey.Key) Option {
 	}
 }
 
-// WithActivator 显式注入 application.Activator，不使用 global 或虚构 getter。
+// WithActivator 显式注入应用受管执行器 [application.Activator]。
+// 调度器必须通过此激活器触发目标组件，不使用全局实例或隐式单例。
 func WithActivator(act application.Activator) Option {
 	return func(c *config) {
 		c.activator = act
 	}
 }
 
-// WithLogger 显式注入 Logger 实例，可选，无 Default。
+// WithLogger 显式注入应用统一结构化日志器，保持 App 隔离。
+// 为 nil 时忽略任务激活失败的告警日志。
 func WithLogger(logger *logging.Logger) Option {
 	return func(c *config) {
 		c.logger = logger
 	}
 }
 
-// WithLocation 设置调度器时区。
+// WithLocation 设置调度器的运行基准时区。
+// 为 nil 时默认遵循底层调度器时区配置（通常为 UTC）。
 func WithLocation(loc *time.Location) Option {
 	return func(c *config) {
 		c.location = loc
@@ -103,6 +113,7 @@ func WithLocation(loc *time.Location) Option {
 }
 
 // WithCronJob 配置基于标准 5 段 cron 表达式的目标 Component 触发任务。
+// 参数 spec 为标准 cron 语法（分、时、日、月、周）；targetKey 为目标组件在应用拓扑中的注册 Key。
 func WithCronJob(spec string, targetKey ctxkey.Key) Option {
 	return func(c *config) {
 		c.jobs = append(c.jobs, jobDef{
@@ -113,7 +124,8 @@ func WithCronJob(spec string, targetKey ctxkey.Key) Option {
 	}
 }
 
-// WithIntervalJob 配置基于固定 Duration 间隔的目标 Component 触发任务。
+// WithIntervalJob 配置基于固定时间间隔的目标 Component 触发任务。
+// 参数 d 为每次触发的时间间隔，必须大于 0；targetKey 为目标组件在应用拓扑中的注册 Key。
 func WithIntervalJob(d time.Duration, targetKey ctxkey.Key) Option {
 	return func(c *config) {
 		c.jobs = append(c.jobs, jobDef{
@@ -124,7 +136,7 @@ func WithIntervalJob(d time.Duration, targetKey ctxkey.Key) Option {
 	}
 }
 
-// Plugin 实现 application.RunnablePlugin，为 ModeWorker 调度器。
+// Plugin 实现 [application.RunnablePlugin]，作为 ModeWorker 类型的定时调度器受宿主应用统一编排。
 type Plugin struct {
 	cfg config
 
@@ -149,7 +161,7 @@ type Plugin struct {
 }
 
 // New 构造 Cron 插件信息与工厂函数。
-// 工厂为纯构造，不创建后台调度器、不产生任何 I/O。
+// 工厂为纯配置构造，不创建后台调度器、不分配后台资源且不产生任何 I/O。
 func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlugin) {
 	cfg := config{
 		key:  DefaultCronPluginKey,
@@ -182,7 +194,9 @@ func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlu
 	return info, factory
 }
 
-// Start 验证表达式、校验激活器并在本阶段构建 gocron.Scheduler。
+// Start 校验表达式语法、检查激活器并构建底层调度器。
+// 若未注入 [application.Activator] 返回 [ErrNoActivator]；若表达式或目标 Key 非法返回相应错误。
+// 本方法在生命周期中保证仅执行一次，多次调用幂等返回相同结果。
 func (p *Plugin) Start(_ context.Context) error {
 	p.startOnce.Do(func() {
 		p.startErr = p.doStart()
@@ -253,7 +267,8 @@ func (p *Plugin) doStart() error {
 	return nil
 }
 
-// Run 启动调度器并在 lifetimeCtx 结束时退出。
+// Run 启动调度器并在 lifetimeCtx 保持运行，直到 lifetimeCtx 结束时退出。
+// 若调度器未执行 Start 初始化，返回错误。
 func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	if p.scheduler == nil {
 		return errors.New("cron: 调度器尚未 Start 或 Start 失败")
@@ -269,7 +284,7 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	return nil
 }
 
-// Quiesce 先原子关闭 tick 准入，不再发起新的组件激活。
+// Quiesce 原子关闭 tick 触发准入，确保在应用进入关机缓冲阶段后不再发起新的组件激活。
 func (p *Plugin) Quiesce(_ context.Context) error {
 	p.gateMu.Lock()
 	p.quiesced = true
@@ -277,7 +292,9 @@ func (p *Plugin) Quiesce(_ context.Context) error {
 	return nil
 }
 
-// Stop 停止调度器、等待所有已发起的激活调用返回后收尾退出。重复 Stop 共享结果。
+// Stop 停止调度器，阻塞等待所有已发起的激活调用真实返回后收尾退出。
+// 若等待期间传入的 ctx 超时，本方法仍保证等待完成并返回包含超时的复合错误。
+// 多次重复调用 Stop 共享相同退出结果与等待同一完成。
 func (p *Plugin) Stop(ctx context.Context) error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)

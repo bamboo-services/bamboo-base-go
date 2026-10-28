@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	// DefaultSuccessOutput 是纯成功响应的默认输出标识。
+	// DefaultSuccessOutput 是标准成功响应信封中 Output 字段的默认语义标签。
+	// 取值为 "Success"。
 	DefaultSuccessOutput = "Success"
 )
 
@@ -36,9 +37,17 @@ func resolveOverhead(ctx context.Context) *int64 {
 	return &overhead
 }
 
-// Success 构建符合 base.proto 定义的操作成功 BaseResponse。
-// Code 填充 200，Output 填充 "Success"，Message 为业务传递的安全文案。
-// Context 与 Overhead（仅调试模式）自动从 context 中提取注入。
+// Success 构建并返回符合框架契约的标准成功响应 [generate.BaseResponse] 实例。
+//
+// 字段填充规则：
+//   - Context：自动从 ctx 中提取请求追踪 ID（通过 [ctxkey.GetRequestKey]）；若 ctx 为 nil 则为空字符串；
+//   - Output：填充为默认的 [DefaultSuccessOutput]（即 "Success"）；
+//   - Code：固定填充为 200，表示业务成功；
+//   - Message：填充传入的业务安全描述文案 message；
+//   - Overhead：仅当应用处于调试模式且上下文携带请求起始时间时计算微秒整数耗时；其余情况安全返回 nil；
+//   - ErrorMessage：成功场景下始终保持为 nil。
+//
+// 该函数为纯构造函数，不执行网络 I/O，可并发安全调用。
 func Success(ctx context.Context, message string) *generate.BaseResponse {
 	resp := &generate.BaseResponse{
 		Context:  resolveRequestKey(ctx),
@@ -98,11 +107,24 @@ func httpGroupToGRPCCode(httpGroup uint64) codes.Code {
 	}
 }
 
-// ToStatusError 将统一业务错误对象 *apperr.Error 转换为 gRPC status 错误。
-// 严禁将底层内部 err.Err（如原始 SQL 错误、私密堆栈）进入 status.Message 或 Details（即使 Debug 模式也不允许）。
-// status.Message 仅对外展示安全业务文案（Code.Message，空时回退至 Code.Output）。
-// status.WithDetails 中附加生成的 BaseResponse，携带业务 code、output、context、安全 errorMessage 及耗时。
-// 若入参 err 为 nil，安全返回 codes.Internal 状态错误。
+// ToStatusError 将结构化业务错误 [*apperr.Error] 转换为符合 gRPC 规范的 [status.Status] 错误。
+//
+// # 错误安全与脱敏红线
+//
+// 转换严格遵守安全边界，严禁将底层内部原始错误 err.Err（如原始 SQL 错误、敏感数据库连接串、
+// 堆栈追踪或系统错误）输出到 [status.Status] 的 Message 或 Details 中，即使在 Debug 模式下也绝不泄露。
+//
+// # 状态映射与 Details 注入
+//
+// 转换规则如下：
+//   - 若入参 err 为 nil，安全返回包含 [codes.Internal] 状态码及兜底业务内部错误信封的错误；
+//   - 提取 err.Code.Code 的前 3 位（即 HTTP 状态组），映射为对应的标准 [codes.Code]；
+//   - status 的安全文案优先采用 err.Code.Message，若为空则回退使用 err.Code.Output；
+//   - 通过 status.WithDetails 注入新生成的 [generate.BaseResponse]，携带业务 code、output、
+//     追踪 context、安全 errorMessage（若存在）及调试耗时 overhead；
+//   - 若 Details 序列化失败，安全回退至未携带 Details 的原生 status 错误。
+//
+// 返回的 error 可直接作为 gRPC 服务的 Handler 返回值交由框架底层传输。
 func ToStatusError(ctx context.Context, err *apperr.Error) error {
 	reqKey := resolveRequestKey(ctx)
 	overhead := resolveOverhead(ctx)

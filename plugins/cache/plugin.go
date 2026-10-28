@@ -32,11 +32,13 @@ type pluginImpl struct {
 	stopErr  error
 }
 
-// New 构造缓存插件信息与工厂函数。
-// 选项应用与模式冻结在 New 中完成：
-// - Memory 模式 Provides [ctxkey.CacheManagerKey]；
-// - Redis 模式额外 Provides [ctxkey.RedisClientKey]；
-// - None 或未知模式存配置错误于 Start 阶段报错，不伪称提供 Redis。
+// New 构造缓存插件元数据与工厂函数，作为 [application.ModeTool] 受管组件接入应用运行时。
+//
+// 选项应用与模式冻结在 New 执行期完成：
+//   - Memory 模式声明 Provides [ctxkey.CacheManagerKey]；
+//   - Redis 模式声明 Provides [ctxkey.CacheManagerKey] 与 [ctxkey.RedisClientKey]；
+//   - None 或未知模式将配置错误记录于工厂实例，并在生命周期 Start 阶段显式返回错误，
+//     绝不伪称向容器提供未就绪的依赖键。
 func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 	var cfg Config
 	for _, opt := range opts {

@@ -7,7 +7,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
-// SetCache [driver.SetCache] 的内存实现。
+// SetCache 是 [driver.SetCache] 的内存分片存储实现。
 //
 // 内存中以 map[string]struct{} 存储成员（序列化后的 string 作为 key），
 // 整体作为 [memoryEntry.Value] 存入 [Store]。

@@ -164,7 +164,9 @@ func (m *Manager) TTL() time.Duration { return m.ttl }
 // Logger 返回命名日志器，可能为 nil（未注入时）。
 func (m *Manager) Logger() *logging.LogNamedLogger { return m.log }
 
-// KeyCacheOf 返回基于当前后端的 [KeyCache] 实现。
+// KeyCacheOf 返回基于当前后端的 [KeyCache] 泛型实现。
+//
+// 当 m 为 nil、底层驱动未注入或后端类型未支持时，安全返回 nil。
 func KeyCacheOf[K any, V any](m *Manager) KeyCache[K, V] {
 	if m == nil {
 		return nil
@@ -185,7 +187,9 @@ func KeyCacheOf[K any, V any](m *Manager) KeyCache[K, V] {
 	}
 }
 
-// HashCacheOf 返回基于当前后端的 [HashCache] 实现。
+// HashCacheOf 返回基于当前后端的 [HashCache] 泛型实现。
+//
+// 当 m 为 nil、底层驱动未注入或后端类型未支持时，安全返回 nil。
 func HashCacheOf[K any, F comparable, V any, S any](m *Manager) HashCache[K, F, V, S] {
 	if m == nil {
 		return nil
@@ -206,7 +210,9 @@ func HashCacheOf[K any, F comparable, V any, S any](m *Manager) HashCache[K, F, 
 	}
 }
 
-// SetCacheOf 返回基于当前后端的 [SetCache] 实现。
+// SetCacheOf 返回基于当前后端的 [SetCache] 泛型实现。
+//
+// 当 m 为 nil、底层驱动未注入或后端类型未支持时，安全返回 nil。
 func SetCacheOf[K any, V any](m *Manager) SetCache[K, V] {
 	if m == nil {
 		return nil
@@ -227,7 +233,9 @@ func SetCacheOf[K any, V any](m *Manager) SetCache[K, V] {
 	}
 }
 
-// ListCacheOf 返回基于当前后端的 [ListCache] 实现。
+// ListCacheOf 返回基于当前后端的 [ListCache] 泛型实现。
+//
+// 当 m 为 nil、底层驱动未注入或后端类型未支持时，安全返回 nil。
 func ListCacheOf[K any, V any](m *Manager) ListCache[K, V] {
 	if m == nil {
 		return nil

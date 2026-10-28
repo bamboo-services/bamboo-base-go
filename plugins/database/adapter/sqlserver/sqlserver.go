@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// DriverName 定义 SQL Server 方言驱动名称。
+// DriverName 定义 SQL Server 方言驱动在全局注册表中的标识名称。
 const DriverName = "sqlserver"
 
 // adapter 实现 dialect.Adapter 接口。
@@ -26,9 +26,10 @@ func init() {
 	dialect.Register(dialect.DriverSQLServer, FromEnv)
 }
 
-// New 接收显式 DSN 构造 SQL Server dialect.Adapter。
+// New 接收显式 DSN 字符串构造 SQL Server 数据库方言适配器 [dialect.Adapter]。
 //
-// 该函数不建立网络连接，如果 DSN 格式不合法或无法解析，将错误推迟至 Open 返回，
+// 该函数为纯构造操作，不建立底层网络连接。要求 DSN 采用 sqlserver:// 协议格式。
+// 如果 DSN 为空或格式非法，错误将延迟推迟至 [dialect.Adapter.Open] 方法调用时返回，
 // 且保证返回的错误信息不包含敏感密码。
 func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
@@ -49,12 +50,13 @@ func New(dsn string) dialect.Adapter {
 	}
 }
 
-// FromEnv 从环境变量构造 SQL Server dialect.Adapter。
+// FromEnv 从标准环境变量构造 SQL Server 数据库方言适配器 [dialect.Adapter]。
 //
-// 优先使用 DATABASE_DSN；若未设置，则从 DATABASE_USER, DATABASE_PASS,
-// DATABASE_HOST, DATABASE_PORT, DATABASE_NAME 拼装。
-// 凭据使用 net/url.URL 及 url.UserPassword 进行标准编码构造，并通过 net.JoinHostPort 规范处理 IPv6 等 Host 格式。
-// 任何解析或配置错误均保存于 adapter 中并在 Open 时返回，避免在构造或 init 期产生网络连接或 panic。
+// 函数优先读取 DATABASE_DSN；若未设置，则从 DATABASE_USER (默认 "sa")、DATABASE_PASS (默认 "")、
+// DATABASE_HOST (默认 "localhost")、DATABASE_PORT (默认 "1433")、DATABASE_NAME (默认 "master") 拼装。
+// 凭据使用 [net/url.URL] 及 [net/url.UserPassword] 进行标准编码，并使用 [net.JoinHostPort]
+// 规范处理包含 IPv6 等各种 Host 格式。
+// 任何解析或配置错误均保存于适配器实例中并在 [dialect.Adapter.Open] 时返回，避免在构造或 init 期产生网络连接或 panic。
 func FromEnv() dialect.Adapter {
 	if rawDSN, ok := env.Lookup(env.DatabaseDSN); ok && strings.TrimSpace(string(rawDSN)) != "" {
 		trimmed := strings.TrimSpace(string(rawDSN))

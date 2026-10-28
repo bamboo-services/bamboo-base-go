@@ -22,10 +22,10 @@ type adapter struct {
 	err error
 }
 
-// New 使用显式指定的 DSN 构造 SQLite dialect.Adapter。
+// New 使用显式指定的 DSN 或文件路径构造 SQLite 数据库方言适配器 [dialect.Adapter]。
 //
-// 仅保存 DSN，不在此处建立数据库连接或验证文件。若 dsn 为空，
-// 则将错误延迟保存至 Open() 时返回，避免伪造有效连接串。
+// 该函数为纯构造操作，仅在内存中保存 DSN，不建立数据库连接或验证文件。若 dsn 为空，
+// 错误将延迟推迟至 [dialect.Adapter.Open] 方法调用时返回，避免伪造无效连接句柄。
 func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
@@ -38,11 +38,11 @@ func New(dsn string) dialect.Adapter {
 	}
 }
 
-// FromEnv 从环境变量构造 SQLite dialect.Adapter。
+// FromEnv 从标准环境变量构造 SQLite 数据库方言适配器 [dialect.Adapter]。
 //
-// 优先读取 DATABASE_DSN，若设置且非空则直接使用；
-// 未设置或为空时读取 DATABASE_PATH（未设置或为空时默认 ":memory:"）。
-// 若最终解析得到的路径为空（如显式配置仅含空白），Open() 将返回明确的配置缺失错误。
+// 函数优先读取 DATABASE_DSN；若未设置或为空，则读取 DATABASE_PATH；
+// 若两者均未配置，默认采用内存数据库 ":memory:"。
+// 若显式配置的路径仅包含空白字符，将在 [dialect.Adapter.Open] 时返回明确的配置缺失错误。
 func FromEnv() dialect.Adapter {
 	if val, ok := env.Lookup(env.DatabaseDSN); ok {
 		trimmed := strings.TrimSpace(val.String())

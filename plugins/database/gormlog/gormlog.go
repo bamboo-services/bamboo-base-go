@@ -12,28 +12,31 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// LogLevel GORM 日志级别类型
+// LogLevel 定义 GORM 日志输出级别。
 type LogLevel int
 
 const (
-	// LevelSilent 静默模式，不输出任何日志
+	// LevelSilent 静默模式，不输出任何 SQL 或错误日志。
 	LevelSilent LogLevel = iota + 1
-	// LevelError 仅输出错误日志
+	// LevelError 仅在 SQL 执行发生严重错误时输出日志。
 	LevelError
-	// LevelWarn 输出错误和警告日志
+	// LevelWarn 输出错误日志以及超出慢查询阈值的告警日志。
 	LevelWarn
-	// LevelInfo 输出所有级别日志（包含 SQL 语句）
+	// LevelInfo 输出所有级别日志，包含每次成功执行的 SQL 详情。
 	LevelInfo
 )
 
-// Config GORM Logger 配置
+// Config 定义 GORM 日志适配器的运行参数。
 type Config struct {
-	SlowThreshold             time.Duration // 慢查询阈值，超过以 WARN 记录；<=0 默认 200ms
-	LogLevel                  LogLevel      // 日志级别；零值默认 LevelWarn
-	IgnoreRecordNotFoundError bool          // 是否忽略 ErrRecordNotFound
+	// SlowThreshold 是慢查询告警阈值。执行耗时超过该值时以 WARN 级别记录；<= 0 时默认采用 200ms。
+	SlowThreshold time.Duration
+	// LogLevel 是日志输出级别；零值时默认采用 [LevelWarn]。
+	LogLevel LogLevel
+	// IgnoreRecordNotFoundError 控制是否忽略 [gorm.ErrRecordNotFound] 错误。
+	IgnoreRecordNotFoundError bool
 }
 
-// Logger GORM logging 适配器，实现 gormlogger.Interface 接口。
+// Logger 是 GORM 日志适配器，实现了 [gormlogger.Interface] 接口。
 type Logger struct {
 	logger                    *logging.Logger
 	config                    Config
@@ -42,8 +45,12 @@ type Logger struct {
 	ignoreRecordNotFoundError bool
 }
 
-// New 显式基于 logging.Logger 构造 GORM 日志器。
-// 若 logger 为 nil，则返回 gormlogger.Discard，不暗造 Logger 且不依赖 slog.Default。
+// New 显式基于 [*logging.Logger] 构造 GORM 日志适配器。
+//
+// 若传入的 logger 为 nil，则直接返回 [gormlogger.Discard]，
+// 不产生任何隐式日志器且不依赖全局 [slog.Default]。
+// 配置中的零值将自动应用默认安全策略：[Config.SlowThreshold] <= 0 默认采用 200ms，
+// [Config.LogLevel] 默认采用 [LevelWarn]。
 func New(logger *logging.Logger, cfg Config) gormlogger.Interface {
 	if logger == nil {
 		return gormlogger.Discard
@@ -68,7 +75,8 @@ func New(logger *logging.Logger, cfg Config) gormlogger.Interface {
 	}
 }
 
-// LogMode 设置日志级别并返回新实例。
+// LogMode 调整当前日志器的输出级别，并返回新构造的浅拷贝实例。
+// 原日志器实例的配置保持不变，支持在链式调用中按需局部调整级别。
 func (l *Logger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	clone := *l
 	switch level {
@@ -86,7 +94,8 @@ func (l *Logger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	return &clone
 }
 
-// Info 记录 INFO 级别日志。
+// Info 记录 INFO 级别的提示信息。
+// 仅在当前级别满足 [LevelInfo] 时输出，使用 [logging.NamedREPO] 命名空间。
 func (l *Logger) Info(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= LevelInfo {
 		named := l.logger.WithName(logging.NamedREPO)
@@ -94,7 +103,8 @@ func (l *Logger) Info(ctx context.Context, msg string, data ...interface{}) {
 	}
 }
 
-// Warn 记录 WARN 级别日志。
+// Warn 记录 WARN 级别的告警信息。
+// 仅在当前级别满足 [LevelWarn] 时输出，使用 [logging.NamedREPO] 命名空间。
 func (l *Logger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= LevelWarn {
 		named := l.logger.WithName(logging.NamedREPO)
@@ -102,7 +112,8 @@ func (l *Logger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	}
 }
 
-// Error 记录 ERROR 级别日志。
+// Error 记录 ERROR 级别的错误信息。
+// 仅在当前级别满足 [LevelError] 时输出，使用 [logging.NamedREPO] 命名空间。
 func (l *Logger) Error(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= LevelError {
 		named := l.logger.WithName(logging.NamedREPO)
@@ -110,7 +121,11 @@ func (l *Logger) Error(ctx context.Context, msg string, data ...interface{}) {
 	}
 }
 
-// Trace 追踪 SQL 执行耗时与结果。
+// Trace 追踪 SQL 执行耗时、受影响行数与执行结果。
+//
+// 记录以结构化属性（elapsed_ms, rows, sql, error, threshold）呈现。
+// 若当前配置启用了 IgnoreRecordNotFoundError 且 err 为 [gorm.ErrRecordNotFound]，
+// 则不记录 ERROR 日志。超出 SlowThreshold 的查询将输出 WARN 级别的慢查询日志。
 func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	if l.logLevel <= LevelSilent {
 		return

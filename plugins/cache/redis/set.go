@@ -8,7 +8,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// SetCache [driver.SetCache] 的 Redis 实现。
+// SetCache 是 [driver.SetCache] 的 Redis 存储实现。
 type SetCache[K any, V any] struct {
 	rdb   *goredis.Client
 	codec driver.Codec

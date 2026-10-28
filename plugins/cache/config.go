@@ -13,37 +13,69 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 )
 
-// Config 缓存模块配置，描述后端类型及各后端详细连接/存储参数。
+// Config 描述缓存模块的配置参数，包含后端选择、连接参数与存储选项。
 type Config struct {
-	TypeVal       Type
-	Redis         RedisOptions
-	Memory        MemoryOptions
-	FromEnv       bool
-	Logger        *logging.Logger
+	// TypeVal 指定当前启用的缓存实现类型（如 [CacheTypeRedis] 或 [CacheTypeMemory]）。
+	TypeVal Type
+
+	// Redis 保存 Redis 模式下的网络连接、鉴权与连接池参数。
+	Redis RedisOptions
+
+	// Memory 保存内存模式下的分片、淘汰与容量参数。
+	Memory MemoryOptions
+
+	// FromEnv 标识是否启用了从环境变量自动识别与填充配置。
+	FromEnv bool
+
+	// Logger 传入应用日志实例，用于打印缓存内部调试与生命周期日志。
+	Logger *logging.Logger
+
 	validationErr error
 }
 
-// Option 定义 Cache 模块与 Manager 的通用配置函数。
+// Option 定义作用于 [*Config] 的函数式配置选项。
 type Option func(*Config)
 
-// RedisOptions Redis 缓存连接参数。
+// RedisOptions 定义 Redis 后端的网络连接、鉴权与连接池参数。
 type RedisOptions struct {
-	Addr         string        // 主机地址，格式 host:port，如 "localhost:6379"
-	Username     string        // 用户名（Redis 6+ ACL），留空表示无
-	Password     string        // 密码，留空表示无
-	DB           int           // 数据库序号
-	PoolSize     int           // 连接池大小，0 表示使用客户端默认值
-	MinIdleConns int           // 最小空闲连接数
-	DialTimeout  time.Duration // 连接建立超时
-	ReadTimeout  time.Duration // 读操作超时
-	WriteTimeout time.Duration // 写操作超时
+	// Addr 是 Redis 服务的网络地址，格式为 "host:port"，如 "localhost:6379"。
+	Addr string
+
+	// Username 是 Redis 6+ ACL 认证用户名，未开启 ACL 时留空。
+	Username string
+
+	// Password 是 Redis 连接认证密码，无密码时留空。
+	Password string
+
+	// DB 是 Redis 数据库序号，默认为 0。
+	DB int
+
+	// PoolSize 是客户端连接池最大连接数，0 表示使用客户端默认值。
+	PoolSize int
+
+	// MinIdleConns 是连接池保持的最小空闲连接数。
+	MinIdleConns int
+
+	// DialTimeout 是建立网络连接的超时时间。
+	DialTimeout time.Duration
+
+	// ReadTimeout 是执行读操作的超时时间。
+	ReadTimeout time.Duration
+
+	// WriteTimeout 是执行写操作的超时时间。
+	WriteTimeout time.Duration
 }
 
-// MemoryOptions 程序内内存缓存参数。
+// MemoryOptions 定义程序内分片内存后端的容量与淘汰参数。
 type MemoryOptions struct {
-	DefaultTTL time.Duration // 默认过期时间，0 表示永不过期
-	MaxEntries int           // 最大条目数，0 表示无上限
-	ShardCount int           // 分片数（提升并发），0 表示使用默认分片
+	// DefaultTTL 是未显式指定写入 TTL 时的默认过期时间；0 表示永不过期。
+	DefaultTTL time.Duration
+
+	// MaxEntries 是每个分片允许容纳的最大条目数；0 表示无上限。
+	MaxEntries int
+
+	// ShardCount 是内部并发分片数，必须为 2 的幂；0 表示使用默认 16 分片。
+	ShardCount int
 }
 
 // RedisOption 是 [RedisOptions] 的二级选项。
@@ -53,11 +85,16 @@ type RedisOption func(*RedisOptions)
 type MemoryOption func(*MemoryOptions)
 
 // WithType 显式指定缓存实现类型。
+//
+// 传入未支持的类型将在生命周期 Start 阶段返回错误。
 func WithType(t Type) Option {
 	return func(c *Config) { c.TypeVal = t }
 }
 
 // WithRedis 配置 Redis 作为缓存后端。
+//
+// addr 为必须提供的网络地址（格式为 host:port）；opts 为可选的连接与连接池配置。
+// 若此前调用过 [WithMemory]，本选项将覆盖其后端设置。
 func WithRedis(addr string, opts ...RedisOption) Option {
 	return func(c *Config) {
 		c.TypeVal = CacheTypeRedis
@@ -70,7 +107,10 @@ func WithRedis(addr string, opts ...RedisOption) Option {
 	}
 }
 
-// WithMemory 配置程序内内存作为缓存后端。
+// WithMemory 配置程序内分片内存作为缓存后端。
+//
+// 默认过期时间初始化为 30 分钟，可通过 opts 中的 [WithMemoryDefaultTTL] 调整。
+// 若此前调用过 [WithRedis]，本选项将覆盖其后端设置。
 func WithMemory(opts ...MemoryOption) Option {
 	return func(c *Config) {
 		c.TypeVal = CacheTypeMemory
@@ -97,6 +137,8 @@ func FromEnv() Option {
 }
 
 // WithLogger 显式注入应用 Logger。
+//
+// 注入后缓存模块将派生名为 "CACH" 的子日志记录器输出内部日志。
 func WithLogger(l *logging.Logger) Option {
 	return func(c *Config) {
 		c.Logger = l
@@ -225,13 +267,17 @@ func (c *Config) applyFromEnv() {
 	}
 }
 
-// Get 从上下文中提取缓存管理器实例 *Manager。
-// 基于 application.Get[*Manager](ctx, ctxkey.CacheManagerKey) 实现，不设全局 fallback。
+// Get 从请求或应用上下文中提取强类型的缓存管理器实例 [*Manager]。
+//
+// 底层基于 [application.Get] 实现，查找 [ctxkey.CacheManagerKey]。
+// 当插件未注册或上下文类型不符时返回结构化错误，不使用任何全局备选单例。
 func Get(ctx context.Context) (*Manager, *apperr.Error) {
 	return application.Get[*Manager](ctx, ctxkey.CacheManagerKey)
 }
 
-// MustGet 从上下文中提取缓存管理器实例 *Manager，若获取失败则 panic。
+// MustGet 从上下文中提取缓存管理器实例 [*Manager]，若获取失败则立即 panic。
+//
+// 仅建议在初始化阶段或确信缓存必已就绪的核心流程中使用。
 func MustGet(ctx context.Context) *Manager {
 	mgr, err := Get(ctx)
 	if err != nil {

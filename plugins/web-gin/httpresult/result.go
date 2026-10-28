@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// DefaultSuccessOutput 是纯成功响应的默认输出标识。
+	// DefaultSuccessOutput 是标准成功响应时信封中 output 字段的默认标识短语（"Success"）。
 	DefaultSuccessOutput apperr.Output = "Success"
 )
 
@@ -81,8 +81,11 @@ func buildEnvelope(ctx *gin.Context, err *apperr.Error) (int, envelope.Response)
 	return statusCode, resp
 }
 
-// Success 向客户端返回 200 成功响应，包含 Context、Code、Output、Message 与可选 Overhead。
-// 避免重复写入响应。
+// Success 向客户端写回 HTTP 200 成功响应，不携带额外 data 数据载荷。
+//
+// 响应内容严格包装为 [envelope.Response] 协议信封，包含由请求上下文解析的追踪标识、
+// 状态码 200、输出标识 [DefaultSuccessOutput]、调用方传入的 message 提示以及微秒级处理耗时。
+// 若当前连接已写入过响应（[gin.ResponseWriter.Written] 返回 true），本函数安全忽略以防重复写入。
 func Success(ctx *gin.Context, message string) {
 	if ctx == nil || ctx.Writer.Written() {
 		return
@@ -97,8 +100,10 @@ func Success(ctx *gin.Context, message string) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
-// SuccessWithData 向客户端返回 200 成功响应并附带数据。
-// 避免重复写入响应。
+// SuccessWithData 向客户端写回 HTTP 200 成功响应，并附带业务数据载荷 data。
+//
+// 载荷数据将赋值给 [envelope.Response.Data] 字段并统一序列化为 JSON。
+// 若当前连接已完成响应写入，本函数安全忽略以防止协议错误或重复输出。
 func SuccessWithData(ctx *gin.Context, message string, data any) {
 	if ctx == nil || ctx.Writer.Written() {
 		return
@@ -114,8 +119,13 @@ func SuccessWithData(ctx *gin.Context, message string, data any) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
-// Error 向客户端写回基于 apperr.Error 映射的状态码与标准 Response JSON 响应。
-// 避免重复写入响应。
+// Error 向客户端写回基于 [*apperr.Error] 映射的错误响应及标准 [envelope.Response] JSON 信封。
+//
+// 该函数执行以下安全与映射规则：
+//   - 若传入的 err 为 nil，自动以 [apperr.ServerInternalError] 回退构造 500 响应；
+//   - 计算 HTTP 状态码为 err.Code.Code / 100，非 400..599 区间一律回退为 500；
+//   - 底层根因错误严格隔离，响应中仅输出安全的 ErrorMessage 与业务错误码；
+//   - 若连接已写过响应，本函数安全忽略。
 func Error(ctx *gin.Context, err *apperr.Error) {
 	if ctx == nil || ctx.Writer.Written() {
 		return
@@ -124,8 +134,10 @@ func Error(ctx *gin.Context, err *apperr.Error) {
 	ctx.JSON(status, resp)
 }
 
-// AbortError 终止当前 gin 请求处理并写回基于 apperr.Error 映射的错误响应。
-// 与 AbortWithStatusJSON 语义一致，避免重复写入响应。
+// AbortError 向客户端写回基于 [*apperr.Error] 映射的错误响应，并中断当前 Gin 请求管道。
+//
+// 内部调用 [gin.Context.AbortWithStatusJSON] 阻止后续处理函数与后置中间件继续执行。
+// 映射算法与安全信封构建规则与 [Error] 完全一致；若连接已写过响应，则仅执行 [gin.Context.Abort]。
 func AbortError(ctx *gin.Context, err *apperr.Error) {
 	if ctx == nil || ctx.Writer.Written() {
 		if ctx != nil {

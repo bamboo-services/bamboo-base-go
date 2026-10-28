@@ -25,24 +25,36 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// DefaultGRPCPluginKey 是 gRPC 插件默认的 Worker 插件 Key。
+// DefaultGRPCPluginKey 是 gRPC 插件默认的 Worker 插件标识键。
+// 其默认值为 "plugin_grpc"，可在应用容器与依赖分析图中作为唯一键引用。
 const DefaultGRPCPluginKey ctxkey.Key = "plugin_grpc"
 
+// gRPC 插件生命周期与状态控制导出的错误变量。
 var (
-	// ErrServerAlreadyStarted 当重复调用 Start 时返回。
+	// ErrServerAlreadyStarted 表示 gRPC 服务已经启动，禁止重复调用 [Plugin.Start]。
 	ErrServerAlreadyStarted = errors.New("grpc: 服务已启动")
-	// ErrServerClosed 当服务已停止或正在关闭时返回。
+
+	// ErrServerClosed 表示 gRPC 服务已经停止或正在关机过程中，拒绝接收入站新请求。
 	ErrServerClosed = errors.New("grpc: 服务已停止")
-	// ErrNoLifetimeContext 当未设置可信 lifetimeCtx 即尝试运行或处理请求时返回。
+
+	// ErrNoLifetimeContext 表示缺少可信的生命周期上下文，无法完成服务启动与运行。
 	ErrNoLifetimeContext = errors.New("grpc: 缺少 lifetime context")
-	// ErrStopTimeout 当服务优雅停机超时时返回。
+
+	// ErrStopTimeout 表示 gRPC 服务在执行优雅停机排空等待时超过了预设的超时预算。
 	ErrStopTimeout = errors.New("grpc: 停机等待超时")
 )
 
-// ServiceRegistrar 是业务向 grpc.Server 注册 Service 的回调函数。
+// ServiceRegistrar 是业务向 [grpc.Server] 挂载 gRPC Service 定义的回调函数。
+//
+// 该函数在 [Plugin.Start] 阶段被执行，入参 ctx 为启动阶段的上下文，
+// s 为已初始化拦截器链的原生 [grpc.Server] 实例。业务应当在此回调中调用
+// protobuf 编译器生成的 RegisterXxxServer 方法。回调中不应启动长驻循环或阻塞操作。
 type ServiceRegistrar func(ctx context.Context, s *grpc.Server)
 
-// Option 为 gRPC 插件的配置函数。
+// Option 为 gRPC 插件的函数式配置项。
+//
+// 传入 [New] 用于在构造期定制监听端口、依赖项、拦截器与日志器。
+// nil 选项函数在执行时会被安全忽略。
 type Option func(*config)
 
 type config struct {
@@ -60,8 +72,11 @@ type config struct {
 	reflectionSet      bool
 }
 
-// WithAddr 设置监听地址（如 ":9090" 或 "127.0.0.1:0"）。
-// 显式传入非空地址时优先采用；未显式指定时，默认从环境变量 GRPC_PORT 读取端口（缺省或无效为 1119），监听地址为 ":<port>"。
+// WithAddr 设置 gRPC 服务的网络监听地址（例如 ":9090" 或 "127.0.0.1:0"）。
+//
+// 显式传入非空字符串时优先采用；未显式指定或传入空字符串时，
+// 默认从环境变量 GRPC_PORT 读取端口数值（缺省或非法端口范围时回退为 1119），
+// 并最终拼接为 ":<port>" 格式的监听地址。
 func WithAddr(addr string) Option {
 	return func(c *config) {
 		if addr != "" {
@@ -70,7 +85,10 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithKey 设置插件的唯一标识 Key。
+// WithKey 设置 gRPC 插件在应用容器中的唯一标识 [ctxkey.Key]。
+//
+// 仅当传入的 k 通过 [ctxkey.Key.IsValid] 校验时生效；若 k 非法或未调用，
+// 插件保持默认的 [DefaultGRPCPluginKey]。
 func WithKey(k ctxkey.Key) Option {
 	return func(c *config) {
 		if k.IsValid() {
@@ -79,7 +97,9 @@ func WithKey(k ctxkey.Key) Option {
 	}
 }
 
-// WithName 设置插件的人类可读名称。
+// WithName 设置 gRPC 插件的人类可读名称。
+//
+// 仅当传入非空字符串时生效；若未调用或传入空值，默认为 "GRPCWorker"。
 func WithName(name string) Option {
 	return func(c *config) {
 		if name != "" {
@@ -88,7 +108,10 @@ func WithName(name string) Option {
 	}
 }
 
-// WithRequires 设置插件所依赖的键。
+// WithRequires 追加 gRPC 插件所依赖的组件上下文键列表。
+//
+// 声明的键将被注册到 [application.PluginInfo.Requires] 中，
+// 供应用容器在拓扑排序阶段执行依赖就绪检查。
 func WithRequires(keys ...ctxkey.Key) Option {
 	return func(c *config) {
 		c.requires = append(c.requires, keys...)
@@ -96,6 +119,9 @@ func WithRequires(keys ...ctxkey.Key) Option {
 }
 
 // WithService 注册 gRPC 服务挂载回调。
+//
+// 业务通过传入 [ServiceRegistrar] 函数将生成的 gRPC 服务绑定到内部 Server 上。
+// 传入 nil 时将被安全忽略；支持多次调用以追加多个服务挂载函数。
 func WithService(fn ServiceRegistrar) Option {
 	return func(c *config) {
 		if fn != nil {
@@ -104,35 +130,49 @@ func WithService(fn ServiceRegistrar) Option {
 	}
 }
 
-// WithLogger 设置显式传入的 Logger 实例。
+// WithLogger 设置显式传入的日志记录器实例。
+//
+// 插件将基于该日志器派生名为 "GRPC" 的子日志器，用于输出未预期 Panic
+// 或内部系统错误的结构化日志。若未注入或传入 nil，插件在异常时静默不记录日志。
 func WithLogger(logger *logging.Logger) Option {
 	return func(c *config) {
 		c.logger = logger
 	}
 }
 
-// WithServerOptions 追加原生 grpc.ServerOption。
+// WithServerOptions 追加原生 [grpc.ServerOption] 选项。
+//
+// 追加的选项将在创建 [grpc.Server] 时生效，排在框架内置拦截器链选项之后。
 func WithServerOptions(opts ...grpc.ServerOption) Option {
 	return func(c *config) {
 		c.serverOptions = append(c.serverOptions, opts...)
 	}
 }
 
-// WithUnaryInterceptors 追加一元拦截器。
+// WithUnaryInterceptors 追加自定义一元拦截器。
+//
+// 追加的拦截器将被编排在框架入口桥接拦截器（负责准入、追踪、桥接与 Panic 恢复）之后，
+// 依次形成洋葱模型调用链。
 func WithUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) Option {
 	return func(c *config) {
 		c.unaryInterceptors = append(c.unaryInterceptors, interceptors...)
 	}
 }
 
-// WithStreamInterceptors 追加流式拦截器。
+// WithStreamInterceptors 追加自定义流式拦截器。
+//
+// 追加的拦截器将被编排在框架流式入口桥接拦截器之后，依次形成洋葱模型调用链。
 func WithStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) Option {
 	return func(c *config) {
 		c.streamInterceptors = append(c.streamInterceptors, interceptors...)
 	}
 }
 
-// WithMiddlewareRegistry 设置实例独享的服务中间件注册表。
+// WithMiddlewareRegistry 设置实例独享的服务级中间件注册表。
+//
+// 传入的 [xGrpcMiddle.Registry] 会在构造工厂中执行深拷贝快照，
+// 确保每个插件实例拥有独立的中间件存储，避免并发修改冲突。若传入 nil，
+// 插件将自动创建一份空的注册表。
 func WithMiddlewareRegistry(reg *xGrpcMiddle.Registry) Option {
 	return func(c *config) {
 		c.middlewareRegistry = reg
@@ -140,7 +180,10 @@ func WithMiddlewareRegistry(reg *xGrpcMiddle.Registry) Option {
 }
 
 // WithReflection 配置是否启用 gRPC 反射服务。
-// 显式传入参数时记录配置偏好；未显式调用时后续逻辑可根据环境默认策略处理。
+//
+// 显式传入 true 时在服务启动后通过 [reflection.Register] 注册反射服务；
+// 若未显式调用本选项，插件在启动时将尝试从环境变量 GRPC_REFLECTION 解析布尔值配置，
+// 若环境变量未配置或解析失败则默认关闭反射服务。
 func WithReflection(enabled bool) Option {
 	return func(c *config) {
 		c.reflectionEnabled = enabled
@@ -227,7 +270,10 @@ func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
 }
 
-// Plugin 实现 application.RunnablePlugin，作为 gRPC Worker 插件。
+// Plugin 实现 [application.RunnablePlugin] 接口，作为长驻的 gRPC Worker 插件。
+//
+// 负责维护 gRPC 服务端的生命周期管理、端口监听、请求准入控制以及优雅关机。
+// 实例由 [New] 导出的工厂函数创建，其生命周期受应用状态机编排控制。
 type Plugin struct {
 	cfg config
 
@@ -267,7 +313,11 @@ func resolveGRPCAddr(configured string) string {
 	return ":" + strconv.Itoa(port)
 }
 
-// New 返回 Worker 的应用注册信息以及 RunnablePlugin 构造工厂（构造期不进行任何 I/O 与后台操作）。
+// New 创建 gRPC 插件并返回其注册信息 [application.PluginInfo] 与构造工厂函数。
+//
+// 函数在构造期仅完成配置项合并、校验与切片深拷贝快照，不执行任何端口绑定、
+// 网络监听或后台任务。返回的工厂函数每次调用都会创建全新的 [Plugin] 实例，
+// 确保中间件注册表及准入控制状态完全隔离。
 func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlugin) {
 	cfg := config{
 		addr: "",
@@ -327,8 +377,11 @@ func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlu
 	return info, factory
 }
 
-// Addr 返回已分配或配置的监听地址字符串（若已成功启动，返回实际绑定的 socket 地址）。
-// 未 Start 时返回解析后的监听地址。
+// Addr 返回已分配或配置的监听地址字符串。
+//
+// 若服务已通过 [Plugin.Start] 成功绑定端口，返回底层 socket 的实际地址（如 "127.0.0.1:9090"）；
+// 若服务尚未启动，返回经过默认规则解析后的监听地址配置（例如 ":1119"）。
+// 该方法可并发安全调用。
 func (p *Plugin) Addr() string {
 	if p.listener != nil {
 		return p.listener.Addr().String()
@@ -337,6 +390,16 @@ func (p *Plugin) Addr() string {
 }
 
 // Start 完成端口监听分配、Server 初始化、私有拦截器装配与业务 Service 挂载。
+//
+// 启动逻辑依循以下顺序执行：
+//  1. 状态检查：若底层 listener 已分配，说明服务重复启动，返回 [ErrServerAlreadyStarted]；
+//  2. 强制上下文派生：从传入的 ctx 中提取应用级 Force 取消分支，用于超时强杀联动；
+//  3. 端口监听：调用底层网络库在目标地址启动 TCP 监听；
+//  4. 拦截器组装：依次将框架内置入口桥接拦截器与自定义拦截器拼接成链；
+//  5. Server 初始化：创建原生 [grpc.Server] 并依次执行已注册的 [ServiceRegistrar]；
+//  6. 反射注册：若配置或环境变量开启反射，则通过 [reflection.Register] 挂载反射服务。
+//
+// 若启动过程中遇到端口占用或网络监听失败，将立即触发内部清理并返回带有地址说明的包装错误。
 func (p *Plugin) Start(ctx context.Context) error {
 	if p.listener != nil {
 		return ErrServerAlreadyStarted
@@ -403,7 +466,13 @@ func (p *Plugin) Start(ctx context.Context) error {
 	return nil
 }
 
-// Run 封存可信运行 lifetimeCtx，并开始阻塞 Serve。
+// Run 封存应用生命周期上下文并阻塞运行 gRPC 服务监听。
+//
+// 调用方传入由应用容器注入的可信 lifetimeCtx。若在未成功执行 [Plugin.Start]
+// 之前直接调用本方法，将返回明确的编程未就绪错误。
+//
+// 该方法会持续阻塞在底层 [grpc.Server.Serve] 上，直到服务被正常关闭或外部强制终止。
+// 若服务因 [grpc.ErrServerStopped] 退出，本方法正常返回 nil，不视作异常。
 func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	if p.server == nil || p.listener == nil {
 		return errors.New("grpc: 服务未完成 Start 即调用 Run")
@@ -420,15 +489,26 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 	return nil
 }
 
-// Quiesce 入站关闸：仅关闭新请求准入闸门，不调用 Stop、不取消 Handlers、不分配新预算。
+// Quiesce 执行入站关闸操作。
+//
+// 该方法通过内部准入闸门关闭新请求准入（随后到达的 RPC 请求将立即被桥接拦截器拒绝并返回
+// 包含 [apperr.ServiceUnavailable] 的状态错误），但不会调用 Stop，不会打断正在处理中的请求，
+// 也不分配新的停机超时预算。此方法可并发幂等调用。
 func (p *Plugin) Quiesce(ctx context.Context) error {
 	p.gate.closeGate()
 	return nil
 }
 
-// Stop 真实优雅关机。在私有 goroutine 运行 GracefulStop；
-// 同时监听 ctx 超时/取消及 App Force 信号，必要时通过 Server.Stop 中断传输；
-// 严格关准入并等待飞行中 Handler 真退（不因 ctx 截止假返回）。
+// Stop 执行真实的 gRPC 优雅关机流程。
+//
+// 该方法具备并发幂等性（内部由 [sync.Once] 保护）：
+//  1. 关闭新请求准入闸门；
+//  2. 在独立的私有 goroutine 中触发原生 [grpc.Server.GracefulStop]；
+//  3. 同时监控传入 ctx 的超时/取消信号与应用的强制停止信号（forceCtx）：若超时或收到 Force，
+//     立即调用 [grpc.Server.Stop] 强制中断底层网络连接；
+//  4. 核心保障：无超时等待飞行中的所有 Handler 与 Stream 完全排空（waitDrained），
+//     绝不因外部 ctx 截止而假返回或提前释放底层资源；
+//  5. 显式关闭 listener 并返回汇总的关闭错误。
 func (p *Plugin) Stop(ctx context.Context) error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)

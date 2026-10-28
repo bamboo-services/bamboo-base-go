@@ -10,18 +10,19 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// ExtractMetadata 从 gRPC 传入上下文（Incoming Metadata）中提取指定键的元数据值。
+// ExtractMetadata 从 gRPC 请求传入上下文（Incoming Metadata）中提取指定键的首个非空白字符串值。
 //
-// 该函数用于从传入的 gRPC 请求元数据（Incoming Metadata，非 Trailer）中获取特定键对应的值。
-// 它会遍历该键下的所有值，并返回第一个经过 strings.TrimSpace 后非空的字符串。
+// 该函数专门用于从传入的 RPC 请求元数据（Incoming Metadata，非响应阶段的 Trailer）中安全提取
+// 键为 key 的值列表。它会按序遍历对应键的所有切片条目，并返回首个经过 [strings.TrimSpace] 去除两端空白后非空的字符串。
 //
-// 参数说明:
-//   - ctx: context.Context 请求上下文（即使为 nil 也不会 panic）。
-//   - key: xGrpcConst.Metadata 需要提取的元数据键名。
+// # 错误与失败语义
 //
-// 返回值:
-//   - string: 找到的第一个非空白元数据值（已去除首尾空白字符）。
-//   - *apperr.Error: 如果上下文为 nil、未包含传入元数据或指定键无有效值，返回 apperr.NotExist 错误（错误码 40000），且不泄露敏感元数据值。
+// 若遇到以下任一情况，函数将返回包含 [apperr.NotExist]（业务错误码 40000）的结构化业务错误，且错误信息中不会打印敏感元数据内容：
+//   - ctx 为 nil；
+//   - ctx 未通过 [metadata.FromIncomingContext] 携带任何传入元数据；
+//   - 元数据中不存在指定的 key，或该键下的所有值均为空白字符串。
+//
+// 该函数具备并发安全性，可在中间件或业务 RPC 实现中安全调用。
 func ExtractMetadata(ctx context.Context, key xGrpcConst.Metadata) (string, *apperr.Error) {
 	if ctx == nil {
 		return "", apperr.New(apperr.NotExist, "缺少 gRPC 传入元数据", nil)

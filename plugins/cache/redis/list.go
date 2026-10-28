@@ -9,7 +9,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// ListCache [driver.ListCache] 的 Redis 实现。
+// ListCache 是 [driver.ListCache] 的 Redis 存储实现。
 type ListCache[K any, V any] struct {
 	rdb   *goredis.Client
 	codec driver.Codec

@@ -12,7 +12,8 @@ import (
 //go:embed template/*.html
 var defaultTemplateFS embed.FS
 
-// TemplateManager 邮件模板管理器
+// TemplateManager 负责加载、管理与渲染基于 Go html/template 的邮件正文模板。
+// 默认内置包含了 welcome、verification 与 reset_password 等常用模板及通用布局框架。
 type TemplateManager struct {
 	templates *template.Template
 	names     []string
@@ -40,8 +41,9 @@ func newTemplateManager(externalDir string) (*TemplateManager, error) {
 	return tm, nil
 }
 
-// Render 渲染指定模板。
-// name 为模板名称（不含 .html 后缀），data 为模板数据。
+// Render 渲染指定的命名模板。
+// 参数 name 为模板文件名（不含 .html 后缀，如 "welcome"）；参数 data 为传递给模板的上下文数据。
+// 若模板管理器未初始化、模板不存在或渲染过程中语法报错，返回相应错误。
 func (t *TemplateManager) Render(name string, data any) (string, error) {
 	if t == nil || t.templates == nil {
 		return "", fmt.Errorf("模板管理器未初始化")
@@ -68,7 +70,8 @@ func (t *TemplateManager) Render(name string, data any) (string, error) {
 	return buf.String(), nil
 }
 
-// ListTemplates 返回可用模板名称列表
+// ListTemplates 返回当前已加载的所有可用模板名称切片（不含 .html 后缀与基础布局模板）。
+// 若模板管理器为 nil，返回 nil。
 func (t *TemplateManager) ListTemplates() []string {
 	if t == nil {
 		return nil
@@ -78,7 +81,8 @@ func (t *TemplateManager) ListTemplates() []string {
 	return names
 }
 
-// AddDir 添加外部模板目录。外部目录中的同名模板会覆盖内置模板。
+// AddDir 加载外部模板目录中的所有 *.html 文件。
+// 外部目录中的同名模板将自动覆盖默认内置模板。若路径不存在或非目录，返回错误。
 func (t *TemplateManager) AddDir(dir string) error {
 	if t == nil {
 		return fmt.Errorf("模板管理器未初始化")
@@ -106,8 +110,8 @@ func (t *TemplateManager) AddDir(dir string) error {
 	return nil
 }
 
-// AddFS 从 fs.FS 加载外部模板，同名模板覆盖内置模板。
-// 适用于单二进制部署场景。
+// AddFS 从内嵌文件系统 [fs.FS] 加载匹配 pattern 的外部模板文件。
+// 同名模板将覆盖原有的内置模板，适用于单二进制分发场景。
 func (t *TemplateManager) AddFS(fsys fs.FS, pattern string) error {
 	if t == nil {
 		return fmt.Errorf("模板管理器未初始化")

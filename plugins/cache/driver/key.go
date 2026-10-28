@@ -22,7 +22,7 @@ type KeyEncoder interface {
 //  5. 其他 → fmt.Sprint(key)
 type DefaultKeyEncoder struct{}
 
-// String 实现 [KeyEncoder] 接口。
+// String 把任意键转换为字符串，实现 [KeyEncoder] 接口。
 func (DefaultKeyEncoder) String(key any) string {
 	switch k := key.(type) {
 	case nil:

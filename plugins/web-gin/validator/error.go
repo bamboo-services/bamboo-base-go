@@ -12,12 +12,16 @@ import (
 	v10 "github.com/go-playground/validator/v10"
 )
 
-// ValidationErrorDetail 单个验证错误的详情
+// ValidationErrorDetail 描述单个结构体字段或参数校验失败的具体违规详情。
 type ValidationErrorDetail struct {
-	Field   string `json:"field"`           // 字段名
-	Tag     string `json:"tag"`             // 验证标签
-	Message string `json:"message"`         // 错误消息
-	Value   any    `json:"value,omitempty"` // 触发错误的字段值（安全默认置空避免泄漏敏感输入）
+	// Field 是触发校验错误的结构体字段名称或参数键名。
+	Field string `json:"field"`
+	// Tag 是触发该项错误的验证规则标签名称（例如 "required"、"min" 等）。
+	Tag string `json:"tag"`
+	// Message 是针对该项违规生成的结构化本地化中文提示文本。
+	Message string `json:"message"`
+	// Value 是触发校验错误的原始字段值，为了防范敏感信息外泄默认置为 nil。
+	Value any `json:"value,omitempty"`
 }
 
 // handleErrorInternal 将验证或绑定错误统一安全转换为 apperr.Error 并使用 httpresult 写出。

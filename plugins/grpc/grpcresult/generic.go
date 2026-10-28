@@ -11,12 +11,25 @@ import (
 
 const baseResponseFullName protoreflect.FullName = "xBase.BaseResponse"
 
-// SuccessWith 创建包含业务响应数据的 Protobuf 消息实例，并通过 Protobuf 反射自动查找并注入 BaseResponse 字段。
+// SuccessWith 创建并返回包含标准成功响应信封的 Protobuf 消息实例。
 //
-// 约束规则：
-// 1. T 必须为具体 Protobuf 消息指针（pointer to struct implementing proto.Message）；
-// 2. T 顶层消息字段中必须恰好有且仅有一个 message 字段，其 message descriptor 匹配框架 BaseResponse（FullName 为 xBase.BaseResponse）；
-// 3. 任何非 pointer、interface、非 proto.Message、缺失 BaseResponse 字段、存在多个 BaseResponse 字段等违背约定的情况均属于编程错误，直接 panic。
+// 该函数在框架内部通过反射创建类型参数 T 的新结构体实例，并自动查找顶层字段中唯一匹配
+// 框架 [generate.BaseResponse]（消息全称为 "xBase.BaseResponse"）的字段，调用 [Success]
+// 构造成功信封注入该字段，最后将填充好的消息实例返回给业务调用方。
+//
+// # 泛型类型参数 T 的契约约束
+//
+//   - T 必须是指向具体结构体的指针类型（pointer to struct），禁止传入接口类型或非指针类型；
+//   - T 必须实现 [proto.Message] 接口；
+//   - T 所对应的 Protobuf Descriptor 顶层必须恰好有且仅有一个消息字段的类型为 [generate.BaseResponse]；
+//   - 不支持嵌套深层查找，不对任意类型做无条件承诺；
+//   - 任何违背上述约束的使用均属于编程错误，函数将立即触发 panic 快速失败。
+//
+// # 耗时与追踪注入
+//
+// 生成的 [generate.BaseResponse] 会自动从传入的 ctx 中提取请求追踪标识（[ctxkey.RequestKey]）；
+// 仅当应用处于调试模式且上下文携带请求起始时间（[ctxkey.UserStartTimeKey]）时，才会计算并填充
+// 微秒级整数耗时 Overhead，其余情况 Overhead 稳健保留为 nil。
 func SuccessWith[T any](ctx context.Context, message string) T {
 	t := reflect.TypeOf((*T)(nil)).Elem()
 	if t == nil {

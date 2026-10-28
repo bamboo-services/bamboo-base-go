@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// DriverName 定义 MySQL 方言驱动名称。
+// DriverName 定义 MySQL 方言驱动在全局注册表中的标识名称。
 const DriverName = "mysql"
 
 // adapter 是 MySQL 的 dialect.Adapter 内部实现。
@@ -24,10 +24,11 @@ func init() {
 	dialect.Register(dialect.DriverMySQL, FromEnv)
 }
 
-// New 接收显式 DSN 构造 MySQL dialect.Adapter。
+// New 接收显式 DSN 字符串构造 MySQL 数据库方言适配器 [dialect.Adapter]。
 //
-// 该函数不建立网络连接，如果 DSN 为空或格式无效，将错误推迟至 Open 返回，
-// 且保证返回的错误信息不包含敏感密码。
+// 该函数为纯构造操作，不建立底层网络连接。若 dsn 为空或格式无效，
+// 错误将延迟推迟至 [dialect.Adapter.Open] 方法调用时返回，
+// 且返回的错误信息已进行凭据脱敏，确保不泄露数据库密码。
 func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
@@ -47,14 +48,15 @@ func New(dsn string) dialect.Adapter {
 	}
 }
 
-// FromEnv 从环境变量构造 MySQL dialect.Adapter。
+// FromEnv 从标准环境变量构造 MySQL 数据库方言适配器 [dialect.Adapter]。
 //
-// 优先使用 DATABASE_DSN；若未设置，则从 DATABASE_USER (默认 "root"), DATABASE_PASS (默认 ""),
-// DATABASE_HOST (默认 "localhost"), DATABASE_PORT (默认 "3306"), DATABASE_NAME (默认 "bamboo"),
-// DATABASE_CHARSET (默认 "utf8mb4") 拼装标准 DSN：
+// 函数优先读取 DATABASE_DSN；若未设置，则从 DATABASE_USER (默认 "root")、DATABASE_PASS (默认 "")、
+// DATABASE_HOST (默认 "localhost")、DATABASE_PORT (默认 "3306")、DATABASE_NAME (默认 "bamboo")、
+// DATABASE_CHARSET (默认 "utf8mb4") 拼装标准连接串：
 // user:pass@tcp(host:port)/name?charset=xxx&parseTime=True&loc=Local
 //
-// 任何解析或配置错误均保存于 adapter 中并在 Open 时返回，避免在构造或 init 期产生网络连接或 panic。
+// 任何配置解析错误均安全记录于适配器实例中并推迟至 [dialect.Adapter.Open] 时返回，
+// 避免在构造或 init 期产生网络 I/O、连击失败或不可控 panic。
 func FromEnv() dialect.Adapter {
 	if rawDSN, ok := env.Lookup(env.DatabaseDSN); ok && strings.TrimSpace(string(rawDSN)) != "" {
 		trimmed := strings.TrimSpace(string(rawDSN))

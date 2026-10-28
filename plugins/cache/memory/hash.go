@@ -7,7 +7,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
-// HashCache [driver.HashCache] 的内存实现。
+// HashCache 是 [driver.HashCache] 的内存分片存储实现。
 //
 // 内存中以 map[F][]byte 存储字段（field → 已序列化的 value），整体作为 [memoryEntry.Value]
 // 存入 [Store]，复用 Store 的 TTL / LRU 能力。F 声明为 comparable，可直接作为

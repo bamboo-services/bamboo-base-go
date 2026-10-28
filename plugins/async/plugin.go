@@ -14,40 +14,54 @@ import (
 	"github.com/panjf2000/ants/v2"
 )
 
-// PluginKey 声明 Async 插件主键。
+// PluginKey 声明 Async 插件在应用拓扑图中的主键。
 const PluginKey ctxkey.Key = "plugin_async"
 
-// PoolKey 声明 Async 暴露给应用共享容器的 Pool 句柄键。
+// PoolKey 声明 Async 暴露给应用共享容器的 [Pool] 句柄键。
 const PoolKey ctxkey.Key = "context_async_pool"
 
 var (
-	// ErrPoolClosed 当池已关闭或应用处于关机状态时返回。
+	// ErrPoolClosed 表示协程池已关闭、正在执行停机流程或应用未处于运行状态。
+	// 调用方可通过 [errors.Is] 识别该错误以实施优雅拒绝或降级。
 	ErrPoolClosed = errors.New("async: pool is closed or shutting down")
-	// ErrPoolFull 当池已满且为非阻塞模式时返回。
+
+	// ErrPoolFull 表示协程池并发容量已达上限，非阻塞提交被立即拒绝。
+	// 调用方可通过 [errors.Is] 捕获该错误以实施削峰重试或业务降级。
 	ErrPoolFull = errors.New("async: pool is full")
-	// ErrNilTaskFunc 当提交的任务函数为 nil 时返回。
+
+	// ErrNilTaskFunc 表示向协程池提交的任务执行函数为 nil。
 	ErrNilTaskFunc = errors.New("async: task function cannot be nil")
-	// ErrNotInitialized 当插件尚未初始化或启动时返回。
+
+	// ErrNotInitialized 表示插件尚未完成初始化启动，底层协程池未就绪。
 	ErrNotInitialized = errors.New("async: plugin not initialized")
-	// ErrInvalidPoolCapacity 当容量小于等于 0 时返回。
+
+	// ErrInvalidPoolCapacity 表示协程池配置容量非法，容量必须大于 0。
 	ErrInvalidPoolCapacity = errors.New("async: pool capacity must be positive")
-	// ErrInvalidContext 当提交任务的上下文不满足准入条件（未就绪、跨容器或无授权）时返回。
+
+	// ErrInvalidContext 表示提交任务的上下文不满足准入条件（未就绪、跨容器或无授权）。
 	ErrInvalidContext = errors.New("async: invalid parent context for pool")
 )
 
-// Pool 定义对外暴露的异步池服务接口。
+// Pool 定义对外暴露的异步任务协程池接口，支持并发安全地提交与观测任务。
+// 由插件在启动时以 [PoolKey] 注册到应用共享容器中。
 type Pool interface {
 	// Submit 提交一个异步任务，从 parentCtx 剥离请求级超时，保留容器与追踪信息。
+	// 当应用处于运行状态且并发槽位充足时返回 [Task] 句柄；若提交失败返回相应错误。
+	// 本方法并发安全，可被多个 goroutine 同时调用。
 	Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error)
-	// Running 返回当前正在运行的任务数。
+
+	// Running 返回当前池中正在执行的活跃任务数量。
 	Running() int
-	// Cap 返回池容量。
+
+	// Cap 返回协程池的最大并发容量。
 	Cap() int
-	// Free 返回池可用容量。
+
+	// Free 返回协程池当前可用的并发槽位数量。
 	Free() int
 }
 
-// Option 为 Async 插件配置项。
+// Option 为 Async 插件的全局函数式配置选项。
+// 传入 nil 时将被 [New] 安全忽略。
 type Option func(*config)
 
 type config struct {
@@ -69,7 +83,8 @@ func defaultConfig() config {
 	}
 }
 
-// WithKey 设置插件 Key。
+// WithKey 设置插件在应用拓扑中的组件 Key。
+// 若 key 非法，则忽略并保持默认值 [PluginKey]。
 func WithKey(key ctxkey.Key) Option {
 	return func(c *config) {
 		if key.IsValid() {
@@ -78,7 +93,8 @@ func WithKey(key ctxkey.Key) Option {
 	}
 }
 
-// WithName 设置插件名称。
+// WithName 设置插件在应用生命周期中的人类可读名称。
+// 若 name 为空字符串，则忽略并保持默认名称 "plugin_async"。
 func WithName(name string) Option {
 	return func(c *config) {
 		if name != "" {
@@ -87,7 +103,8 @@ func WithName(name string) Option {
 	}
 }
 
-// WithRequires 声明本池内任务使用的资源（DB/Cache/Email 等），构建 PluginInfo.Requires。
+// WithRequires 声明本池内任务使用的下游共享资源键（如 DB、Cache、Email 等），构建 PluginInfo.Requires。
+// 宿主应用将依据依赖图确保这些组件在协程池关机完全结束前保持可用。
 func WithRequires(keys ...ctxkey.Key) Option {
 	return func(c *config) {
 		for _, k := range keys {
@@ -98,7 +115,8 @@ func WithRequires(keys ...ctxkey.Key) Option {
 	}
 }
 
-// WithCapacity 设置协程池容量（最大并发并发数，必须大于 0）。
+// WithCapacity 设置协程池最大并发运行容量（槽位数，必须大于 0）。
+// 若 cap 小于等于 0，则忽略并保持默认容量 1000。
 func WithCapacity(cap int) Option {
 	return func(c *config) {
 		if cap > 0 {
@@ -107,7 +125,8 @@ func WithCapacity(cap int) Option {
 	}
 }
 
-// WithExpiryDuration 设置 worker 清理空闲间隔。
+// WithExpiryDuration 设置 worker 协程空闲回收间隔。
+// 若 d 小于等于 0，则忽略并保持默认间隔 10 秒。
 func WithExpiryDuration(d time.Duration) Option {
 	return func(c *config) {
 		if d > 0 {
@@ -116,21 +135,23 @@ func WithExpiryDuration(d time.Duration) Option {
 	}
 }
 
-// WithPreAlloc 设置是否预先分配 worker 队列内存。
+// WithPreAlloc 设置是否在协程池启动时预先分配 worker 队列内存。
 func WithPreAlloc(preAlloc bool) Option {
 	return func(c *config) {
 		c.preAlloc = preAlloc
 	}
 }
 
-// WithLogger 注入应用统一日志器，保持 App 隔离。
+// WithLogger 注入应用统一结构化日志器，保持 App 隔离。
+// 为 nil 时插件仅在控制台或标准输出产生最小诊断，不记录任务级调试与错误日志。
 func WithLogger(logger *logging.Logger) Option {
 	return func(c *config) {
 		c.logger = logger
 	}
 }
 
-// Plugin 实现 application.Plugin 与 ctxkey.Exposer 契约（Tool 模式）。
+// Plugin 实现 [application.Plugin] 与 [ctxkey.Exposer] 契约（Tool 模式）。
+// 由宿主生命周期机制调度，不直接由业务业务方构造。
 type Plugin struct {
 	cfg config
 
@@ -149,8 +170,8 @@ type Plugin struct {
 	stopErr  error
 }
 
-// New 构造 Async Tool 定义与工厂，主键为 PluginKey，Provides 包含 PoolKey。
-// 构造过程为纯构造，不创建后台协程池或分配 worker 内存。
+// New 构造 Async Tool 插件定义与工厂，主键为 [PluginKey]，Provides 包含 [PoolKey]。
+// 构造过程为纯配置构造，不创建后台协程池或预分配 worker 内存。
 func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 	cfg := defaultConfig()
 	for _, opt := range opts {
@@ -182,7 +203,8 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 	return info, factory
 }
 
-// Start 在生命周期启动阶段创建私有 ants.Pool。
+// Start 在生命周期启动阶段创建私有底层的并发协程池。
+// 若已启动则幂等返回 nil；若容量参数非法返回 [ErrInvalidPoolCapacity]。
 func (p *Plugin) Start(_ context.Context) error {
 	p.poolMu.Lock()
 	defer p.poolMu.Unlock()
@@ -214,15 +236,15 @@ func (p *Plugin) Start(_ context.Context) error {
 	return nil
 }
 
-// Expose 交付 PluginInfo.Provides 中声明的 PoolKey 底层句柄。
+// Expose 交付 [application.PluginInfo.Provides] 中声明的 [PoolKey] 底层接口句柄。
 func (p *Plugin) Expose() map[ctxkey.Key]any {
 	return map[ctxkey.Key]any{
 		PoolKey: p,
 	}
 }
 
-// Stop 关准入，等待在途任务真实归零，再释放 ants 协程池。
-// 多次重复调用 Stop 共享相同结果与等待同一完成。
+// Stop 关闭准入门禁，阻塞等待在途活跃任务真实归零后释放底层协程池。
+// 即使传入的 ctx 超时，本方法也绝不虚假提前返回；多次重复调用共享相同退出结果与等待同一完成。
 func (p *Plugin) Stop(ctx context.Context) error {
 	if p == nil {
 		return nil
@@ -264,12 +286,14 @@ func (p *Plugin) doStop(_ context.Context) error {
 	return nil
 }
 
-// Running 返回当前正在运行的任务数。
+// Running 返回当前池中正在执行的活跃任务数量。
+// 本方法并发安全。
 func (p *Plugin) Running() int {
 	return int(atomic.LoadInt64(&p.active))
 }
 
-// Cap 返回池容量。
+// Cap 返回协程池的最大并发容量。
+// 若协程池尚未完成 Start 初始化，返回配置容量。本方法并发安全。
 func (p *Plugin) Cap() int {
 	p.poolMu.RLock()
 	defer p.poolMu.RUnlock()
@@ -279,7 +303,8 @@ func (p *Plugin) Cap() int {
 	return p.pool.Cap()
 }
 
-// Free 返回可用容量。
+// Free 返回协程池当前可用的并发槽位数量。
+// 若协程池尚未完成 Start 初始化，返回 0。本方法并发安全。
 func (p *Plugin) Free() int {
 	p.poolMu.RLock()
 	defer p.poolMu.RUnlock()
@@ -289,7 +314,10 @@ func (p *Plugin) Free() int {
 	return p.pool.Free()
 }
 
-// Submit 核心提交实现：准入检查、任务计数登记、Detach 上下文、接入 Force 取消，并在 ants 中执行。
+// Submit 提交异步任务，执行运行态准入检查、任务计数登记、Detach 上下文、接入 Force 取消，并在协程池中执行。
+// 若任务函数 fn 为 nil，返回 [ErrNilTaskFunc]；若应用处于关闭状态返回 [ErrPoolClosed]；
+// 若池满返回 [ErrPoolFull]；若上下文跨容器或未就绪返回 [ErrInvalidContext]。
+// 本方法并发安全。
 func (p *Plugin) Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error) {
 	if fn == nil {
 		return nil, ErrNilTaskFunc
@@ -392,8 +420,9 @@ func (p *Plugin) releaseTask() {
 	}
 }
 
-// Submit 从 parentCtx 的应用共享容器中获取 Pool 实例并提交任务。
-// 若 parentCtx 未挂载容器或池不存在，返回相应错误。
+// Submit 从 parentCtx 的应用共享容器中获取 [Pool] 实例并提交异步任务。
+// 若 parentCtx 未挂载容器或池已停用，返回对应错误（包括 [ErrPoolClosed]、[ErrNotInitialized] 等）。
+// 提交成功后返回关联的 [Task] 句柄。本函数并发安全。
 func Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error) {
 	pool, err := application.Get[Pool](parentCtx, PoolKey)
 	if err != nil {

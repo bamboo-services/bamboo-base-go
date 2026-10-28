@@ -7,7 +7,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
-// ListCache [driver.ListCache] 的内存实现。
+// ListCache 是 [driver.ListCache] 的内存分片存储实现。
 //
 // 内存中以 [][]byte 存储有序元素切片，整体作为 [memoryEntry.Value] 存入 [Store]。
 type ListCache[K any, V any] struct {

@@ -16,36 +16,70 @@ import (
 	"github.com/wneessen/go-mail"
 )
 
-// PluginKey 是 Email 插件的固定唯一标识。
+// PluginKey 是 Email 插件在应用拓扑图中的固定唯一标识。
 const PluginKey ctxkey.Key = "plugin_email"
 
-// 常见错误定义。
 var (
-	ErrStopped        = errors.New("email: client has been stopped")
+	// ErrStopped 表示邮件客户端已被停止或正在停机排空，拒绝接纳新的发信请求。
+	ErrStopped = errors.New("email: client has been stopped")
+
+	// ErrRecipientEmpty 表示收件人地址列表为空。
 	ErrRecipientEmpty = errors.New("email: recipient address cannot be empty")
-	ErrSubjectEmpty   = errors.New("email: subject cannot be empty")
-	ErrTemplateEmpty  = errors.New("email: template name cannot be empty")
+
+	// ErrSubjectEmpty 表示邮件主题为空。
+	ErrSubjectEmpty = errors.New("email: subject cannot be empty")
+
+	// ErrTemplateEmpty 表示模板发信时指定的模板名称为空。
+	ErrTemplateEmpty = errors.New("email: template name cannot be empty")
+
+	// ErrNotInitialized 表示邮件插件尚未完成 Start 阶段的初始化。
 	ErrNotInitialized = errors.New("email: plugin not initialized")
-	ErrMissingHost    = errors.New("email: missing SMTP host")
-	ErrMissingUser    = errors.New("email: missing SMTP username")
-	ErrMissingPass    = errors.New("email: missing SMTP password")
-	ErrMissingFrom    = errors.New("email: missing sender address")
-	ErrInvalidPort    = errors.New("email: invalid SMTP port (must be between 1 and 65535)")
+
+	// ErrMissingHost 表示配置中缺少 SMTP 主机地址。
+	ErrMissingHost = errors.New("email: missing SMTP host")
+
+	// ErrMissingUser 表示配置中缺少 SMTP 认证用户名。
+	ErrMissingUser = errors.New("email: missing SMTP username")
+
+	// ErrMissingPass 表示配置中缺少 SMTP 认证密码。
+	ErrMissingPass = errors.New("email: missing SMTP password")
+
+	// ErrMissingFrom 表示配置中缺少发件人邮箱地址。
+	ErrMissingFrom = errors.New("email: missing sender address")
+
+	// ErrInvalidPort 表示 SMTP 端口号超出合法范围（必须介于 1 到 65535 之间）。
+	ErrInvalidPort = errors.New("email: invalid SMTP port (must be between 1 and 65535)")
 )
 
-// Config 邮件客户端配置。
+// Config 包含邮件客户端的连接与认证配置。
 type Config struct {
-	Host        string // SMTP 服务器地址
-	Port        int    // SMTP 端口
-	Username    string // 认证用户名
-	Password    string // 认证密码
-	FromName    string // 发件人名称
-	FromAddr    string // 发件人地址
-	TLSType     string // TLS 策略 (none/starttls/tls)
-	TemplateDir string // 外部模板目录 (可选)
+	// Host 为 SMTP 服务器地址（域名或 IP）。
+	Host string
+
+	// Port 为 SMTP 服务端口（常用端口如 25、465、587，缺省时默认为 587）。
+	Port int
+
+	// Username 为 SMTP 身份验证用户名。
+	Username string
+
+	// Password 为 SMTP 身份验证密码或应用授权码。
+	Password string
+
+	// FromName 为发件人显示名称（可选，如 "Bamboo Service"）。
+	FromName string
+
+	// FromAddr 为发件人邮箱地址（必填）。
+	FromAddr string
+
+	// TLSType 为 TLS 连接加密策略（支持 "none"、"starttls" 与 "tls"，缺省默认为 "starttls"）。
+	TLSType string
+
+	// TemplateDir 为可选的外部 HTML 模板根目录。
+	TemplateDir string
 }
 
-// Option 定义邮件插件的配置选项。
+// Option 定义邮件插件的全局函数式配置选项。
+// 传入 nil 时将被 [New] 安全忽略。
 type Option func(*pluginOptions)
 
 type templateFSEntry struct {
@@ -61,39 +95,40 @@ type pluginOptions struct {
 	templateFS   []templateFSEntry
 }
 
-// WithConfig 显式指定配置。
+// WithConfig 显式指定邮件客户端的基础配置。
 func WithConfig(cfg Config) Option {
 	return func(o *pluginOptions) {
 		o.cfg = cfg
 	}
 }
 
-// FromEnv 从环境变量读取配置。
+// FromEnv 配置插件从环境变量中读取 SMTP 运行参数。
 //
-// 环境变量列表:
-//   - EMAIL_HOST: SMTP 服务器地址 [必填]
-//   - EMAIL_PORT: SMTP 端口 [必填，缺省 587]
-//   - EMAIL_USER: 认证用户名 [必填]
-//   - EMAIL_PASS: 认证密码 [必填]
-//   - EMAIL_FROM: 发件人地址 [必填]
-//   - EMAIL_FROM_NAME: 发件人名称 [可选]
-//   - EMAIL_TLS: TLS 策略 [可选，默认 starttls]
-//   - EMAIL_TEMPLATE_DIR: 外部模板目录 [可选]
+// 支持的环境变量键如下：
+//   - EMAIL_HOST: SMTP 服务器地址（必填）；
+//   - EMAIL_PORT: SMTP 端口（可选，缺省默认为 587）；
+//   - EMAIL_USER: 认证用户名（必填）；
+//   - EMAIL_PASS: 认证密码（必填）；
+//   - EMAIL_FROM: 发件人地址（必填）；
+//   - EMAIL_FROM_NAME: 发件人显示名称（可选）；
+//   - EMAIL_TLS: TLS 策略（可选，支持 "none"、"starttls"、"tls"，缺省为 "starttls"）；
+//   - EMAIL_TEMPLATE_DIR: 外部模板根目录（可选）。
 func FromEnv() Option {
 	return func(o *pluginOptions) {
 		o.fromEnv = true
 	}
 }
 
-// WithLogger 显式注入应用 Logger 对象。
-// 不走 slog.Default / 全局单例，保持 App 隔离。
+// WithLogger 显式注入应用统一结构化日志器，保持 App 隔离。
+// 为 nil 时插件仅在关键失败时输出最小诊断。
 func WithLogger(l *logging.Logger) Option {
 	return func(o *pluginOptions) {
 		o.logger = l
 	}
 }
 
-// WithTemplateDir 预添加外部模板目录。
+// WithTemplateDir 预添加外部 HTML 模板目录，目录内的模板文件在启动时自动加载。
+// 若 dir 为空字符串，则忽略。
 func WithTemplateDir(dir string) Option {
 	return func(o *pluginOptions) {
 		if dir != "" {
@@ -102,7 +137,8 @@ func WithTemplateDir(dir string) Option {
 	}
 }
 
-// WithTemplateFS 预加载内嵌模板 FS。
+// WithTemplateFS 预加载内嵌文件系统的 HTML 模板集合，适用于单二进制内嵌资产部署。
+// 若 fsys 为 nil 或 pattern 为空字符串，则忽略。
 func WithTemplateFS(fsys fs.FS, pattern string) Option {
 	return func(o *pluginOptions) {
 		if fsys != nil && pattern != "" {
@@ -111,12 +147,14 @@ func WithTemplateFS(fsys fs.FS, pattern string) Option {
 	}
 }
 
-// Client 提供邮件发送与模板管理 API。
+// Client 提供邮件发送、HTML 渲染与模板管理能力。
+// 在应用启动后以 [ctxkey.EmailClientKey] 注入共享组件容器。
+// [Client] 的所有方法均为并发安全。
 type Client struct {
 	plugin *Plugin
 }
 
-// Plugin 实现了 application.Plugin 与 ctxkey.Exposer 接口。
+// Plugin 实现 [application.Plugin] 与 [ctxkey.Exposer] 接口，作为 Tool 模式受宿主编排。
 type Plugin struct {
 	opts pluginOptions
 
@@ -134,8 +172,8 @@ type Plugin struct {
 	closeDone  chan struct{}
 }
 
-// New 构造 Email 插件注册描述与工厂函数。
-// 构造、New、工厂均不发生任何网络建连与 SMTP 连接。
+// New 构造 Email 插件注册描述与工厂函数，主键为 [PluginKey]，Provides 包含 [ctxkey.EmailClientKey]。
+// 构造函数与返回的工厂均为纯内存配置，不发起任何 SMTP 网络连接或 DNS 查询。
 func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 	var po pluginOptions
 	for _, opt := range opts {
@@ -163,8 +201,9 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 	return info, factory
 }
 
-// Start 在 App 启动阶段完成纯配置客户端和模板管理器初始化。
-// Start 时不连接 SMTP，只有实际发信时才建连。
+// Start 在应用启动阶段完成配置校验、环境变量合并以及模板管理器初始化。
+// 本阶段不与 SMTP 服务器建立网络连接，连接在调用发送时按需延迟建立。
+// 若关键配置缺失或模板语法错误，返回相应错误。
 func (p *Plugin) Start(ctx context.Context) error {
 	if p == nil {
 		return ErrNotInitialized
@@ -282,7 +321,7 @@ func (p *Plugin) Start(ctx context.Context) error {
 	return nil
 }
 
-// Expose 返回对外暴露的句柄资源。
+// Expose 返回对外暴露的句柄资源，将 [Client] 以 [ctxkey.EmailClientKey] 注入共享组件容器。
 func (p *Plugin) Expose() map[ctxkey.Key]any {
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
@@ -291,8 +330,8 @@ func (p *Plugin) Expose() map[ctxkey.Key]any {
 	}
 }
 
-// Stop 关闭发信准入，等待所有已接纳的发送真实退出再清理。
-// nil 接收者或重复调用 Stop 必须安全幂等并等待同一完成。
+// Stop 关闭发信准入，并阻塞等待所有已接纳的在途发送任务执行完毕后再清理客户端句柄。
+// nil 接收者或多次重复调用 Stop 均安全幂等并等待同一关停动作完成。
 func (p *Plugin) Stop(ctx context.Context) error {
 	if p == nil {
 		return nil
@@ -352,7 +391,8 @@ func (p *Plugin) release() {
 	}
 }
 
-// InflightCount 返回当前正在进行的发送任务数（主要用于测试观测）。
+// InflightCount 返回当前正在进行的发送任务数量。
+// 主要供监控观测与测试验证使用。本方法并发安全。
 func (p *Plugin) InflightCount() int {
 	if p == nil {
 		return 0
@@ -420,8 +460,10 @@ func (c *watchedConn) Close() error {
 	return c.closeErr
 }
 
-// Send 根据 Message 构建并发送邮件。
-// 准入、执行、日志均处于严格受控与监督边界，支持 ctx 取消。
+// Send 根据给定的 [Message] 构建并发送邮件。
+// 发送过程严格受 ctx 的超时与取消管辖；若插件已处于停止状态，立即返回 [ErrStopped]。
+// 发送在调用方协程内同步完成，不启动不可控的脱靶后台协程。
+// 本方法并发安全。
 func (c *Client) Send(ctx context.Context, msg *Message) error {
 	if c == nil || c.plugin == nil {
 		return ErrNotInitialized
@@ -592,12 +634,15 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 	return nil
 }
 
-// SendHTML 发送 HTML 邮件。
+// SendHTML 发送包含 HTML 正文的邮件，行为契约与 [Client.Send] 一致。
+// 本方法并发安全。
 func (c *Client) SendHTML(ctx context.Context, msg *Message) error {
 	return c.Send(ctx, msg)
 }
 
-// SendTemplate 使用模板管理器渲染并发送邮件。
+// SendTemplate 使用内置或外部模板渲染正文并发送邮件。
+// 要求 msg.Template 必须非空（对应模板名称，无需包含 .html 后缀），渲染结果写入 msg.HTMLBody 并调用 [Client.Send]。
+// 若模板不存在或渲染失败，返回相应错误。本方法并发安全。
 func (c *Client) SendTemplate(ctx context.Context, msg *Message) error {
 	if c == nil || c.plugin == nil {
 		return ErrNotInitialized
@@ -626,7 +671,8 @@ func (c *Client) SendTemplate(ctx context.Context, msg *Message) error {
 	return c.Send(ctx, msg)
 }
 
-// AddTemplateDir 添加外部模板目录。
+// AddTemplateDir 动态挂载外部模板目录。
+// 外部目录中的同名模板将覆盖原有的同名模板。本方法并发安全。
 func (c *Client) AddTemplateDir(dir string) error {
 	if c == nil || c.plugin == nil {
 		return ErrNotInitialized
@@ -640,7 +686,8 @@ func (c *Client) AddTemplateDir(dir string) error {
 	return tmpl.AddDir(dir)
 }
 
-// AddTemplateFS 从 fs.FS 添加内嵌模板。
+// AddTemplateFS 动态挂载内嵌文件系统的 HTML 模板集合。
+// 内嵌集合中的同名模板将覆盖原有的同名模板。本方法并发安全。
 func (c *Client) AddTemplateFS(fsys fs.FS, pattern string) error {
 	if c == nil || c.plugin == nil {
 		return ErrNotInitialized
@@ -654,7 +701,8 @@ func (c *Client) AddTemplateFS(fsys fs.FS, pattern string) error {
 	return tmpl.AddFS(fsys, pattern)
 }
 
-// ListTemplates 列出可用模板。
+// ListTemplates 返回当前已加载的所有可用模板名称列表。
+// 若客户端未就绪或未初始化，返回 nil。本方法并发安全。
 func (c *Client) ListTemplates() []string {
 	if c == nil || c.plugin == nil {
 		return nil

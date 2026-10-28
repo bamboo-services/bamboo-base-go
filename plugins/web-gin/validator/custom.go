@@ -18,22 +18,28 @@ var (
 	alphanumUnderscoreRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 )
 
-// ValidateStrictURL 严格的 URL 验证（仅支持 HTTP/HTTPS）
+// ValidateStrictURL 执行严格的 URL 格式验证。
+//
+// 仅允许以 "http://" 或 "https://" 开头，且后跟有效域名或路径的 URL 格式。
 func ValidateStrictURL(fl v10.FieldLevel) bool {
 	return urlRegex.MatchString(fl.Field().String())
 }
 
-// ValidateStrictUUID 严格的 UUID 格式验证
+// ValidateStrictUUID 执行严格的 UUID 格式验证。
+//
+// 仅匹配符合 RFC 4122 标准的 8-4-4-4-12 格式 UUID 字符串。
 func ValidateStrictUUID(fl v10.FieldLevel) bool {
 	return uuidRegex.MatchString(fl.Field().String())
 }
 
-// ValidateAlphanumUnderscore 字母数字下划线验证
+// ValidateAlphanumUnderscore 验证字段值仅包含字母、数字与下划线。
 func ValidateAlphanumUnderscore(fl v10.FieldLevel) bool {
 	return alphanumUnderscoreRegex.MatchString(fl.Field().String())
 }
 
-// ValidateRegexp 正则表达式验证（支持自定义正则参数）
+// ValidateRegexp 执行基于参数传参的正则表达式验证。
+//
+// 参数 fl.Param() 必须为合法的正则表达式模式；若模式为空或无法编译，返回 false。
 func ValidateRegexp(fl v10.FieldLevel) bool {
 	pattern := fl.Param()
 	if pattern == "" {
@@ -46,7 +52,10 @@ func ValidateRegexp(fl v10.FieldLevel) bool {
 	return re.MatchString(fl.Field().String())
 }
 
-// ValidateEnumInt 整数枚举值验证
+// ValidateEnumInt 验证整型字段值是否属于预设的枚举集合。
+//
+// 验证规则参数为以空格分隔的整数列表（例如 "1 2 3"）。
+// 支持各类有符号与无符号整数类型（超出 int64 范围的大无符号数返回 false）。
 func ValidateEnumInt(fl v10.FieldLevel) bool {
 	param := fl.Param()
 	if param == "" {
@@ -85,7 +94,9 @@ func ValidateEnumInt(fl v10.FieldLevel) bool {
 	return ok
 }
 
-// ValidateEnumString 字符串枚举值验证
+// ValidateEnumString 验证字符串字段值是否属于预设的枚举集合。
+//
+// 验证规则参数为以空格分隔的候选字符串列表（例如 "active pending disabled"）。
 func ValidateEnumString(fl v10.FieldLevel) bool {
 	param := fl.Param()
 	if param == "" {
@@ -110,7 +121,10 @@ func ValidateEnumString(fl v10.FieldLevel) bool {
 	return false
 }
 
-// ValidateEnumFloat 浮点数枚举值验证
+// ValidateEnumFloat 验证浮点数字段值是否属于预设的枚举集合。
+//
+// 验证规则参数为以空格分隔的浮点数字符串列表（例如 "1.5 2.0 3.14"）。
+// 比较时采用 1e-9 容差 epsilon 进行绝对差比较。
 func ValidateEnumFloat(fl v10.FieldLevel) bool {
 	param := fl.Param()
 	if param == "" {
@@ -148,7 +162,9 @@ func ValidateEnumFloat(fl v10.FieldLevel) bool {
 	return false
 }
 
-// ValidateSnowflake Snowflake ID 格式验证（纯数字、长度 1~20）
+// ValidateSnowflake 验证字符串是否符合 Snowflake 雪花算法 ID 格式。
+//
+// 仅允许长度为 1 至 20 个字符的纯 ASCII 数字字符串，空字符串或包含非数字字符返回 false。
 func ValidateSnowflake(fl v10.FieldLevel) bool {
 	field := fl.Field()
 	if field.Kind() != reflect.String {

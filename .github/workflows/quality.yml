@@ -57,3 +57,5 @@ jobs:
         run: make proto-check
       - name: Verify consumer examples and README quickstart
         run: make check-examples
+      - name: Run scripts self-test suite
+        run: make test-scripts

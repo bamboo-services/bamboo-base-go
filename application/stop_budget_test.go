@@ -153,14 +153,8 @@ func TestApp_StopBudget_TimeoutRetainsDepsAndUnblocks(t *testing.T) {
 	// 2. 解除阻塞，消费者实际 Stop 完成
 	cleanupUnblock()
 
-	// 等待消费者 goroutine 退出并确认计数
-	recConsumer := app.staticInstances[consumerKey]
-	recConsumer.stopMu.Lock()
-	consumerStopDone := recConsumer.stopDone
-	recConsumer.stopMu.Unlock()
-	if consumerStopDone != nil {
-		<-consumerStopDone
-	}
+	// 等待消费者 goroutine 退出并确认计数（统一 stopDone 完成信号，有界等待）
+	waitForStaticStopDone(t, app, consumerKey, 2*time.Second)
 	if consumer.stopCalled.Load() != 1 {
 		t.Fatalf("expected consumer Stop called exactly 1 time, got %d", consumer.stopCalled.Load())
 	}

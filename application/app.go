@@ -44,7 +44,8 @@ type staticInstanceRecord struct {
 	stopped atomic.Bool
 	stopErr error
 
-	// 停止过程并发控制
+	// 停止过程并发控制；stopDone 在实例构造时即创建，任意时刻可等待，
+	// Stop 完成（含 panic 路径）后关闭且仅关闭一次，作为静态实例收尾的统一完成信号
 	stopMu      sync.Mutex
 	stopStarted bool
 	stopDone    chan struct{}
@@ -458,6 +459,9 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 				instanceID: instID,
 				plugin:     inst,
 				handle:     newRunHandle(instID, key),
+				// 预创建 stopDone：迟到收尾场景下（如 Start 超时后脱离协调的晚 Stop），
+				// 测试与内核在任何时刻等待该信号均不会因惰性创建而拿到 nil
+				stopDone: make(chan struct{}),
 			}
 			if runnable, ok := inst.(RunnablePlugin); ok {
 				rec.runnable = runnable

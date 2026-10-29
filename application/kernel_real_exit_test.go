@@ -72,7 +72,6 @@ func (p *realExitProviderTool) Expose() map[ctxkey.Key]any {
 type realExitConsumerTool struct {
 	startEntered chan struct{}
 	releaseStart chan struct{}
-	stopEntered  chan struct{}
 	startCalled  atomic.Int32
 	stopCalled   atomic.Int32
 }
@@ -91,13 +90,6 @@ func (c *realExitConsumerTool) Start(ctx context.Context) error {
 
 func (c *realExitConsumerTool) Stop(ctx context.Context) error {
 	c.stopCalled.Add(1)
-	if c.stopEntered != nil {
-		select {
-		case <-c.stopEntered:
-		default:
-			close(c.stopEntered)
-		}
-	}
 	return nil
 }
 
@@ -121,7 +113,6 @@ func TestKernelStartTimeout_NoExternalShutdown_RealExit(t *testing.T) {
 	consumer := &realExitConsumerTool{
 		startEntered: make(chan struct{}),
 		releaseStart: releaseStart,
-		stopEntered:  make(chan struct{}),
 	}
 
 	// 设定短 StartTimeout 与 Shutdown 预算，Grace < Shutdown
@@ -197,12 +188,8 @@ func TestKernelStartTimeout_NoExternalShutdown_RealExit(t *testing.T) {
 	})
 
 	// 等待内核收尾 goroutine 真实执行 safeCallStop 晚清理：
-	// 晚清理是脱离关机协调的独立 goroutine，通道同步替代 sleep，消除负载敏感窗口
-	select {
-	case <-consumer.stopEntered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for consumer.Stop late cleanup")
-	}
+	// 晚清理是脱离关机协调的独立 goroutine，经实例 stopDone 统一完成信号确定性同步
+	waitForStaticStopDone(t, app, consumerKey, 2*time.Second)
 
 	// consumer.Start 真实退出后，consumer 应被晚 Stop 且仅 Stop 一次
 	if cStops := consumer.stopCalled.Load(); cStops != 1 {

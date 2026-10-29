@@ -485,7 +485,6 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 	var runCalled atomic.Bool
 	var stopCalled atomic.Int32
 	var stopCalledBeforeStartReturn atomic.Bool
-	stopEntered := make(chan struct{})
 
 	err = app.RegisterComponent(PluginInfo{
 		Key:      compKey,
@@ -510,11 +509,6 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 				stopCalled.Add(1)
 				if !startFinished.Load() {
 					stopCalledBeforeStartReturn.Store(true)
-				}
-				select {
-				case <-stopEntered:
-				default:
-					close(stopEntered)
 				}
 				return nil
 			},
@@ -613,13 +607,13 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 		t.Fatal("timeout waiting for app.Run to terminate")
 	}
 
-	// 等待引擎任务 goroutine 真实执行迟到 Stop 后再断言计数：
-	// Shutdown 超时返回后 Run 即返回，迟到 Stop 在引擎任务 goroutine 中执行，
-	// 与本断言无 happens-before，重负载下偶发读到 0
-	select {
-	case <-stopEntered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for component Stop after release")
+	// 任务句柄终态由引擎在迟到 Stop 完成后发布，RunHandle.Wait 即引擎迟到收尾的统一完成信号：
+	// 先等终态再断言计数，消除断言与引擎任务 goroutine 之间的负载敏感窗口
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	waitRes, waitErr := handle.Wait(waitCtx)
+	if waitErr == nil || !errors.Is(waitErr, context.DeadlineExceeded) {
+		t.Fatalf("expected handle.Wait to contain context.DeadlineExceeded, got: %v", waitErr)
 	}
 
 	// 释放 Start 返回后绝不能调用 Run
@@ -632,13 +626,6 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 		t.Fatalf("expected component Stop called exactly once, got %d", stops)
 	}
 
-	// 任务句柄终态校验：使用有界 waitCtx 防死锁，非 nil 且包含超时原因
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer waitCancel()
-	waitRes, waitErr := handle.Wait(waitCtx)
-	if waitErr == nil || !errors.Is(waitErr, context.DeadlineExceeded) {
-		t.Fatalf("expected handle.Wait to contain context.DeadlineExceeded, got: %v", waitErr)
-	}
 	if !errors.Is(waitRes.StartErr, context.DeadlineExceeded) {
 		t.Fatalf("expected waitRes.StartErr to be context.DeadlineExceeded, got: %v", waitRes.StartErr)
 	}

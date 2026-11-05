@@ -11,19 +11,23 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
-// componentInstance 是 Component 运行实例在引擎内部的记录
+// ==============================
+// 内部组件实例记录
+// ==============================
+
+// componentInstance 是 Component 运行实例在引擎内部的记录。
 type componentInstance struct {
-	id           string
-	compKey      ctxkey.Key
-	parentID     string
-	parentKey    ctxkey.Key
-	rawPlugin    RunnablePlugin
-	handle       *runHandleImpl
-	stopDone     chan struct{}
-	stopped      atomic.Bool
-	stopPanicked atomic.Bool
-	stopErr      error
-	retainedDeps []ctxkey.Key
+	id           string         // 组件实例唯一标识
+	compKey      ctxkey.Key     // 组件插件标识键
+	parentID     string         // 父级实例唯一标识
+	parentKey    ctxkey.Key     // 父级插件标识键
+	rawPlugin    RunnablePlugin // 实际运行的插件接口实例
+	handle       *runHandleImpl // 交付给调用方的运行句柄
+	stopDone     chan struct{}  // Stop 完成（含 panic）后的通知通道
+	stopped      atomic.Bool    // 标记 Stop 是否已执行
+	stopPanicked atomic.Bool    // 标记 Stop 阶段是否发生 panic
+	stopErr      error          // Stop 执行返回的错误
+	retainedDeps []ctxkey.Key   // 该实例当前占用的依赖资源键集合
 }
 
 func newComponentInstance(id string, compKey ctxkey.Key, parentID string, parentKey ctxkey.Key, deps []ctxkey.Key, handle *runHandleImpl) *componentInstance {

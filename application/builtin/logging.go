@@ -12,6 +12,10 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 )
 
+// ==============================
+// 导出常量与配置
+// ==============================
+
 // LoggerPluginKey 是内置日志受管插件在拓扑图中的全局唯一标识。
 //
 // 作为 [application.PluginInfo.Key] 传递给 [application.App.RegisterTool]，
@@ -30,31 +34,15 @@ const LoggerKey ctxkey.Key = "context_logger"
 // 零值时使用各字段的零值配置；若 Rotator 的配置为空，底层日志写入器
 // 将使用其内部默认值（目录默认 ".logs"，文件名前缀默认 "log"）。
 type LoggerConfig struct {
-	// Rotator 是文件日志轮转配置，包含目标目录、文件名格式与单文件大小限制。
-	Rotator logging.RotatorConfig
-
-	// Console 是控制台日志输出目标。
-	// 为 nil 时由底层处理器默认输出至标准输出，也可传入 [io.Discard] 禁用控制台输出。
-	Console io.Writer
-
-	// Level 是日志输出的最低级别（如 [slog.LevelInfo] 或 [slog.LevelDebug]）。
-	Level slog.Level
-
-	// Debug 标识是否开启调试模式。
-	Debug bool
+	Rotator logging.RotatorConfig // 文件日志轮转配置，包含目标目录、文件名格式与单文件大小限制
+	Console io.Writer             // 控制台日志输出目标，为 nil 时由底层处理器默认输出至标准输出
+	Level   slog.Level            // 日志输出的最低级别（如 [slog.LevelInfo] 或 [slog.LevelDebug]）
+	Debug   bool                  // 标识是否开启调试模式
 }
 
-type loggerPlugin struct {
-	cfg LoggerConfig
-
-	mu      sync.Mutex
-	started bool
-	writer  *logging.RotatingWriter
-	logger  *logging.Logger
-
-	stopOnce sync.Once
-	stopErr  error
-}
+// ==============================
+// 构造函数
+// ==============================
 
 // NewLogger 构造内置日志受管插件的元信息与工厂闭包。
 //
@@ -87,6 +75,22 @@ func NewLogger(cfg LoggerConfig) (application.PluginInfo, func() application.Plu
 	}
 
 	return info, factory
+}
+
+// ==============================
+// 私有受管插件实现
+// ==============================
+
+type loggerPlugin struct {
+	cfg LoggerConfig // 受管配置选项
+
+	mu      sync.Mutex              // 保护运行态字段的互斥锁
+	started bool                    // 标识组件是否已启动
+	writer  *logging.RotatingWriter // 底层文件轮转写入器
+	logger  *logging.Logger         // 构造完成的日志器实例
+
+	stopOnce sync.Once // 确保 Stop 只执行一次的同步原语
+	stopErr  error     // 缓存 Stop 执行返回的错误
 }
 
 // Start 启动受管日志组件，完成 RotatingWriter、Handler 与 Logger 构造。

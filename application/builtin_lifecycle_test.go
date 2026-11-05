@@ -1,4 +1,4 @@
-package builtin_test
+package application_test
 
 import (
 	"context"
@@ -18,15 +18,22 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
 )
 
-type testWorker struct {
-	logger *logging.Logger
-	node   *snowflake.Node
+// ==============================
+// 测试辅助 Worker 与工厂
+// ==============================
 
-	readyCh chan struct{}
-	idCh    chan int64
-	stopCh  chan struct{}
+// testWorker 是用于验证应用生命周期与内置受管组件协同的测试 Worker 插件。
+type testWorker struct {
+	logger *logging.Logger // 日志记录器实例，由 Start 从容器上下文提取
+	node   *snowflake.Node // 雪花算法发号器节点，由 Start 从容器上下文提取
+
+	readyCh chan struct{} // 标识 Worker 已成功生成首个 ID 处于就绪状态
+	idCh    chan int64    // 传递生成的首个雪花 ID 给外部测试断言
+	stopCh  chan struct{} // 通知 Run 循环停止的退出信号通道
 }
 
+// Start 在 Worker 启动阶段从上下文提取日志器与雪花算法发号节点。
+// 若任一受管组件未注册或类型不符，返回对应的错误并终止启动。
 func (w *testWorker) Start(ctx context.Context) error {
 	var errLogger *apperr.Error
 	w.logger, errLogger = application.Get[*logging.Logger](ctx, builtin.LoggerKey)
@@ -42,6 +49,8 @@ func (w *testWorker) Start(ctx context.Context) error {
 	return nil
 }
 
+// Run 执行 Worker 的主事件循环。
+// 生成首个雪花 ID，记录运行日志，通知就绪通道，并阻塞等待退出或上下文取消。
 func (w *testWorker) Run(ctx context.Context) error {
 	id, genErr := w.node.Generate()
 	if genErr != nil {
@@ -59,6 +68,8 @@ func (w *testWorker) Run(ctx context.Context) error {
 	}
 }
 
+// Stop 停止 Worker 并释放资源。
+// 关闭内部 stopCh 唤醒 Run 退出，并在底层 Logger 关闭前输出停止确认日志。
 func (w *testWorker) Stop(ctx context.Context) error {
 	close(w.stopCh)
 	if w.logger != nil {
@@ -67,10 +78,13 @@ func (w *testWorker) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Quiesce 执行 Worker 的静默收拢阶段。
+// 本测试 Worker 无需额外静默逻辑，直接返回 nil。
 func (w *testWorker) Quiesce(ctx context.Context) error {
 	return nil
 }
 
+// newWorkerFactory 构造测试 Worker 的插件元信息、工厂函数与实例指针。
 func newWorkerFactory() (application.PluginInfo, func() application.RunnablePlugin, *testWorker) {
 	worker := &testWorker{
 		readyCh: make(chan struct{}),
@@ -89,6 +103,7 @@ func newWorkerFactory() (application.PluginInfo, func() application.RunnablePlug
 	return info, fac, worker
 }
 
+// setupApp 根据指定目录与节点 ID 装配包含内置日志、雪花组件与测试 Worker 的 App 实例。
 func setupApp(t *testing.T, dir string, dcID, nodeID int64) (*application.App, *testWorker) {
 	t.Helper()
 	logInfo, logFac := builtin.NewLogger(builtin.LoggerConfig{
@@ -120,6 +135,11 @@ func setupApp(t *testing.T, dir string, dcID, nodeID int64) (*application.App, *
 	return app, worker
 }
 
+// ==============================
+// 生命周期测试用例
+// ==============================
+
+// TestAppLifecycle_BuiltinLoggingAndSnowflake 验证内置受管日志与雪花组件在多应用实例中的完整生命周期与隔离性。
 func TestAppLifecycle_BuiltinLoggingAndSnowflake(t *testing.T) {
 	origDefault := slog.Default()
 
@@ -268,6 +288,7 @@ func TestAppLifecycle_BuiltinLoggingAndSnowflake(t *testing.T) {
 	}
 }
 
+// TestAppLifecycle_IllegalSnowflakeNodeFailsRun 验证非法雪花参数导致 App 启动失败并正确退出。
 func TestAppLifecycle_IllegalSnowflakeNodeFailsRun(t *testing.T) {
 	dir := t.TempDir()
 	logInfo, logFac := builtin.NewLogger(builtin.LoggerConfig{

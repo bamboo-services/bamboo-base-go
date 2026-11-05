@@ -10,20 +10,19 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
 )
 
+// ==============================
+// 导出常量
+// ==============================
+
 // SnowflakePluginKey 是内置雪花算法受管插件在拓扑图中的全局唯一标识。
 //
 // 作为 [application.PluginInfo.Key] 传递给 [application.App.RegisterTool]，
 // 用于在依赖拓扑排序与生命周期管理中唯一标识内置雪花算法发号器组件。
 const SnowflakePluginKey ctxkey.Key = "plugin_snowflake"
 
-type snowflakePlugin struct {
-	datacenterID int64
-	nodeID       int64
-
-	mu      sync.Mutex
-	started bool
-	node    *snowflake.Node
-}
+// ==============================
+// 构造函数
+// ==============================
 
 // NewSnowflake 构造内置雪花算法受管插件的元信息与工厂闭包。
 //
@@ -59,6 +58,19 @@ func NewSnowflake(datacenterID, nodeID int64) (application.PluginInfo, func() ap
 	}
 
 	return info, factory
+}
+
+// ==============================
+// 私有受管插件实现
+// ==============================
+
+type snowflakePlugin struct {
+	datacenterID int64 // 数据中心 ID，合法取值范围 [0, 7]
+	nodeID       int64 // 工作节点 ID，合法取值范围 [0, 7]
+
+	mu      sync.Mutex      // 保护运行态字段的互斥锁
+	started bool            // 标识组件是否已启动
+	node    *snowflake.Node // 构造完成的雪花算法发号节点实例
 }
 
 // Start 启动受管雪花算法组件，调用底层 NewNode 并对非法 ID 校验报错。

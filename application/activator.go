@@ -9,51 +9,55 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
-// componentQueueItem 描述排队中尚未派发的任务
+// ==============================
+// 内部任务状态与引擎结构
+// ==============================
+
+// componentQueueItem 描述排队中尚未派发的任务。
 type componentQueueItem struct {
-	instanceID string
-	parentID   string
-	parentKey  ctxkey.Key
-	compKey    ctxkey.Key
-	handle     *runHandleImpl
-	payload    any
-	deps       []ctxkey.Key
+	instanceID string         // 分配给该次激活实例的唯一 ID（如 compKey_timestamp）
+	parentID   string         // 发起激活的父级实例唯一 ID
+	parentKey  ctxkey.Key     // 发起激活的父级插件键
+	compKey    ctxkey.Key     // 被激发的组件唯一标识键
+	handle     *runHandleImpl // 交付给调用方的运行句柄
+	payload    any            // 透传给组件的业务激活数据
+	deps       []ctxkey.Key   // 该组件声明依赖的外部资源键集合
 
 	// 取消与派发状态分支
-	mu          sync.Mutex
-	stage       string // queued/factory/start/run/stop/stop-panic
-	dispatched  bool
-	cancelled   bool
-	cancelErr   error
-	runCancel   context.CancelFunc // 派发后若需取消
-	executeDone chan struct{}
+	mu          sync.Mutex         // 保护当前排队项内部状态的互斥锁
+	stage       string             // 当前生命周期阶段（queued/factory/start/run/stop/stop-panic）
+	dispatched  bool               // 标识是否已成功分配槽位并派发执行
+	cancelled   bool               // 标识是否在派发前被取消
+	cancelErr   error              // 记录排队期取消的原因错误
+	runCancel   context.CancelFunc // 派发后用于级联取消执行的 CancelFunc
+	executeDone chan struct{}      // 标识整个执行流程完全结束的信号通道
 }
 
-// componentSlotState 追踪每个 Component 注册键的重入与并发配额
+// componentSlotState 追踪每个 Component 注册键的重入与并发配额。
 type componentSlotState struct {
-	mu           sync.Mutex
-	policy       OverlapPolicy
-	activeCount  int
-	queuedItems  []*componentQueueItem
-	wakeWorkerCh chan struct{}
+	mu           sync.Mutex            // 保护槽位并发与排队队列的互斥锁
+	policy       OverlapPolicy         // 注册时声明的并发与重入策略
+	activeCount  int                   // 当前正在并发执行的组件实例数量
+	queuedItems  []*componentQueueItem // 排队等待执行槽位的任务队列
+	wakeWorkerCh chan struct{}         // 用于通知等待槽位空闲的调度通道
 }
 
-// parentState 记录存活的父级（Worker 或 Component）状态
+// parentState 记录存活的父级（Worker 或 Component）状态。
 type parentState struct {
-	mu               sync.Mutex
-	instanceID       string
-	pluginKey        ctxkey.Key
-	parentID         string
-	isComponent      bool
-	closed           bool
-	activeCancelSent bool
-	closeCause       error
+	mu               sync.Mutex // 保护父级状态与子树计数的互斥锁
+	instanceID       string     // 父级实例的全局唯一标识
+	pluginKey        ctxkey.Key // 父级组件的插件标识键
+	parentID         string     // 若父级自身也是 Component，指向其上层祖先 ID
+	isComponent      bool       // 标识父级是否为 Component（用于嵌套激活规则校验）
+	closed           bool       // 标识父级是否已触发关闭流程
+	activeCancelSent bool       // 标识是否已向所有存活子任务发送取消信号
+	closeCause       error      // 记录父级关闭的诱因错误
 
 	// 子树计数
-	activeCount    int
-	zeroCh         chan struct{}
-	queuedItemMap  map[string]*componentQueueItem
-	runningCancels map[string]context.CancelFunc
+	activeCount    int                            // 属于该父级的活跃与排队子任务总数
+	zeroCh         chan struct{}                  // 当 activeCount 降为 0 时关闭的归零等待通道
+	queuedItemMap  map[string]*componentQueueItem // 属于该父级且尚未派发的排队项索引
+	runningCancels map[string]context.CancelFunc  // 属于该父级且正在运行的任务取消函数索引
 }
 
 func newParentState(instanceID string, pluginKey ctxkey.Key, parentID string, isComponent bool) *parentState {
@@ -88,23 +92,23 @@ func (p *parentState) dec() {
 	}
 }
 
-// componentEngine 是 Component 运行时的核心调度器
+// componentEngine 是 Component 运行时的核心调度器。
 type componentEngine struct {
-	app *App
+	app *App // 所属的应用实例指针
 
-	mu        sync.RWMutex
-	stopped   bool
-	stopErr   error
-	slots     map[ctxkey.Key]*componentSlotState
-	parents   map[string]*parentState
-	compDefs  map[ctxkey.Key]PluginInfo
-	compFacs  map[ctxkey.Key]func() RunnablePlugin
-	liveItems map[string]*componentQueueItem
+	mu        sync.RWMutex                         // 保护引擎定义、槽位与全局状态的读写锁
+	stopped   bool                                 // 标识调度引擎是否已停止接收新任务
+	stopErr   error                                // 引擎停止时的错误原因
+	slots     map[ctxkey.Key]*componentSlotState   // 组件键到并发槽位状态的映射表
+	parents   map[string]*parentState              // 存活父级实例 ID 到父级状态的映射表
+	compDefs  map[ctxkey.Key]PluginInfo            // 已注册的组件元信息定义表
+	compFacs  map[ctxkey.Key]func() RunnablePlugin // 已注册的组件工厂函数表
+	liveItems map[string]*componentQueueItem       // 存活与执行中的任务字典
 
 	// 依赖占用集合追踪：供集成 owner 查询真实占用情况
-	retainedDepsMu    sync.RWMutex
+	retainedDepsMu    sync.RWMutex       // 保护依赖占用计数的读写锁
 	retainedDeps      map[ctxkey.Key]int // 依赖的提供者/资源键 -> 引用计数
-	dependencyChanged chan struct{}
+	dependencyChanged chan struct{}      // 依赖占用发生变化时的通知通道
 }
 
 func newComponentEngine(a *App) *componentEngine {
@@ -138,7 +142,20 @@ func newComponentEngine(a *App) *componentEngine {
 	return e
 }
 
-// RegisterComponentDef 供测试或未在 App 初始化前动态登记定义
+// ==============================
+// 引擎构造与组件登记
+// ==============================
+
+// RegisterComponentDef 供测试 Harness 或 App 初始化前动态登记组件定义。
+//
+// 该方法受互斥锁保护，并发安全。
+//
+// # 使用场景与契约
+//
+//   - info 必须声明有效的 [PluginInfo.Key]，方法内部自动将其 Mode 强制归一化为 [ModeComponent]；
+//   - fac 是在组件激活时产生全新 [RunnablePlugin] 实例的工厂函数闭包；
+//   - 主要供内部装配（如 [App.RegisterComponent]）及模块自测 Harness 在运行前完成定义注册；
+//   - 若组件对应的槽位状态尚未初始化，内部会自动根据 info.Overlap 策略分配槽位并初始化调度通道。
 func (e *componentEngine) RegisterComponentDef(info PluginInfo, fac func() RunnablePlugin) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -153,14 +170,26 @@ func (e *componentEngine) RegisterComponentDef(info PluginInfo, fac func() Runna
 	}
 }
 
-// registerWorker 登记存活的 Worker 父级（必须具有有效可信身份）
+// registerWorker 登记存活的 Worker 父级（必须具有有效可信身份）。
 func (e *componentEngine) registerWorker(instanceID string, key ctxkey.Key) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.parents[instanceID] = newParentState(instanceID, key, "", false)
 }
 
-// GetRetainedDependencies 快照查询当前所有 Component 占用的真实外部依赖集合
+// ==============================
+// 依赖追踪与状态查询
+// ==============================
+
+// GetRetainedDependencies 快照查询当前所有处于执行状态的 Component 所占用的真实外部依赖集合。
+//
+// 返回以资源键为 Key、当前引用计数为 Value 的字典浅拷贝。
+//
+// # 并发与使用契约
+//
+//   - 该方法受内部读锁保护，并发安全；
+//   - 供关机协调器（[shutdownCoordinator]）或运行时拓扑监控查询外部 Tool 依赖是否仍被占用；
+//   - 外部调用者修改返回的 map 不会影响引擎内部真实的依赖计数。
 func (e *componentEngine) GetRetainedDependencies() map[ctxkey.Key]int {
 	e.retainedDepsMu.RLock()
 	defer e.retainedDepsMu.RUnlock()
@@ -510,7 +539,29 @@ func (e *componentEngine) hasAncestorCycle(parentID string, targetKey ctxkey.Key
 	return false
 }
 
-// Activate 核心入口，实现 Activator 接口
+// ==============================
+// 动态激活核心入口 (Activator 实现)
+// ==============================
+
+// Activate 按指定组件键 compKey 动态激活并调度执行一个组件实例，实现 [Activator] 接口。
+//
+// # 准入与校验契约
+//
+//   - ctx 必须是携带可信父级身份凭据（[trustedAuthKey]）的非空上下文；若凭据无效或父级已关闭，
+//     立即返回 [ErrInvalidActivationParent]；
+//   - 若底层 App 处于停止或已关闭状态（[StateStopping]、[StateStopped]），返回 [ErrAppClosed]；
+//   - 若 compKey 未在引擎中注册，返回 [ErrComponentNotFound]；
+//   - 若在激活调用链中检测到祖先依赖递归环，返回 [ErrActivationCycle]。
+//
+// # 并发与重入决策
+//
+//   - 根据注册时声明的 [OverlapPolicy] 决定立即派发执行、进入等待队列或直接拒绝：
+//   - [OverlapSkip]：已有实例在执行时立即拒绝，返回 [ErrComponentSkipped]；
+//   - [OverlapAllow]：并发数达到限制时拒绝，返回 [ErrConcurrencyLimitExceeded]；
+//   - [OverlapQueue]：若存在执行槽立即派发，否则若队列未满则排队，满则返回 [ErrQueueFull]；
+//     特别地，若为 Component 嵌套激活且队列繁忙，返回 [ErrNestedQueueWouldBlock] 避免死锁。
+//
+// 成功接纳后返回可用于取消或等待结果的 [RunHandle]。
 func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts ...ActivateOption) (RunHandle, error) {
 	// 1. ctx 空安全与接纳前取消检查
 	if ctx == nil {

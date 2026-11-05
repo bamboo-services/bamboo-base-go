@@ -16,52 +16,60 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
+// ==============================
+// 内部注册与运行实例记录
+// ==============================
+
 type pluginRegistration struct {
-	info      PluginInfo
-	toolFac   func() Plugin
-	workerFac func() RunnablePlugin
-	compFac   func() RunnablePlugin
+	info      PluginInfo            // 插件元信息（包含插件标识、模式、依赖项与导出项）
+	toolFac   func() Plugin         // 工具模式工厂函数（仅 ModeTool 有效）
+	workerFac func() RunnablePlugin // 工作者模式工厂函数（仅 ModeWorker 有效）
+	compFac   func() RunnablePlugin // 组件模式工厂函数（仅 ModeComponent 有效）
 }
 
 type staticInstanceRecord struct {
-	info       PluginInfo
-	instanceID string
-	plugin     Plugin
-	runnable   RunnablePlugin
-	handle     *runHandleImpl
+	info       PluginInfo     // 插件元信息
+	instanceID string         // 运行实例的全局唯一标识
+	plugin     Plugin         // 基础插件接口实例
+	runnable   RunnablePlugin // 具备 Runnable 契约的插件实例（若为 Worker 或具备 Run 能力）
+	handle     *runHandleImpl // 交付给运行时的句柄
 
 	// 状态与错误追踪
-	started  bool
-	startErr error
+	started  bool  // 标记 Start 阶段是否已执行完成
+	startErr error // 记录 Start 阶段产生的错误
 
-	expectedStop atomic.Bool // 统一标记 expectedStop，避免误报崩溃
-	runExited    atomic.Bool
-	runErr       error
+	expectedStop atomic.Bool // 标记是否属于受控正常停止，避免看门狗误报崩溃
+	runExited    atomic.Bool // 标记 Run 主函数是否已退出
+	runErr       error       // 记录 Run 主函数返回的错误
 
-	quiesced   bool
-	quiesceErr error
+	quiesced   bool  // 标记 Quiesce 静默收拢阶段是否已执行完成
+	quiesceErr error // 记录 Quiesce 阶段产生的错误
 
-	stopped atomic.Bool
-	stopErr error
+	stopped atomic.Bool // 标记 Stop 资源清理阶段是否已执行完成
+	stopErr error       // 记录 Stop 阶段产生的错误
 
 	// 停止过程并发控制；stopDone 在实例构造时即创建，任意时刻可等待，
 	// Stop 完成（含 panic 路径）后关闭且仅关闭一次，作为静态实例收尾的统一完成信号
-	stopMu      sync.Mutex
-	stopStarted bool
-	stopDone    chan struct{}
-	runClaimed  bool
-	runDone     chan struct{}
+	stopMu      sync.Mutex    // 保护停止状态迁移的互斥锁
+	stopStarted bool          // 标记 Stop 过程是否已进入
+	stopDone    chan struct{} // Stop 完成（含 panic）后的统一通知通道
+	runClaimed  bool          // 标记 Run 协程拉起权是否已被消费
+	runDone     chan struct{} // Run 协程完全退出后的通知通道
 
 	// Start 生命周期独立监督屏障
-	startMu      sync.Mutex
-	startEntered bool
-	startDone    chan struct{}
-	startCancel  context.CancelFunc
+	startMu      sync.Mutex         // 保护 Start 启动屏障的互斥锁
+	startEntered bool               // 标记 Start 方法是否已进入
+	startDone    chan struct{}      // Start 执行完成信号通道
+	startCancel  context.CancelFunc // Start 启动超时或异常时的取消函数
 
 	// panic 记录
-	stopPanicked atomic.Bool
-	stopPanicErr *HookPanicError
+	stopPanicked atomic.Bool     // 标记 Stop 阶段是否发生 panic
+	stopPanicErr *HookPanicError // 捕获并封装的 Stop 阶段 panic 详细信息
 }
+
+// ==============================
+// 导出核心类型：App
+// ==============================
 
 // App 是应用级生命周期管理器与运行时核心。
 //
@@ -75,42 +83,46 @@ type staticInstanceRecord struct {
 // 各类组件注册方法（如 [App.RegisterTool]）内部受互斥锁保护，但必须在单线程装配
 // 阶段或 [App.Run] 启动之前调用；在应用启动后调用注册方法将返回 [ErrRegistrationClosed]。
 type App struct {
-	cfg    Config
-	cfgErr error
+	cfg    Config // 应用运行配置选项（包含各类超时预算）
+	cfgErr error  // 配置解析或校验阶段产生的致命错误
 
-	stateMu     sync.RWMutex
-	state       AppState
-	runConsumed bool
+	stateMu     sync.RWMutex // 保护状态机状态与运行消费标记的读写锁
+	state       AppState     // 当前应用所处的全局生命周期状态
+	runConsumed bool         // 标识 Run 方法是否已被调用过（Run 是一次性消费）
 
-	regMu sync.Mutex
-	defs  []pluginRegistration
+	regMu sync.Mutex           // 保护组件注册列表的互斥锁
+	defs  []pluginRegistration // 注册的插件元信息与工厂定义列表
 
-	appID string
+	appID string // 当前应用实例的全局唯一标识，用于跨层凭证校验
 
 	// 运行时组件
-	container       *sharedContainer
-	coordinator     *shutdownCoordinator
-	supervisor      *supervisor
-	componentEngine *componentEngine
+	container       *sharedContainer     // 共享上下文容器，提供类型安全的组件实例存取与隔离
+	coordinator     *shutdownCoordinator // 关机协调器，负责两阶段依赖保全与逆拓扑平滑退出
+	supervisor      *supervisor          // 看门狗监督器，负责 Worker 协程拉起、Panic 隔离与全局退出通知
+	componentEngine *componentEngine     // 动态组件激活引擎，管理 Component 的并发配额与生命周期
 
 	// 图与拓扑
-	graph *dependencyGraph
+	graph *dependencyGraph // 组件依赖有向无环图与 Kahn 拓扑排序器
 
 	// 静态运行实例字典
-	staticMu        sync.RWMutex
-	staticInstances map[ctxkey.Key]*staticInstanceRecord
+	staticMu        sync.RWMutex                         // 保护静态实例映射表的读写锁
+	staticInstances map[ctxkey.Key]*staticInstanceRecord // 已初始化的静态工具与工作者实例映射表
 
 	// 运行结果
-	runErrMu sync.Mutex
-	runErrs  []error
+	runErrMu sync.Mutex // 保护运行期错误收集列表的互斥锁
+	runErrs  []error    // 运行期与关机阶段收集的聚合错误列表
 
 	// 强制取消与生命周期根
-	graceCancelFunc context.CancelFunc
-	forceCtx        context.Context
+	graceCancelFunc context.CancelFunc // 触发平滑停机的根取消函数
+	forceCtx        context.Context    // 标记是否进入强制超时终绝状态的根上下文
 
 	// 信号监听通道
-	sigChan chan os.Signal
+	sigChan chan os.Signal // 监听操作系统中断与终止信号的通知通道
 }
+
+// ==============================
+// 构造函数与生命周期核心
+// ==============================
 
 // New 创建并返回一个新的 [App] 实例。
 //
@@ -156,6 +168,10 @@ func (a *App) State() AppState {
 	defer a.stateMu.RUnlock()
 	return a.state
 }
+
+// ==============================
+// 导出方法：组件定义注册
+// ==============================
 
 // RegisterTool 注册一个工具态单实例插件（[ModeTool]）。
 //
@@ -415,6 +431,10 @@ func (a *App) Run() error {
 		return errors.Join(a.getRunErr(), a.coordinator.res.err)
 	}
 }
+
+// ==============================
+// 私有方法：拓扑启动与运行监控
+// ==============================
 
 func (a *App) recordRunErr(err error) {
 	if err == nil {
@@ -938,6 +958,10 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 	}
 }
 
+// ==============================
+// 导出方法：优雅平滑关机
+// ==============================
+
 // Shutdown 执行关机协调流程，平滑释放应用静态与动态资源。
 //
 // 关机流程严格遵循逆拓扑时序与超时预算控制，主要执行步骤如下：
@@ -1048,6 +1072,10 @@ func (a *App) Shutdown() error {
 	close(a.coordinator.done)
 	return shutdownErr
 }
+
+// ==============================
+// 私有方法：关机拓扑执行与依赖保全
+// ==============================
 
 func (a *App) markRetainedTransitiveClosure(pluginKey ctxkey.Key, retained map[ctxkey.Key]struct{}) {
 	if a.graph == nil {

@@ -12,11 +12,12 @@ import (
 // ExampleResponse 展示一个完整的错误信封如何序列化为标准 JSON：
 // 可选字段非零时全部输出。
 func ExampleResponse() {
+	badRequest := apperr.ErrorCode{Code: 40050, Output: "SHOP_BAD_REQUEST", Message: "错误请求"}
 	resp := envelope.Response{
 		Context:      "req-123456",
-		Code:         apperr.BadRequest.Code,
-		Output:       apperr.BadRequest.Output,
-		Message:      apperr.BadRequest.Message,
+		Code:         badRequest.Code,
+		Output:       badRequest.Output,
+		Message:      badRequest.Message,
 		ErrorMessage: "field 'username' is invalid",
 		Overhead:     12,
 		Data:         map[string]any{"field": "username"},
@@ -28,7 +29,7 @@ func ExampleResponse() {
 	}
 	fmt.Println(string(data))
 	// Output:
-	// {"context":"req-123456","code":40010,"output":"BAD_REQUEST","message":"错误请求","error_message":"field 'username' is invalid","overhead":12,"data":{"field":"username"}}
+	// {"context":"req-123456","code":40050,"output":"SHOP_BAD_REQUEST","message":"错误请求","error_message":"field 'username' is invalid","overhead":12,"data":{"field":"username"}}
 }
 
 // ExampleResponse_minimal 展示最小信封的序列化结果：
@@ -36,9 +37,9 @@ func ExampleResponse() {
 // Code、Output 与 Message 恒定输出。
 func ExampleResponse_minimal() {
 	resp := envelope.Response{
-		Code:    apperr.ServerInternalError.Code,
-		Output:  apperr.ServerInternalError.Output,
-		Message: apperr.ServerInternalError.Message,
+		Code:    apperr.FrameworkInternalError.Code,
+		Output:  apperr.FrameworkInternalError.Output,
+		Message: apperr.FrameworkInternalError.Message,
 	}
 
 	data, err := json.Marshal(resp)
@@ -47,5 +48,5 @@ func ExampleResponse_minimal() {
 	}
 	fmt.Println(string(data))
 	// Output:
-	// {"code":50000,"output":"SERVER_INTERNAL_ERROR","message":"服务器内部错误"}
+	// {"code":50000,"output":"FRAMEWORK_INTERNAL_ERROR","message":"框架内部错误"}
 }

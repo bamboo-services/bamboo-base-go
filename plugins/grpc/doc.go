@@ -40,7 +40,7 @@
 // 插件在底层拦截器链的最外层装配了一元桥接拦截器与流式桥接拦截器：
 //
 //   - 准入控制：每个 RPC 接入时检查内部准入闸门，未就绪或已关闸时立即返回
-//     包含 [apperr.ServiceUnavailable] 的标准错误；
+//     包含 [grpcresult.ServiceUnavailable] 的标准错误；
 //   - 追踪透传：优先提取上游 Metadata 中的 "x-request-uuid" 标识，缺失时回退为
 //     服务端生成的 UUID，并同时以 SetHeader 与 SetTrailer 写入响应（兼容 v1 规范）；
 //   - 耗时统计：在上下文写入请求起始时间 [ctxkey.UserStartTimeKey]，供响应阶段计算耗时；
@@ -55,7 +55,7 @@
 // 拦截器内建顶层 defer-recover 保护机制：
 //
 //   - 业务 Panic 发生时，自动拦截堆栈并在配置了日志器时输出错误记录，
-//     对外转换为包含 [apperr.ServerInternalError] 的安全 gRPC status 响应，
+//     对外转换为包含 [grpcresult.InternalError] 的安全 gRPC status 响应，
 //     绝不泄露内部 SQL、敏感文件路径或 Panic 堆栈至外部调用方；
 //   - 业务返回的 [*apperr.Error] 通过 [grpcresult.ToStatusError] 转换为
 //     携带安全业务文案及 [generate.BaseResponse] 细节的 gRPC status；

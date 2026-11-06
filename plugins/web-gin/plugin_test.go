@@ -205,7 +205,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 		r.POST("/bind-test", func(c *gin.Context) {
 			b := bind.FromContext(c)
 			if b == nil {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "binder not injected", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "binder not injected", nil))
 				return
 			}
 			var p testPayload
@@ -375,7 +375,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 		}
 		var envResp envelope.Response
 		_ = json.NewDecoder(resp.Body).Decode(&envResp)
-		if envResp.Code != apperr.ServerInternalError.Code {
+		if envResp.Code != httpresult.InternalError.Code {
 			t.Fatalf("expected ServerInternalError code, got %d", envResp.Code)
 		}
 	}
@@ -390,7 +390,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 
 		var envResp envelope.Response
 		_ = json.NewDecoder(resp.Body).Decode(&envResp)
-		if envResp.Code != apperr.DeveloperError.Code {
+		if envResp.Code != httpresult.ResponseMissing.Code {
 			t.Fatalf("expected DeveloperError code, got %d", envResp.Code)
 		}
 	}

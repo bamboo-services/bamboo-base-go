@@ -6,19 +6,21 @@
 //
 // # 字段与序列化
 //
-// Code、Output 与 Message 恒定输出，错误场景通常取自 apperr
-// 预定义错误码，成功场景取值由协议层决定；Context、ErrorMessage、
+// Code、Output 与 Message 恒定输出，错误场景通常取自调用方提供的
+// apperr.ErrorCode，成功场景取值由协议层决定；Context、ErrorMessage、
 // Overhead 与 Data 为可选项，零值时 JSON 输出省略对应字段。
 //
 // # 典型用法
 //
 // 以下片段构造一个携带业务数据的错误信封并序列化为 JSON：
 //
+//	badRequest := apperr.ErrorCode{Code: 40050, Output: "SHOP_BAD_REQUEST", Message: "错误请求"}
+//
 //	resp := envelope.Response{
 //		Context:      "req-123456",
-//		Code:         apperr.BadRequest.Code,
-//		Output:       apperr.BadRequest.Output,
-//		Message:      apperr.BadRequest.Message,
+//		Code:         badRequest.Code,
+//		Output:       badRequest.Output,
+//		Message:      badRequest.Message,
 //		ErrorMessage: "field 'username' is invalid",
 //		Data:         map[string]any{"field": "username"},
 //	}

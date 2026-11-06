@@ -49,7 +49,7 @@
 //
 // 校验错误通过 [Engine.TranslateError] 转换为结构化的中文字段映射。
 // 在处理 HTTP 绑定失败时，[Engine.HandleError] 构造 [ValidationErrorDetail] 列表，
-// 并将其包装在标准业务错误 [apperr.BodyError] 中通过 [httpresult.Error] 输出：
+// 并将其包装在标准业务错误 [BodyError] 中通过 [httpresult.Error] 输出：
 //
 //   - 字段明细：[ValidationErrorDetail] 包含触发错误的 Field、Tag 以及本地化 Message；
 //   - 输入脱敏：[ValidationErrorDetail.Value] 安全默认置空（nil），

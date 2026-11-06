@@ -38,7 +38,7 @@ func CORS() gin.HandlerFunc {
 //
 // 参数 logger 允许为 nil；非 nil 时将异常原因记录到专用日志中。
 // 该中间件通过 defer recover() 拦截下游所有中间件与业务处理函数中发生的 panic：
-//   - 将 panic 转换为 500 [apperr.ServerInternalError] 业务错误；
+//   - 将 panic 转换为 500 [httpresult.InternalError] 业务错误；
 //   - 提示语固定为“系统内部异常”，绝不泄漏原始堆栈或内部调用路径；
 //   - 内部通过 [httpresult.AbortError] 写回响应并调用 [gin.Context.Abort] 中断后续逻辑。
 func Recovery(logger *logging.LogNamedLogger) gin.HandlerFunc {
@@ -48,7 +48,7 @@ func Recovery(logger *logging.LogNamedLogger) gin.HandlerFunc {
 				if logger != nil {
 					logger.Error(c.Request.Context(), fmt.Sprintf("webgin: 请求处理 panic: %v", r))
 				}
-				panicErr := apperr.New(apperr.ServerInternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
+				panicErr := apperr.New(httpresult.InternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
 				httpresult.AbortError(c, panicErr)
 			}
 		}()
@@ -62,7 +62,7 @@ func Recovery(logger *logging.LogNamedLogger) gin.HandlerFunc {
 //   - 若下游已调用写入方法（[gin.ResponseWriter.Written] 为 true），则直接放行；
 //   - 若下游未写入且 [gin.Context.Errors] 存在错误，优先按最后一个错误映射输出；
 //   - 若下游未写入且无错误，且当前状态码非 301 或 302 重定向，
-//     自动输出 [apperr.DeveloperError] 提示开发者检查代码逻辑。
+//     自动输出 [httpresult.ResponseMissing] 提示开发者检查代码逻辑。
 func Response() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -74,7 +74,7 @@ func Response() gin.HandlerFunc {
 				if errors.As(lastErr, &appErr) {
 					httpresult.Error(c, appErr)
 				} else {
-					httpresult.Error(c, apperr.New(apperr.ServerInternalError, "系统内部异常", lastErr))
+					httpresult.Error(c, apperr.New(httpresult.InternalError, "系统内部异常", lastErr))
 				}
 				c.Abort()
 				return
@@ -83,7 +83,7 @@ func Response() gin.HandlerFunc {
 			// 无错误也未写入任何内容（排查重定向 301/302）
 			status := c.Writer.Status()
 			if status != http.StatusMovedPermanently && status != http.StatusFound {
-				httpresult.Error(c, apperr.New(apperr.DeveloperError, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」", nil))
+				httpresult.Error(c, apperr.New(httpresult.ResponseMissing, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」", nil))
 				c.Abort()
 			}
 		}

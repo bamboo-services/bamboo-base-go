@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help proto proto-check check-generated tidy test race vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release check-examples check-readme-example test-scripts
+.PHONY: help proto proto-check check-generated tidy test race vet lint lint-docs format-docs lint-go lint-go-oracle lint-go-all release check-examples check-readme-example test-scripts error-codes-check
 
 # ============================================================
 # 基础变量
@@ -21,6 +21,7 @@ help:
 	@echo "  make proto-check              - 校验生成的 gRPC / Protobuf 代码一致性"
 	@echo "  make check-generated          - 校验生成的 gRPC / Protobuf 代码一致性 (别名)"
 	@echo "  make tidy                     - 整理 14 个 v2 模块依赖"
+	@echo "  make error-codes-check        - 校验全库错误码词表、唯一性与源码归属"
 	@echo "  make test                     - 运行 14 个 v2 模块单元测试"
 	@echo "  make race                     - 运行 14 个 v2 模块竞态检测测试"
 	@echo "  make vet                      - go vet 检查 14 个 v2 模块"
@@ -58,6 +59,9 @@ help:
 # ============================================================
 # 开发命令
 # ============================================================
+
+error-codes-check:
+	GOWORK=off go run .github/scripts/ci/check-error-codes.go
 
 test:
 	bash .github/scripts/ci/check-go.sh test

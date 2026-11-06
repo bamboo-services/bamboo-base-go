@@ -56,7 +56,7 @@ func TestError_FallbackAndEnvelope(t *testing.T) {
 			name:       "nil error fallback 500",
 			err:        nil,
 			wantStatus: http.StatusInternalServerError,
-			wantCode:   int(apperr.ServerInternalError.Code),
+			wantCode:   int(InternalError.Code),
 		},
 		{
 			name: "20000 custom error fallback 500",
@@ -150,7 +150,7 @@ func TestError_NoUnderlyingErrLeakEvenInDebug(t *testing.T) {
 	defer gin.SetMode(gin.TestMode)
 
 	secretMsg := "top-secret-internal-db-password-123456"
-	appErr := apperr.New(apperr.ServerInternalError, "safe public message", errors.New(secretMsg))
+	appErr := apperr.New(InternalError, "safe public message", errors.New(secretMsg))
 	appErr.Data = map[string]any{"field": "val"}
 
 	w := httptest.NewRecorder()

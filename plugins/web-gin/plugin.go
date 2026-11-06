@@ -593,7 +593,7 @@ func (p *Plugin) requestBridgeMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 同一把锁先判断准入与递增 inflight
 		if !p.gate.enter() {
-			httpresult.AbortError(c, apperr.New(apperr.ServiceUnavailable, "服务已停止或正在关机", ErrServerClosed))
+			httpresult.AbortError(c, apperr.New(httpresult.ServiceUnavailable, "服务已停止或正在关机", ErrServerClosed))
 			return
 		}
 		defer p.gate.leave()
@@ -604,7 +604,7 @@ func (p *Plugin) requestBridgeMiddleware() gin.HandlerFunc {
 		// 3. 检查 lifetimeCtx，缺失则拒绝请求（严禁 fallback 到背景 context）
 		lifetime := p.getLifetimeCtx()
 		if lifetime == nil {
-			httpresult.AbortError(c, apperr.New(apperr.ServiceUnavailable, "服务未完全就绪，缺少 lifetimeContext", ErrNoLifetimeContext))
+			httpresult.AbortError(c, apperr.New(httpresult.ServiceUnavailable, "服务未完全就绪，缺少 lifetimeContext", ErrNoLifetimeContext))
 			return
 		}
 

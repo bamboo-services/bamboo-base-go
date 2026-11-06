@@ -180,8 +180,8 @@ func TestHandleErrorSafety(t *testing.T) {
 		t.Fatalf("响应反序列化失败: %v, body: %s", err, w.Body.String())
 	}
 
-	if resp.Code != 40014 {
-		t.Fatalf("预期错误码 40014，实际: %d", resp.Code)
+	if resp.Code != 40006 {
+		t.Fatalf("预期错误码 40006，实际: %d", resp.Code)
 	}
 	if resp.ErrorMessage == "" {
 		t.Fatalf("预期包含 ErrorMessage")

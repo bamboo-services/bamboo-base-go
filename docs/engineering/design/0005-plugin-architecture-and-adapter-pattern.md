@@ -163,10 +163,12 @@ HTTP/gRPC 适配器的 forceCtx、调用计数、Stream Context 包装与 Stop �
 
 底座 `foundation/apperr` 与 `foundation/envelope` 只定义纯数据结构；当业务返回 `*apperr.Error` 时，两个协议插件的结果包按各自协议规范做转换：
 
+错误码按责任归属：`foundation/apperr` 仅维护 `FRAMEWORK_*` 的内部500系列码；HTTP绑定、校验和响应语义分别归 `bind`、`validator`、`httpresult`，RPC定义归 `grpcresult`。两个结果包消费统一 `*apperr.Error` 原语，不引入横向依赖。Code/Output由 [统一词表](../spec/0002-foundation-error-code-vocabulary.md) 分配；本次重构允许改变wire三元组，状态分组映射机制保持不变，框架装配故障不再伪装成客户端4xx。
+
 | 维度             | `plugins/web-gin/httpresult`                                                                    | `plugins/grpc/grpcresult`（配合拦截器）                                                                           |
 | ---------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **输入契约**     | `*gin.Context` + `*apperr.Error`（或成功 `data`）                                               | `context.Context` + `*apperr.Error`（或 Protobuf 响应）                                                           |
-| **状态码决策**   | 取 `int(err.Code.Code / 100)` 作为 HTTP 状态码（如 `40014 → 400`、`50000 → 500`）               | 按 `err.Code.Code / 100` 映射为 gRPC 标准 `codes.Code`（如 `400xx → InvalidArgument`、`401xx → Unauthenticated`） |
+| **状态码决策**   | 取 `int(err.Code.Code / 100)` 作为 HTTP 状态码（如 `40006 → 400`、`50000 → 500`）               | 按 `err.Code.Code / 100` 映射为 gRPC 标准 `codes.Code`（如 `400xx → InvalidArgument`、`401xx → Unauthenticated`） |
 | **响应体封装**   | 构造 `envelope.Response` JSON：自动填入 `ctxkey.GetRequestKey(ctx)` 与 `CalcOverheadTime(ctx)`  | 成功时向 Protobuf `BaseResponse` 注入 `Context` 与 `Overhead`；失败时将 `apperr` 元信息写入 `status.Status`       |
 | **报错内容脱敏** | `Message` 始终展示；`ErrorMessage` 只使用业务显式提供的安全内容；Debug 也不直接暴露底层原始 Err | 同样仅附业务明确给出的安全详情，原始 Err 只记日志                                                                 |
 
@@ -337,7 +339,7 @@ Cron 仅做表达式触发时，robfig/cron 已经足够，且范围更小。继
 4. 用 gocron 的间隔调度接口配置 50ms 周期，激活耗时 120ms 的 Component，验证 OverlapSkip 与独立追踪 ID；显式 Queue 验证 FIFO、队满、Cron 关闭取消未派发 tick。不要把五段 Cron 表达式误当成毫秒调度接口。嵌套子树也须完整收拢。
 5. 两个 Gin 插件为同名标签配置相反规则，框架 Bind 分别按各自实例校验；不得修改 Gin 全局校验器，也不得在解码时隐式调用它。
 6. 真实 HTTP/gRPC 取消与排空按 0002 验证，包括 Serve 已退但 Handler 未退；WebSocket/hijack 不计入默认保证。
-7. 同一份 40014 BodyError 与 50000 ServerInternalError 经两个结果包得到确定映射；覆盖映射表兜底、非法 HTTP 码与内部 Err 不外泄。SuccessWith 的对象由框架创建，`T` 必须是具体的 Protobuf 指针类型，其顶层包含恰好一个框架 `BaseResponse` 类型的消息字段；框架基于 Protobuf 类型 descriptor 进行精确识别而非猜测业务字段名。缺少、多于、非 Protobuf 或非 pointer 均属于明确的编程错误，禁止对 `any` 作无条件成功承诺。保持 SuccessWith 签名与草稿状态，不自行更改 wire 字段；旧 `code` 成功为 200 保持不变。
+7. 按统一词表定义的40006 BodyError（归Web validator包）与50000 FrameworkInternalError 经两个结果包得到确定映射；覆盖映射表兜底、非法 HTTP 码与内部 Err 不外泄。SuccessWith 的对象由框架创建，`T` 必须是具体的 Protobuf 指针类型，其顶层包含恰好一个框架 `BaseResponse` 类型的消息字段；框架基于 Protobuf 类型 descriptor 进行精确识别而非猜测业务字段名。缺少、多于、非 Protobuf 或非 pointer 均属于明确的编程错误，禁止对 `any` 作无条件成功承诺。保持 SuccessWith 签名与草稿状态，不自行更改 wire 字段；旧 `code` 成功为 200 保持不变。
 
 ## 待确认
 

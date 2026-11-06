@@ -1,4 +1,4 @@
-// Package apperr 定义结构化业务错误码目录与统一的框架错误对象，
+// Package apperr 定义结构化错误原语、内核错误码与统一的框架错误对象，
 // 供业务层构造错误、协议层（HTTP 与 gRPC）映射标准错误信封。
 //
 // 本包属于 foundation 领域原语基座，不依赖任何上层模块，也不负责
@@ -9,8 +9,8 @@
 //
 // [ErrorCode] 以值形式保留一个稳定的错误码三元组：
 // 机器码 [Code]、输出标识 [Output] 与对外文案 [Message]。
-// error_code.go 预置了 189 个覆盖常用 HTTP 语义的错误码变量，
-// 例如 [BadRequest]、[Unauthorized]、[NotFound] 与 [ServerInternalError]。
+// error_code.go 仅预置内核所需的错误码，
+// 全部使用 FRAMEWORK_ 前缀和500分组，例如 [FrameworkContainerNotMounted] 与 [FrameworkInternalError]。
 //
 // 业务层通过 [New] 选定错误码并构造 [*Error]。[*Error] 实现
 // error 接口，携带可选的补充描述、业务数据与底层根因，
@@ -19,9 +19,11 @@
 // # 错误码目录
 //
 // 错误码 [Code] 为 5 位整数，前 3 位对齐 HTTP 状态分组：
-// 400xx 表示请求与业务语义类错误，500xx 表示服务端内部错误。
-// 同一前 3 位内按主题划分区间（如 4001x 请求参数、4011x 用户账户、
-// 409xx 状态冲突），完整目录见 error_code.go 中的预置变量。
+// 内置目录只维护框架上下文、组件状态与内部错误，不维护 HTTP 或 RPC 的协议目录。
+// 编号与Output由 docs/engineering/spec/0002 的统一词表分配，禁止各包自行取号。
+// SDK使用分组内00..49序号，下游业务使用50..99并维护自身中央台账。
+// 请求绑定与校验由 Web 插件的 bind、validator 子包维护，
+// HTTP 与 RPC 响应语义分别由各自的结果包维护；业务与插件也可定义 [ErrorCode] 传给 [New]。
 //
 // 目录变量均为 *ErrorCode 指针，可以在多个错误间共享只读引用；
 // [New] 会在构造时复制值快照，调用方后续修改原变量不影响已构造的错误。
@@ -44,7 +46,7 @@
 //
 // 构造带根因的业务错误并识别根因：
 //
-//	err := apperr.New(apperr.DatabaseError, "查询用户失败", connErr)
+//	err := apperr.New(apperr.FrameworkInternalError, "处理请求失败", connErr)
 //	if errors.Is(err, context.DeadlineExceeded) {
 //		// 按超时处理
 //	}

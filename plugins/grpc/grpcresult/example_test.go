@@ -45,7 +45,7 @@ func ExampleSuccessWith() {
 // ExampleToStatusError 演示将统一业务错误 apperr.Error 转换为标准 gRPC status 错误。
 func ExampleToStatusError() {
 	ctx := context.Background()
-	bizErr := apperr.New(apperr.ParameterError, "请求参数无效")
+	bizErr := apperr.New(grpcresult.ParameterError, "请求参数无效")
 
 	stErr := grpcresult.ToStatusError(ctx, bizErr)
 	st, ok := status.FromError(stErr)

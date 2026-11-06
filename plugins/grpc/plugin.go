@@ -485,7 +485,7 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 // Quiesce 执行入站关闸操作。
 //
 // 该方法通过内部准入闸门关闭新请求准入（随后到达的 RPC 请求将立即被桥接拦截器拒绝并返回
-// 包含 [apperr.ServiceUnavailable] 的状态错误），但不会调用 Stop，不会打断正在处理中的请求，
+// 包含 [grpcresult.ServiceUnavailable] 的状态错误），但不会调用 Stop，不会打断正在处理中的请求，
 // 也不分配新的停机超时预算。此方法可并发幂等调用。
 func (p *Plugin) Quiesce(ctx context.Context) error {
 	p.gate.closeGate()
@@ -621,7 +621,7 @@ func (p *Plugin) normalizeRPCError(ctx context.Context, err error) error {
 		p.namedLog.Error(ctx, fmt.Sprintf("gRPC 调用未预期内部错误: %v", err))
 	}
 
-	internalErr := apperr.New(apperr.ServerInternalError, "系统内部异常", err)
+	internalErr := apperr.New(grpcresult.InternalError, "系统内部异常", err)
 	return grpcresult.ToStatusError(ctx, internalErr)
 }
 
@@ -630,7 +630,7 @@ func (p *Plugin) normalizeRPCError(ctx context.Context, err error) error {
 func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		if !p.gate.enter() {
-			return nil, grpcresult.ToStatusError(ctx, apperr.New(apperr.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
+			return nil, grpcresult.ToStatusError(ctx, apperr.New(grpcresult.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
 		}
 		defer p.gate.leave()
 
@@ -663,7 +663,7 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 				if p.namedLog != nil {
 					p.namedLog.Error(bridgedCtx, fmt.Sprintf("gRPC 一元调用发生 panic: %v", r))
 				}
-				panicErr := apperr.New(apperr.ServerInternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
+				panicErr := apperr.New(grpcresult.InternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
 				resp = nil
 				err = grpcresult.ToStatusError(bridgedCtx, panicErr)
 			}
@@ -691,7 +691,7 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 			return nil, p.normalizeRPCError(bridgedCtx, err)
 		}
 		if resp == nil {
-			return nil, grpcresult.ToStatusError(bridgedCtx, apperr.New(apperr.DeveloperError, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」"))
+			return nil, grpcresult.ToStatusError(bridgedCtx, apperr.New(grpcresult.ResponseMissing, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」"))
 		}
 
 		return resp, nil
@@ -703,7 +703,7 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 func (p *Plugin) streamBridgeInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 		if !p.gate.enter() {
-			return grpcresult.ToStatusError(ss.Context(), apperr.New(apperr.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
+			return grpcresult.ToStatusError(ss.Context(), apperr.New(grpcresult.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
 		}
 		defer p.gate.leave()
 
@@ -735,7 +735,7 @@ func (p *Plugin) streamBridgeInterceptor() grpc.StreamServerInterceptor {
 				if p.namedLog != nil {
 					p.namedLog.Error(bridgedCtx, fmt.Sprintf("gRPC 流式调用发生 panic: %v", r))
 				}
-				panicErr := apperr.New(apperr.ServerInternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
+				panicErr := apperr.New(grpcresult.InternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
 				err = grpcresult.ToStatusError(bridgedCtx, panicErr)
 			}
 		}()

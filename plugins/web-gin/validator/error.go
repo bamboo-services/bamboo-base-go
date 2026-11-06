@@ -62,7 +62,7 @@ func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
 
 	// 构造统一 apperr.Error。注意：底层根因保留在 Err 内部供日志与 unwrap 使用，
 	// httpresult.Error 内部 buildEnvelope 绝不会把 Err 序列化泄漏给客户端。
-	appErr := apperr.New(apperr.BodyError, apperr.ErrMessage(firstErrorMessage), bindErr)
+	appErr := apperr.New(BodyError, apperr.ErrMessage(firstErrorMessage), bindErr)
 	appErr.Data = errorDetails
 
 	httpresult.Error(ctx, appErr)

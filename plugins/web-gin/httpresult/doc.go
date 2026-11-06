@@ -16,6 +16,9 @@
 //   - data：成功时返回的业务载荷，或参数验证失败时的字段错误详情列表；
 //   - overhead：自请求进入框架直至响应构造所耗费的微秒整数（基于请求上下文中的起点计算）。
 //
+// HTTP 专属预置码（如 [BadRequest]、[NotFound]、[ServiceUnavailable]）由本包维护，
+// 调用方使用 apperr.New 组合安全描述与根因，不从 foundation 获取协议目录。
+//
 // # 典型用法
 //
 // 下面的示例展示在 Gin 处理函数中返回成功数据或业务错误：
@@ -24,7 +27,7 @@
 //		user, err := userService.Find(c.Param("id"))
 //		if err != nil {
 //			// 写回业务错误响应并计算对应状态码
-//			httpresult.Error(c, apperr.New(apperr.RecordNotFound, "用户不存在", err))
+//			httpresult.Error(c, apperr.New(httpresult.NotFound, "用户不存在", err))
 //			return
 //		}
 //		// 写回 200 成功响应并附带数据
@@ -39,7 +42,7 @@
 //   - 允许区间：业务错误路径仅接纳 400 至 599 范围内的状态码；
 //   - 越界回退：若计算结果超出该区间（例如 <400 或 >599，包括 1xx、2xx、3xx、负数或 6xx 等），
 //     一律安全回退为 500 [http.StatusInternalServerError]；
-//   - nil 容错：若传入的 [*apperr.Error] 为 nil，自动以 [apperr.ServerInternalError]
+//   - nil 容错：若传入的 [*apperr.Error] 为 nil，自动以 [InternalError]
 //     构造 500 内部异常响应；
 //   - 敏感信息隔离：底层根因错误（[apperr.Error.Err]）标记有 json:"-"，
 //     仅保留在内存中供日志记录与 Unwrap 诊断，绝不序列化泄漏至客户端 HTTP 响应中。
@@ -54,6 +57,6 @@
 //
 // # 并发安全
 //
-// 本包内仅包含纯函数与只读常量，无任何包级可变状态。
+// 导出错误码在初始化后应视为只读，响应函数不修改这些定义；调用方不得并发改写。
 // 同一个 [*gin.Context] 的生命周期应严格受限于其处理协程，不可在多个 goroutine 间无同步读写。
 package httpresult

@@ -63,5 +63,5 @@ func ExampleResponse() {
 	fmt.Printf("HTTP 状态码: %d\n", w.Code)
 
 	// Output:
-	// HTTP 状态码: 400
+	// HTTP 状态码: 500
 }

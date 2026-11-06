@@ -226,7 +226,7 @@ func (b *Binding[T]) handleBindError(err error) {
 		return
 	}
 	// 缺失 Binder 明确报错，绝不偷建全局引擎
-	appErr := apperr.New(apperr.ParameterError, apperr.ErrMessage("请求绑定失败: "+err.Error()), err)
+	appErr := apperr.New(ParameterError, apperr.ErrMessage("请求绑定失败: "+err.Error()), err)
 	httpresult.AbortError(b.Context, appErr)
 }
 

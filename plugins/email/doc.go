@@ -89,4 +89,8 @@
 //   - 参数校验阶段：收件人为空返回 [ErrRecipientEmpty]，主题为空返回 [ErrSubjectEmpty]；
 //   - 停机拒绝：停机后发送返回 [ErrStopped]，调用方可实施降级或转入离线队列；
 //   - 网络与认证失败：返回底层 SMTP 协议或网络层包装错误。
+//
+// 需要对外输出结构化错误时，调用方可使用 [apperr.New] 与 [EmailError] 包装发送错误，
+// 保留根因供 errors.Is / errors.As 识别。该错误码不替代上述哨兵，也不会自动改写 SMTP 错误。
+// 本插件只发送验证码邮件，不负责验证码生成、过期或正确性校验；这些规则由业务定义。
 package email

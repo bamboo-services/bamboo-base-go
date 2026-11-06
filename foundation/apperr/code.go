@@ -3,19 +3,20 @@ package apperr
 // Code 表示业务错误码。
 //
 // 取值为 5 位整数，前 3 位对齐 HTTP 状态分组（如 400xx / 500xx），
-// 完整取值关系见 error_code.go 中的预置错误码目录；
+// 框架内部预置取值见 error_code.go；插件预置码必须在spec/0002统一登记。
+// 每个状态分组的00..49序号归SDK，50..99归业务，禁止逐包独立分配。
 // 零值 0 不属于内置目录中的任何错误码。
 type Code int
 
 // Output 表示机器可读的错误输出标识。
 //
-// 通常为大写下划线格式（如 "NOT_FOUND"），供日志检索与调用方程序化识别；
+// 通常为大写下划线格式（如 "FRAMEWORK_COMPONENT_NOT_FOUND"），供日志检索与调用方程序化识别；
 // 零值为空字符串。
 type Output string
 
 // Message 表示错误码预定义的对外文案。
 //
-// 由错误码目录统一维护的中文描述，零值为空字符串。
+// 由错误码定义方维护的中文描述，零值为空字符串。
 type Message string
 
 // ErrMessage 表示构造错误时传入的补充错误描述。

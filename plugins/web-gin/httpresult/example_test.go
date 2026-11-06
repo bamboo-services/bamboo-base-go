@@ -56,7 +56,7 @@ func ExampleError() {
 	req, _ := http.NewRequest(http.MethodGet, "/item", nil)
 	c.Request = req
 
-	err := apperr.New(apperr.RecordNotFound, "指定条目不存在")
+	err := apperr.New(httpresult.NotFound, "指定条目不存在")
 	httpresult.Error(c, err)
 
 	fmt.Printf("HTTP 状态码: %d\n", w.Code)
@@ -64,5 +64,5 @@ func ExampleError() {
 
 	// Output:
 	// HTTP 状态码: 404
-	// 响应体: {"code":40406,"output":"RECORD_NOT_FOUND","message":"记录未找到","error_message":"指定条目不存在"}
+	// 响应体: {"code":40400,"output":"HTTP_NOT_FOUND","message":"未找到","error_message":"指定条目不存在"}
 }

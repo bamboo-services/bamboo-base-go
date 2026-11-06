@@ -83,7 +83,7 @@
 //   - 循环依赖检测：若插件间存在依赖环，[App.Run] 立即中止并返回 [ErrDependencyCycle]；
 //   - 启动期受限视图：在插件的 [Plugin.Start] 钩子中，上下文挂载严格受限的视图。
 //     插件只能通过 [Get] 访问其在 [PluginInfo.Requires] 中显式声明的直接依赖键，
-//     越权读取未声明组件将返回携带 [foundation/v2/apperr.Forbidden] 的错误；
+//     越权读取未声明组件将返回携带 [foundation/v2/apperr.FrameworkDependencyUndeclared] 的错误；
 //   - 资源原子发布：若插件声明了额外的 [PluginInfo.Provides] 资源键，
 //     必须同时实现 [foundation/v2/ctxkey.Exposer] 接口并在 Expose 方法中交付。
 //     内核严格校验交付集合，并在启动成功后原子发布至共享容器。

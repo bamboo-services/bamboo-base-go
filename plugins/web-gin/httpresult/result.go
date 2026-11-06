@@ -55,7 +55,7 @@ func buildEnvelope(ctx *gin.Context, err *apperr.Error) (int, envelope.Response)
 	overhead := resolveOverhead(ctx)
 
 	if err == nil {
-		fallback := apperr.ServerInternalError
+		fallback := InternalError
 		resp := envelope.Response{
 			Context:  reqKey,
 			Code:     fallback.Code,
@@ -122,7 +122,7 @@ func SuccessWithData(ctx *gin.Context, message string, data any) {
 // Error 向客户端写回基于 [*apperr.Error] 映射的错误响应及标准 [envelope.Response] JSON 信封。
 //
 // 该函数执行以下安全与映射规则：
-//   - 若传入的 err 为 nil，自动以 [apperr.ServerInternalError] 回退构造 500 响应；
+//   - 若传入的 err 为 nil，自动以 [InternalError] 回退构造 500 响应；
 //   - 计算 HTTP 状态码为 err.Code.Code / 100，非 400..599 区间一律回退为 500；
 //   - 底层根因错误严格隔离，响应中仅输出安全的 ErrorMessage 与业务错误码；
 //   - 若连接已写过响应，本函数安全忽略。

@@ -39,6 +39,8 @@ jobs:
         with:
           version-file: .golangci-lint-version
           install-only: true
+      - name: Check global error-code vocabulary
+        run: make error-codes-check
       - name: Check all regular modules (lint & format)
         run: make lint-go
       - name: Vet all 14 v2 modules

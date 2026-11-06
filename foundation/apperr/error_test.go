@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
@@ -18,69 +20,53 @@ func (c *customTestError) Error() string {
 	return c.msg
 }
 
-func TestErrorCodesInventoryAndRepresentativeValues(t *testing.T) {
-	// 代表值检验
-	tests := []struct {
-		ec      *apperr.ErrorCode
-		code    apperr.Code
-		output  apperr.Output
-		message apperr.Message
-	}{
-		{apperr.NotExist, 40000, "NOT_EXIST", "内容不存在"},
-		{apperr.BadRequest, 40010, "BAD_REQUEST", "错误请求"},
-		{apperr.DeveloperError, 40024, "DEVELOPER_ERROR", "开发者操作错误"},
-		{apperr.Unauthorized, 40100, "UNAUTHORIZED", "未授权"},
-		{apperr.Forbidden, 40300, "FORBIDDEN", "禁止访问"},
-		{apperr.NotFound, 40400, "NOT_FOUND", "未找到"},
-		{apperr.MethodNotAllowed, 40500, "METHOD_NOT_ALLOWED", "方法不允许"},
-		{apperr.NotAcceptable, 40600, "NOT_ACCEPTABLE", "不可接受"},
-		{apperr.Timeout, 40800, "TIMEOUT", "请求超时"},
-		{apperr.Conflict, 40900, "CONFLICT", "冲突"},
-		{apperr.Gone, 41000, "GONE", "资源已删除"},
-		{apperr.PayloadTooLarge, 41300, "PAYLOAD_TOO_LARGE", "请求体过大"},
-		{apperr.UnsupportedMedia, 41500, "UNSUPPORTED_MEDIA", "不支持的媒体类型"},
-		{apperr.UnprocessableEntity, 42200, "UNPROCESSABLE_ENTITY", "无法处理的实体"},
-		{apperr.TooManyRequests, 42900, "TOO_MANY_REQUESTS", "请求过多"},
-		{apperr.ServerInternalError, 50000, "SERVER_INTERNAL_ERROR", "服务器内部错误"},
-		{apperr.UnknownError, 50099, "UNKNOWN_ERROR", "未知错误"},
-		{apperr.GatewayError, 50200, "GATEWAY_ERROR", "网关错误"},
-		{apperr.ServiceUnavailable, 50300, "SERVICE_UNAVAILABLE", "服务不可用"},
-		{apperr.GatewayTimeout, 50400, "GATEWAY_TIMEOUT", "网关超时"},
+func TestErrorCodesInventorySnapshot(t *testing.T) {
+	data, err := os.ReadFile("testdata/error_codes.json")
+	if err != nil {
+		t.Fatalf("read error code snapshot: %v", err)
+	}
+	var expected []apperr.ErrorCode
+	if err := json.Unmarshal(data, &expected); err != nil {
+		t.Fatalf("decode error code snapshot: %v", err)
+	}
+	if len(allExportedCodes) != 8 || len(expected) != len(allExportedCodes) {
+		t.Fatalf("expected 8 framework error codes, got inventory=%d snapshot=%d", len(allExportedCodes), len(expected))
 	}
 
-	for _, tc := range tests {
-		if tc.ec.GetCode() != tc.code {
-			t.Errorf("expected code %d, got %d", tc.code, tc.ec.GetCode())
-		}
-		if tc.ec.GetOutput() != tc.output {
-			t.Errorf("expected output %s, got %s", tc.output, tc.ec.GetOutput())
-		}
-		if tc.ec.GetMessage() != tc.message {
-			t.Errorf("expected message %s, got %s", tc.message, tc.ec.GetMessage())
-		}
-	}
-
-	// 统计并确保错误码总数与旧库 189 个完全一致
-	codeSet := make(map[apperr.Code]string)
+	codeSet := make(map[apperr.Code]apperr.ErrorCode)
+	outputSet := make(map[apperr.Output]bool)
 	for _, ec := range allExportedCodes {
 		if ec == nil {
 			t.Fatal("found nil ErrorCode pointer")
 		}
+		if ec.Code/100 != 500 || !strings.HasPrefix(string(ec.Output), "FRAMEWORK_") {
+			t.Fatalf("foundation must contain only framework 500-series codes: %+v", ec)
+		}
 		if _, exists := codeSet[ec.Code]; exists {
 			t.Fatalf("duplicate code detected: %d (%s)", ec.Code, ec.Output)
 		}
-		codeSet[ec.Code] = string(ec.Output)
+		if outputSet[ec.Output] {
+			t.Fatalf("duplicate output detected: %s", ec.Output)
+		}
+		codeSet[ec.Code] = apperr.ErrorCode{Code: ec.GetCode(), Output: ec.GetOutput(), Message: ec.GetMessage()}
+		outputSet[ec.Output] = true
 	}
-
-	if len(allExportedCodes) != 189 {
-		t.Fatalf("expected total 189 error codes, got %d", len(allExportedCodes))
+	for _, want := range expected {
+		got, exists := codeSet[want.Code]
+		if !exists || got != want {
+			t.Errorf("error code snapshot mismatch: want %+v, got %+v", want, got)
+		}
+		delete(codeSet, want.Code)
+	}
+	if len(codeSet) != 0 {
+		t.Errorf("error codes missing from snapshot: %v", codeSet)
 	}
 }
 
 func TestErrorUnwrapAndIsAs(t *testing.T) {
 	rootCause := &customTestError{msg: "connection reset by peer"}
 	wrapped := &apperr.Error{
-		Code:         *apperr.ServerInternalError,
+		Code:         *apperr.FrameworkInternalError,
 		ErrorMessage: "failed to connect upstream",
 		Err:          rootCause,
 	}
@@ -98,7 +84,7 @@ func TestErrorUnwrapAndIsAs(t *testing.T) {
 
 	// 验证 io.EOF 等标准 error
 	eofErr := &apperr.Error{
-		Code: *apperr.IoError,
+		Code: *apperr.FrameworkInternalError,
 		Err:  io.EOF,
 	}
 	if !errors.Is(eofErr, io.EOF) {
@@ -109,7 +95,7 @@ func TestErrorUnwrapAndIsAs(t *testing.T) {
 func TestErrorJSONSerializationNoLeak(t *testing.T) {
 	rootCause := errors.New("super secret database credential error")
 	appErr := &apperr.Error{
-		Code:         *apperr.DatabaseError,
+		Code:         *apperr.FrameworkInternalError,
 		ErrorMessage: "query failed",
 		Data:         map[string]any{"table": "users"},
 		Err:          rootCause,
@@ -140,7 +126,7 @@ func TestErrorJSONSerializationNoLeak(t *testing.T) {
 
 	// 测试 omitempty
 	emptyErr := &apperr.Error{
-		Code: *apperr.BadRequest,
+		Code: *apperr.FrameworkContainerNotMounted,
 	}
 	emptyData, err := json.Marshal(emptyErr)
 	if err != nil {

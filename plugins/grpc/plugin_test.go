@@ -13,6 +13,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/constant"
+	"github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/grpcresult"
 	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -103,7 +104,7 @@ func unaryAppErrorHandler(srv any, ctx context.Context, dec func(any) error, int
 		return nil, err
 	}
 	h := func(ctx context.Context, req any) (any, error) {
-		return nil, apperr.New(apperr.ParameterError, "参数校验失败", errors.New("underlying private db err"))
+		return nil, apperr.New(grpcresult.ParameterError, "参数校验失败", errors.New("underlying private db err"))
 	}
 	if interceptor != nil {
 		return interceptor(ctx, req, &grpc.UnaryServerInfo{

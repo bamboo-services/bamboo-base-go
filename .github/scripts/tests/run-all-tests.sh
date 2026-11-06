@@ -4,7 +4,7 @@
 #
 # 功能:
 #   一键执行 .github/scripts/ 体系下的所有单元测试与回归测试:
-#   1. Go 脚本单元测试 (.github/scripts/proxy 及 .github/scripts/release，启用 -race)
+#   1. Go 脚本单元测试 (.github/scripts/proxy、release 及 ci，启用 -race)
 #   2. .github/scripts/tests/ 下全部 Shell 自动化回归测试套件 (test_*.sh)
 #
 # 特性:
@@ -69,7 +69,7 @@ BambooBase 脚本自测试套件驱动
   --no-race       禁用 Go 脚本测试的 -race 检测 (默认启用)
 
 目标:
-  go              运行 Go 模块代理与发布清单单测 (proxy + release)
+  go              运行 Go 模块代理、发布清单与错误码守卫单测 (proxy + release + ci)
   <script_name>   运行指定 test_*.sh 脚本 (支持完整文件名或前缀)
 
 示例:
@@ -86,7 +86,7 @@ discover_shell_tests() {
 
 list_targets() {
 	echo "可用的自测试套件目标:"
-	echo "  go (Go proxy & release manifest 单元测试)"
+	echo "  go (Go proxy, release manifest & error vocabulary 单元测试)"
 	discover_shell_tests | while read -r test_file; do
 		printf "  %s\n" "$(basename "${test_file}")"
 	done
@@ -171,13 +171,13 @@ if [ $RUN_GO_TEST -eq 1 ]; then
 	RACE_ARG=""
 	if [ $ENABLE_RACE -eq 1 ]; then
 		RACE_ARG="-race"
-		log_step "${CURRENT_STEP}/${TOTAL_TESTS}" "运行 Go 脚本单元测试 (.github/scripts/proxy & release, -race)..."
+		log_step "${CURRENT_STEP}/${TOTAL_TESTS}" "运行 Go 脚本单元测试 (.github/scripts/proxy & release & ci, -race)..."
 	else
-		log_step "${CURRENT_STEP}/${TOTAL_TESTS}" "运行 Go 脚本单元测试 (.github/scripts/proxy & release)..."
+		log_step "${CURRENT_STEP}/${TOTAL_TESTS}" "运行 Go 脚本单元测试 (.github/scripts/proxy & release & ci)..."
 	fi
 
 	# Go 脚本测试需在根工作区外使用 GOWORK=off 独立执行
-	if GOWORK=off go test ${RACE_ARG} ./.github/scripts/proxy ./.github/scripts/release; then
+	if GOWORK=off go test ${RACE_ARG} ./.github/scripts/proxy ./.github/scripts/release ./.github/scripts/ci; then
 		log_pass "Go 脚本单测全部通过"
 		PASSED_COUNT=$((PASSED_COUNT + 1))
 	else

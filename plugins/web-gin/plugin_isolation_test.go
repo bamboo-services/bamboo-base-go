@@ -128,7 +128,7 @@ func buildApp(
 		engine.POST("/test", func(c *gin.Context) {
 			b := bind.FromContext(c)
 			if b == nil {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "binder not injected", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "binder not injected", nil))
 				return
 			}
 
@@ -141,23 +141,23 @@ func buildApp(
 			reqCtx := c.Request.Context()
 			reqKey := ctxkey.GetRequestKey(reqCtx)
 			if reqKey == "" {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "missing RequestKey", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "missing RequestKey", nil))
 				return
 			}
 
 			svc, hGetErr := application.Get[string](reqCtx, resourceKey)
 			if hGetErr != nil || svc == "" {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get resource in handler", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "failed to get resource in handler", nil))
 				return
 			}
 
 			cVal := c.Value(resourceKey)
 			if cVal == nil {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get resource via c.Value", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "failed to get resource via c.Value", nil))
 				return
 			}
 			if strVal, ok := cVal.(string); !ok || strVal != toolVal {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "resource mismatch via c.Value", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "resource mismatch via c.Value", nil))
 				return
 			}
 

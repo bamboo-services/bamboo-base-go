@@ -43,6 +43,7 @@ v2 全仓实施安排见 [0001 总实施计划（已归档）](./plan/archive/00
 | 编号 | 文档                                                                                                        | Scope      | 阶段状态 |
 | ---- | ----------------------------------------------------------------------------------------------------------- | ---------- | -------- |
 | 0001 | [v2.0.0 foundation 能力与测试迁移规范](./engineering/spec/0001-foundation-capability-and-test-inventory.md) | foundation | draft    |
+| 0002 | [v2.0.0 错误码分配与受控词表规范](./engineering/spec/0002-foundation-error-code-vocabulary.md)              | foundation | draft    |
 
 ### 手册模式（`runbook/`）
 

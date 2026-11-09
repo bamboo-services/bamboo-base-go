@@ -7,7 +7,7 @@
 
 V2 SDK 的各插件曾独立选择错误码，HTTP 与 gRPC 出现相同 Code 和 Output；application 又把组件装配失败表达为客户端 400/403/404。统一分配编号不代表把所有定义搬进 foundation。
 
-本规范管辖 `foundation/apperr` 与 `plugins/` 中对外导出的预置结构化错误码、协议转换及其检查门禁。不替代原生 error、哨兵错误和 errors.Is 根因契约；不替业务应用自动解释身份认证或生成支付、验证码等领域错误。本文是本次重构的实施草案，尚未冻结为 ADR。
+本规范管辖 `foundation/apperr` 与 `plugins/` 中对外导出的预置结构化错误码、协议转换及其检查门禁。本文不单独规定全部SDK函数的返回签名；自有错误返回强类型要求及固定外部接口例外见[强类型错误返回规范](./0003-foundation-strong-error-contract.md)。原生错误可作为根因保留并支持errors.Is，但不能据此认为自有出口继续裸返回error已符合新规范。本规范不替业务应用自动解释身份认证或生成支付、验证码等领域错误，尚未冻结为ADR。
 
 ### 工作树现状与边界
 
@@ -54,6 +54,7 @@ Go 符号在所属包内唯一即可；不同包允许同名 NotFound。Message 
 ### E06：状态来自分组，不能靠新序号猜测
 
 HTTP 状态取 Code / 100；非400..599的自定义错误退为500。RPC 沿用 grpcresult 的明确映射：400→InvalidArgument，401→Unauthenticated，403→PermissionDenied，404→NotFound，408/504→DeadlineExceeded，409→AlreadyExists，412→FailedPrecondition，429→ResourceExhausted，499→Canceled，500→Internal，501→Unimplemented，502/503→Unavailable，其余分组→Unknown。禁止用简单全局整数递增使除100后的状态改变。
+上述是SDK统一错误到RPC的正向映射，不是从原生RPC状态反推业务原因的一一对应关系。2026-11-08已确认 [spec0003 R12](./0003-foundation-strong-error-contract.md)：原生合法非OK status补BaseResponse时保留原RPC状态/显式文案/已有Details；已有信封不重写，缺信封只追加兼容信封。兼容码的完整标准状态分类及新序号留待实施前评审登记，不把兼容业务Code重新正向映射后覆盖原RPC状态。本轮未改Go映射或现有65项机器词表。
 
 所有 `FRAMEWORK_` 故障经 HTTP 返回500、经 RPC 返回 Internal；HTTP/RPC 自身的 InternalError、ResponseMissing 必须使用各自协议定义。RPC 无 metadata 或键无有效值使用400组的 GRPC_METADATA_MISSING，不得推断为未认证；nil RPC context 属于内部调用契约错误，使用500组的 GRPC_CONTEXT_MISSING。SQL事务整体失败使用 DATABASE_TRANSACTION_FAILED 的500分组，具体并发/约束冲突使用409分组，不把全部驱动原始错误自动改写为这些码。
 
@@ -81,6 +82,74 @@ errors.Is/errors.As 根因、JSON不含底层Err、HTTP信封/RPC Details脱敏�
 | `plugins/database`           | `DATABASE_`       | 8              |
 | `plugins/cache`              | `CACHE_`          | 1              |
 | `plugins/email`              | `EMAIL_`          | 1              |
+
+### 已确认的后续归属（尚未登记或实现）
+
+2026-11-07用户确认 [spec0003 R11](./0003-foundation-strong-error-contract.md) 的两个新增基础子包方向。本表仅记录未来扩展，不计入上表当前active数量，不属于下方机器校验词表标记区。
+
+| 规划归属              | 规划前缀   | 已确认分组与协议映射                                                                                   | 当前状态                                               |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `foundation/control`  | `CONTROL_` | 取消499→Canceled；请求接收/读取超时408、内部deadline504→DeadlineExceeded                               | 子包、具体序号、Go定义及检查器白名单均未创建/登记      |
+| `foundation/valueerr` | `VALUE_`   | 输入非法400→InvalidArgument；目标/API契约非法500→Internal；服务配置入口用所属500码包装并保留值错误原因 | 子包、具体符号/序号、Go定义及检查器白名单均未创建/登记 |
+
+HTTP状态仍按分组计算。499是非标准扩展，内部deadline默认504是本项目约定，均不能冒充HTTP标准强制；连接已断时不保证能写回取消响应。配置责任不能仅凭字符串判定。根包 `foundation/apperr` 的 `FRAMEWORK_`/500-only约束不变；两个新域不得为取码引入对协议插件的依赖。
+
+实施时按全局组内最大序号追加，保留现有65项，不为这两个域重新从00独立计数；细化符号后再核算容量、更新实际词表/源码/守卫。不采用422方案，不改变现有422→Unknown的行为。
+
+### P1开工候选码（2026-11-09，未登记）
+
+本节是P1评审提案的唯一候选码表，不是已生效的分配台账，也不预占编号。用户已授权整理开工材料，尚未批准这些具体符号、号码或Go实施。机器标记区仍只有65项active；不得把本表计入当前归属数量或声称新包已存在。实施前重读active/retired，核对并发新增后重新按E04取号；获准后同一补丁登记机器词表、归属白名单、源码及回归。
+
+| 候选Code | 候选Output                         | 规划归属包                | 候选Go符号                      | 候选Message          |
+| -------- | ---------------------------------- | ------------------------- | ------------------------------- | -------------------- |
+| 40013    | `VALUE_INVALID_FORMAT`             | `foundation/valueerr`     | `InvalidFormat`                 | 值格式非法           |
+| 40014    | `VALUE_OUT_OF_RANGE`               | `foundation/valueerr`     | `OutOfRange`                    | 值超出范围           |
+| 40015    | `VALUE_INVALID_TYPE`               | `foundation/valueerr`     | `InvalidType`                   | 值类型非法           |
+| 40016    | `GRPC_OUT_OF_RANGE`                | `plugins/grpc/grpcresult` | `OutOfRange`                    | 参数超出范围         |
+| 40802    | `CONTROL_REQUEST_TIMEOUT`          | `foundation/control`      | `RequestTimeout`                | 请求接收超时         |
+| 40907    | `GRPC_ABORTED`                     | `plugins/grpc/grpcresult` | `Aborted`                       | 操作已中止           |
+| 41201    | `GRPC_PRECONDITION_FAILED`         | `plugins/grpc/grpcresult` | `PreconditionFailed`            | 前置条件未满足       |
+| 42902    | `GRPC_RESOURCE_EXHAUSTED`          | `plugins/grpc/grpcresult` | `ResourceExhausted`             | 资源耗尽             |
+| 49900    | `CONTROL_CANCELED`                 | `foundation/control`      | `Canceled`                      | 操作已取消           |
+| 50018    | `VALUE_UNSUPPORTED_TARGET`         | `foundation/valueerr`     | `UnsupportedTarget`             | 不支持的转换目标     |
+| 50019    | `VALUE_INVALID_RECEIVER`           | `foundation/valueerr`     | `InvalidReceiver`               | 值接收器无效         |
+| 50020    | `FRAMEWORK_MULTIPLE_FAILURES`      | `foundation/apperr`       | `FrameworkMultipleFailures`     | 多个框架阶段失败     |
+| 50021    | `FRAMEWORK_HOOK_PANIC`             | `foundation/apperr`       | `FrameworkHookPanic`            | 框架生命周期钩子异常 |
+| 50022    | `FRAMEWORK_SHUTDOWN_INCOMPLETE`    | `foundation/apperr`       | `FrameworkShutdownIncomplete`   | 框架关闭未完成       |
+| 50023    | `FRAMEWORK_WORKER_UNEXPECTED_EXIT` | `foundation/apperr`       | `FrameworkWorkerUnexpectedExit` | 后台服务意外退出     |
+| 50024    | `GRPC_UNKNOWN_ERROR`               | `plugins/grpc/grpcresult` | `UnknownError`                  | RPC未知错误          |
+| 50025    | `GRPC_DATA_LOSS`                   | `plugins/grpc/grpcresult` | `DataLoss`                      | 数据丢失             |
+| 50100    | `GRPC_UNIMPLEMENTED`               | `plugins/grpc/grpcresult` | `Unimplemented`                 | 功能未实现           |
+| 50401    | `CONTROL_DEADLINE_EXCEEDED`        | `foundation/control`      | `DeadlineExceeded`              | 操作超过截止时间     |
+
+本提案合计19项。若全部批准并登记，active将由65变为84；500组从18项变为26项，SDK槽位余24个，400组从13项变为17项，余33个。其他受影响组追加40802、40907、41201、42902、49900、50100、50401，不改旧号，不占业务50..99。4项框架码在P1只建立定义/聚合诊断契约及测试，Worker/钩子/停机流程接入仍属P2/P3，不在P1偷换生命周期接口。未列出的日志、雪花、调度、任务池等错误，须在对应阶段细化登记；本表不是全SDK错误分类的穷举。
+
+输入源类型不合法使用VALUE_INVALID_TYPE；不支持的目标/API契约使用VALUE_UNSUPPORTED_TARGET；nil接收器等内部契约错误使用VALUE_INVALID_RECEIVER。不能只因函数返回error就猜成400。CONTROL_REQUEST_TIMEOUT要求实际请求接收/读取阶段证据，不能套用到任意内部deadline。FrameworkMultipleFailures只作真正框架多阶段失败的总码，不能成为其他插件或所有普通错误的默认桶；聚合时由调用层显式指定责任域总码。
+
+### 原生gRPC缺信封时的P1兼容提案
+
+下表覆盖16种标准非OK状态，只在缺BaseResponse时选择兼容码。取码仅引用当前机器词表或上节候选表，不另占号；它不是已实现映射。原生RPC状态、显式GRPCStatus文案和原Any Details仍按spec0003 R12保留，禁止把兼容Code重新正向映射覆盖原RPC状态。已有BaseResponse（包括重复、冲突或不可解码条目）不重写、不追加；问题进入受控诊断，不冒称有效信封。
+
+| 原生RPC状态        | 兼容Output                                              | HTTP分组  | 取码依据与边界                                          |
+| ------------------ | ------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| Canceled           | `CONTROL_CANCELED`                                      | 499       | 候选；原生status不等于context.Canceled原因，不伪造cause |
+| Unknown            | `GRPC_UNKNOWN_ERROR`                                    | 500       | 候选；不猜具体业务原因                                  |
+| InvalidArgument    | `GRPC_PARAMETER_ERROR`                                  | 400       | 当前active；不猜具体字段                                |
+| DeadlineExceeded   | `CONTROL_DEADLINE_EXCEEDED` / `CONTROL_REQUEST_TIMEOUT` | 504 / 408 | 默认504；实际请求接收/读取阶段证据才408                 |
+| NotFound           | `GRPC_NOT_FOUND`                                        | 404       | 当前active；不反推数据库记录缺失                        |
+| AlreadyExists      | `GRPC_CONFLICT`                                         | 409       | 当前active；保留AlreadyExists                           |
+| PermissionDenied   | `GRPC_PERMISSION_DENIED`                                | 403       | 当前active；不猜认证失败                                |
+| ResourceExhausted  | `GRPC_RESOURCE_EXHAUSTED`                               | 429       | 候选；不等于只表示请求过多的TooManyRequests             |
+| FailedPrecondition | `GRPC_PRECONDITION_FAILED`                              | 412       | 候选；不把所有前置条件窄化成InvalidState                |
+| Aborted            | `GRPC_ABORTED`                                          | 409       | 候选；保留Aborted，不改成AlreadyExists                  |
+| OutOfRange         | `GRPC_OUT_OF_RANGE`                                     | 400       | 候选；保留OutOfRange，不改成InvalidArgument             |
+| Unimplemented      | `GRPC_UNIMPLEMENTED`                                    | 501       | 候选；保留Unimplemented                                 |
+| Internal           | `GRPC_INTERNAL_ERROR`                                   | 500       | 当前active；不复制未知包装层文本                        |
+| Unavailable        | `GRPC_SERVICE_UNAVAILABLE`                              | 503       | 当前active；不猜具体网络故障                            |
+| DataLoss           | `GRPC_DATA_LOSS`                                        | 500       | 候选；保留DataLoss，不改成Internal                      |
+| Unauthenticated    | `GRPC_UNAUTHORIZED`                                     | 401       | 当前active；与PermissionDenied分开                      |
+
+OK不制造失败信封；非标准/非法RPC状态不在这16项承诺内，需受控兜底与诊断。原生status.Message保留；未知包装层文本不得冒充该文案。若补充Details编码失败，保留原状态与原Details并记录受控降级，不能宣称已成功补齐。该表定义P1要验证的语义；真实normalizeRPCError拆分及拦截器接入留P6，不把文档检查当作协议链路验收。
 
 ### 错误码受控词表
 

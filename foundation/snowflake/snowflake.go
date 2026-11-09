@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/valueerr"
 )
 
 // 雪花算法配置常量
@@ -36,7 +39,12 @@ const (
 	timestampShift  = sequenceBits + nodeBits + datacenterBits + geneBits // 22
 )
 
-// 节点发号与反序列化过程中的导出错误变量，调用方可通过 errors.Is 识别。
+// 节点发号与反序列化过程中的导出哨兵错误，调用方可通过 errors.Is 识别。
+//
+// 迁移到统一错误后，这三个哨兵不再直接作为返回值抛出，
+// 而是作为对应统一错误的根因保留：错误码分别为
+// [valueerr.InvalidReceiver]（50019，无效接收器）与 [ClockBackwards]（50027，时钟回退），
+// 因此 errors.Is(err, ErrNilNode) 等判定依旧可达。
 var (
 	ErrNilNode        = errors.New("snowflake: nil node")              // 在未初始化的 nil [Node] 指针上调用了发号方法。
 	ErrNilReceiver    = errors.New("snowflake: nil receiver")          // 在 nil 接收器指针上调用了反序列化或数据扫描方法。
@@ -61,14 +69,23 @@ type Node struct {
 // NewNode 创建并初始化一个雪花算法发号节点实例。
 //
 // datacenterID 与 nodeID 均受位宽限制，合法取值范围均为 [0, 7]。
-// 任一参数超出合法范围时返回非 nil 错误并附带具体越界信息。
+// 任一参数超出合法范围时返回非 nil 的 [*apperr.Error]，错误码为
+// [NodeInvalid]（50026），并把具体越界信息保留为根因；
 // 成功构造的 [Node] 实例完全并发安全，可供应用内全局共享。
-func NewNode(datacenterID, nodeID int64) (*Node, error) {
+func NewNode(datacenterID, nodeID int64) (*Node, *apperr.Error) {
 	if datacenterID < 0 || datacenterID > maxDatacenterID {
-		return nil, fmt.Errorf("数据中心 ID 必须在 0-%d 之间，当前值: %d", maxDatacenterID, datacenterID)
+		return nil, apperr.New(
+			NodeInvalid,
+			apperr.ErrMessage(fmt.Sprintf("数据中心 ID 必须在 0-%d 之间", maxDatacenterID)),
+			fmt.Errorf("数据中心 ID 必须在 0-%d 之间，当前值: %d", maxDatacenterID, datacenterID),
+		)
 	}
 	if nodeID < 0 || nodeID > maxNodeID {
-		return nil, fmt.Errorf("节点 ID 必须在 0-%d 之间，当前值: %d", maxNodeID, nodeID)
+		return nil, apperr.New(
+			NodeInvalid,
+			apperr.ErrMessage(fmt.Sprintf("节点 ID 必须在 0-%d 之间", maxNodeID)),
+			fmt.Errorf("节点 ID 必须在 0-%d 之间，当前值: %d", maxNodeID, nodeID),
+		)
 	}
 	return &Node{
 		datacenterID: datacenterID,
@@ -86,14 +103,20 @@ func (n *Node) currentTime() int64 {
 // Generate 并发安全地生成一个新的 64 位雪花算法 ID。
 //
 // gene 为可选参数，表示需要嵌入 ID 的业务基因：未传或为空时默认使用 [GeneDefault]；
-// 若传入的值超出合法范围 [0, 63]，将返回校验错误。
+// 若传入的值超出合法范围 [0, 63]，将返回值为 [valueerr.OutOfRange]（40014）
+// 的统一错误，原越界信息保留为根因。
 //
-// 在 nil 节点上调用将返回 [ErrNilNode]。若当前时钟小于上一次发号时间戳，
-// 将返回包装有 [ErrClockBackwards] 的错误；若当前毫秒内序列号用尽，
-// 方法将主动等待下一毫秒并重置序列号后完成发号。
-func (n *Node) Generate(gene ...Gene) (SnowflakeID, error) {
+// 在 nil 节点上调用将返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
+// 并保留 [ErrNilNode] 为根因（errors.Is 仍可达）。
+// 若当前时钟小于上一次发号时间戳，将返回错误码为 [ClockBackwards]（50027）
+// 的统一错误，并保留 [ErrClockBackwards] 为根因；
+// 若当前毫秒内序列号用尽，方法将主动等待下一毫秒并重置序列号后完成发号。
+//
+// 成功路径返回的 nil 是真正的 nil 错误（类型为 [*apperr.Error] 的零值指针），
+// 调用方可用 == nil 直接判定成功。
+func (n *Node) Generate(gene ...Gene) (SnowflakeID, *apperr.Error) {
 	if n == nil {
-		return 0, ErrNilNode
+		return 0, valueerr.From(valueerr.KindInvalidReceiver, "雪花发号节点未初始化", ErrNilNode)
 	}
 
 	g := GeneDefault
@@ -102,7 +125,11 @@ func (n *Node) Generate(gene ...Gene) (SnowflakeID, error) {
 	}
 
 	if !g.IsValid() {
-		return 0, fmt.Errorf("基因类型必须在 0-%d 之间，当前值: %d", maxGene, g)
+		return 0, valueerr.From(
+			valueerr.KindOutOfRange,
+			apperr.ErrMessage(fmt.Sprintf("基因类型必须在 0-%d 之间", maxGene)),
+			fmt.Errorf("基因类型必须在 0-%d 之间，当前值: %d", maxGene, g),
+		)
 	}
 
 	n.mu.Lock()
@@ -111,7 +138,11 @@ func (n *Node) Generate(gene ...Gene) (SnowflakeID, error) {
 	now := n.currentTime()
 
 	if now < n.lastTime {
-		return 0, fmt.Errorf("%w: current time %d < last time %d", ErrClockBackwards, now, n.lastTime)
+		return 0, apperr.New(
+			ClockBackwards,
+			"系统时钟回退",
+			fmt.Errorf("%w: current time %d < last time %d", ErrClockBackwards, now, n.lastTime),
+		)
 	}
 
 	var nextSeq int64
@@ -122,7 +153,11 @@ func (n *Node) Generate(gene ...Gene) (SnowflakeID, error) {
 			for now <= n.lastTime {
 				now = n.currentTime()
 				if now < n.lastTime {
-					return 0, fmt.Errorf("%w: clock moved backwards while waiting next millisecond", ErrClockBackwards)
+					return 0, apperr.New(
+						ClockBackwards,
+						"系统时钟回退",
+						fmt.Errorf("%w: clock moved backwards while waiting next millisecond", ErrClockBackwards),
+					)
 				}
 			}
 			nextSeq = 0
@@ -193,31 +228,64 @@ type SnowflakeID int64
 // MarshalJSON 实现 [json.Marshaler] 接口，将雪花 ID 编码为带引号的十进制 JSON 字符串。
 //
 // 此举可防止前端 JavaScript 等弱类型环境因数值超过 2^53 - 1 产生精度丢失。
+// 该方法的外部签名固定为 ([]byte, error)：内部使用强类型核心，
+// 成功时返回真正的 nil 错误，失败时返回携带统一错误码的错误。
 func (s SnowflakeID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(strconv.FormatInt(int64(s), 10))
+	data, err := s.marshalJSONCore()
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// marshalJSONCore 是 [SnowflakeID.MarshalJSON] 的强类型核心。
+//
+// 内部以十进制文本编码再交给 JSON 编码器，保证输出为带引号的字符串。
+func (s SnowflakeID) marshalJSONCore() ([]byte, *apperr.Error) {
+	data, err := json.Marshal(strconv.FormatInt(int64(s), 10))
+	if err != nil {
+		return nil, valueerr.From(valueerr.KindUnsupportedTarget, "编码雪花 ID 失败", err)
+	}
+	return data, nil
 }
 
 // UnmarshalJSON 实现 [json.Unmarshaler] 接口，从 JSON 数据反序列化雪花 ID。
 //
 // 支持字符串格式（如 "123456"）以及向前兼容纯数字格式（如 123456）。
-// 若接收器指针为 nil 则返回 [ErrNilReceiver]；解析失败时原有值保持不变。
+// 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
+// 并保留 [ErrNilReceiver] 为根因；解析失败时原有值保持不变，
+// 错误码为 [valueerr.InvalidFormat]（40013）。
+//
+// 该方法的外部签名固定为 error：内部使用强类型核心，
+// 成功时返回真正的 nil 错误。
 func (s *SnowflakeID) UnmarshalJSON(data []byte) error {
+	if err := s.unmarshalJSONCore(data); err != nil {
+		return err
+	}
+	return nil
+}
+
+// unmarshalJSONCore 是 [SnowflakeID.UnmarshalJSON] 的强类型核心。
+//
+// 先尝试按 JSON 字符串解析，失败后退化为纯数字格式，两种格式都不成立时
+// 才判定为格式非法；解析失败不会污染接收器原值。
+func (s *SnowflakeID) unmarshalJSONCore(data []byte) *apperr.Error {
 	if s == nil {
-		return ErrNilReceiver
+		return valueerr.From(valueerr.KindInvalidReceiver, "雪花 ID 接收器为 nil", ErrNilReceiver)
 	}
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		// 兼容数字格式
 		var num int64
 		if numErr := json.Unmarshal(data, &num); numErr != nil {
-			return fmt.Errorf("解析雪花 ID 失败: %w", err)
+			return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 失败", err)
 		}
 		*s = SnowflakeID(num)
 		return nil
 	}
 	num, err := strconv.ParseInt(str, 10, 64)
 	if err != nil {
-		return fmt.Errorf("解析雪花 ID 字符串失败: %w", err)
+		return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 字符串失败", err)
 	}
 	*s = SnowflakeID(num)
 	return nil
@@ -226,20 +294,44 @@ func (s *SnowflakeID) UnmarshalJSON(data []byte) error {
 // MarshalBinary 实现 [encoding.BinaryMarshaler] 接口，将雪花 ID 转换为十进制字符串格式的字节切片。
 //
 // 返回的 error 始终为 nil。
+// 该方法的外部签名固定为 ([]byte, error)：内部使用强类型核心，
+// 成功时返回真正的 nil 错误。
 func (s SnowflakeID) MarshalBinary() ([]byte, error) {
+	data, err := s.marshalBinaryCore()
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// marshalBinaryCore 是 [SnowflakeID.MarshalBinary] 的强类型核心。
+func (s SnowflakeID) marshalBinaryCore() ([]byte, *apperr.Error) {
 	return []byte(s.String()), nil
 }
 
 // UnmarshalBinary 实现 [encoding.BinaryUnmarshaler] 接口，从十进制字节切片反序列化雪花 ID。
 //
-// 若接收器指针为 nil 则返回 [ErrNilReceiver]；若解析错误原有值保持不变并返回错误。
+// 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
+// 并保留 [ErrNilReceiver] 为根因；若解析错误原有值保持不变，
+// 错误码为 [valueerr.InvalidFormat]（40013）。
+//
+// 该方法的外部签名固定为 error：内部使用强类型核心，
+// 成功时返回真正的 nil 错误。
 func (s *SnowflakeID) UnmarshalBinary(data []byte) error {
+	if err := s.unmarshalBinaryCore(data); err != nil {
+		return err
+	}
+	return nil
+}
+
+// unmarshalBinaryCore 是 [SnowflakeID.UnmarshalBinary] 的强类型核心。
+func (s *SnowflakeID) unmarshalBinaryCore(data []byte) *apperr.Error {
 	if s == nil {
-		return ErrNilReceiver
+		return valueerr.From(valueerr.KindInvalidReceiver, "雪花 ID 接收器为 nil", ErrNilReceiver)
 	}
 	val, err := strconv.ParseInt(string(data), 10, 64)
 	if err != nil {
-		return fmt.Errorf("解析雪花 ID 字节数据失败: %w", err)
+		return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 字节数据失败", err)
 	}
 	*s = SnowflakeID(val)
 	return nil
@@ -248,18 +340,43 @@ func (s *SnowflakeID) UnmarshalBinary(data []byte) error {
 // Value 实现 [driver.Valuer] 接口，转换为 int64 原生数值写入数据库。
 //
 // 返回的 error 始终为 nil。
+// 该方法的外部签名固定为 (driver.Value, error)：内部使用强类型核心，
+// 成功时返回真正的 nil 错误。
 func (s SnowflakeID) Value() (driver.Value, error) {
+	value, err := s.valueCore()
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+// valueCore 是 [SnowflakeID.Value] 的强类型核心。
+func (s SnowflakeID) valueCore() (driver.Value, *apperr.Error) {
 	return int64(s), nil
 }
 
 // Scan 实现 [database/sql.Scanner] 接口，从数据库驱动值扫描还原雪花 ID。
 //
 // 支持 int64、int、int32 数值类型，以及 []byte、string 十进制文本类型。
-// 当传入 value 为 nil 时，将接收器重置为 0 并返回 nil；若接收器指针为 nil 则返回 [ErrNilReceiver]；
-// 遇到不支持的类型或文本解析失败时保留原值并返回错误。
+// 当传入 value 为 nil 时，将接收器重置为 0 并返回 nil；
+// 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
+// 并保留 [ErrNilReceiver] 为根因；
+// 遇到不支持的类型（错误码 [valueerr.InvalidType]，40015）或文本解析失败
+// （错误码 [valueerr.InvalidFormat]，40013）时保留原值并返回错误。
+//
+// 该方法的外部签名固定为 error：内部使用强类型核心，
+// 成功时返回真正的 nil 错误。
 func (s *SnowflakeID) Scan(value interface{}) error {
+	if err := s.scanCore(value); err != nil {
+		return err
+	}
+	return nil
+}
+
+// scanCore 是 [SnowflakeID.Scan] 的强类型核心。
+func (s *SnowflakeID) scanCore(value interface{}) *apperr.Error {
 	if s == nil {
-		return ErrNilReceiver
+		return valueerr.From(valueerr.KindInvalidReceiver, "雪花 ID 接收器为 nil", ErrNilReceiver)
 	}
 	if value == nil {
 		*s = 0
@@ -275,17 +392,21 @@ func (s *SnowflakeID) Scan(value interface{}) error {
 	case []byte:
 		num, err := strconv.ParseInt(string(v), 10, 64)
 		if err != nil {
-			return fmt.Errorf("扫描雪花 ID 失败: %w", err)
+			return valueerr.From(valueerr.KindInvalidFormat, "扫描雪花 ID 失败", err)
 		}
 		*s = SnowflakeID(num)
 	case string:
 		num, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return fmt.Errorf("扫描雪花 ID 失败: %w", err)
+			return valueerr.From(valueerr.KindInvalidFormat, "扫描雪花 ID 失败", err)
 		}
 		*s = SnowflakeID(num)
 	default:
-		return fmt.Errorf("不支持的雪花 ID 类型: %T", value)
+		return apperr.New(
+			valueerr.InvalidType,
+			"不支持的雪花 ID 类型",
+			fmt.Errorf("不支持的雪花 ID 类型: %T", value),
+		)
 	}
 	return nil
 }

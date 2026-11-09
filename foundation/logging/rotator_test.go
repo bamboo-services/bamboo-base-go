@@ -13,17 +13,26 @@ import (
 	"time"
 )
 
+// newTestWriter 构造测试用轮转写入器。
+//
+// 失败分支直接终止当前测试：构造失败属于测试前置条件不成立。
+func newTestWriter(t *testing.T, dir, baseName string, maxSize int64) *RotatingWriter {
+	t.Helper()
+	w, appErr := NewRotatingWriter(RotatorConfig{
+		Dir:      dir,
+		BaseName: baseName,
+		Ext:      ".log",
+		MaxSize:  maxSize,
+	})
+	if appErr != nil {
+		t.Fatalf("NewRotatingWriter failed: %v", appErr)
+	}
+	return w
+}
+
 func TestRotatingWriter_BasicWriteAndContent(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewRotatingWriter(RotatorConfig{
-		Dir:      dir,
-		BaseName: "app",
-		Ext:      ".log",
-		MaxSize:  1024,
-	})
-	if err != nil {
-		t.Fatalf("NewRotatingWriter failed: %v", err)
-	}
+	w := newTestWriter(t, dir, "app", 1024)
 
 	content := []byte("hello bamboo logging\n")
 	n, err := w.Write(content)
@@ -46,15 +55,7 @@ func TestRotatingWriter_BasicWriteAndContent(t *testing.T) {
 
 func TestRotatingWriter_SizeRotation(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewRotatingWriter(RotatorConfig{
-		Dir:      dir,
-		BaseName: "app",
-		Ext:      ".log",
-		MaxSize:  50,
-	})
-	if err != nil {
-		t.Fatalf("NewRotatingWriter failed: %v", err)
-	}
+	w := newTestWriter(t, dir, "app", 50)
 
 	// 写入超过 50 字节
 	chunk := []byte("123456789012345678901234567890\n") // 31 bytes
@@ -89,15 +90,7 @@ func TestRotatingWriter_ArchiveTarGzContent(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	w, err := NewRotatingWriter(RotatorConfig{
-		Dir:      dir,
-		BaseName: "app",
-		Ext:      ".log",
-		MaxSize:  1024,
-	})
-	if err != nil {
-		t.Fatalf("NewRotatingWriter failed: %v", err)
-	}
+	w := newTestWriter(t, dir, "app", 1024)
 
 	// 显式触发归档
 	w.archiveYesterday()
@@ -152,18 +145,13 @@ func TestRotatingWriter_ArchiveTarGzContent(t *testing.T) {
 
 func TestRotatingWriter_ConcurrentWriteAndClose(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewRotatingWriter(RotatorConfig{
-		Dir:      dir,
-		BaseName: "app",
-		Ext:      ".log",
-		MaxSize:  100,
-	})
-	if err != nil {
-		t.Fatalf("NewRotatingWriter failed: %v", err)
-	}
+	w := newTestWriter(t, dir, "app", 100)
 
 	var wg sync.WaitGroup
 	writeDone := make(chan struct{})
+	// 首个写入完成的信号：用于确认并发写入已真实发生，
+	// 不依赖 time.Sleep 猜测时序。
+	firstWrite := make(chan struct{}, 5)
 
 	// 并发写
 	for i := 0; i < 5; i++ {
@@ -181,13 +169,21 @@ func TestRotatingWriter_ConcurrentWriteAndClose(t *testing.T) {
 						if errors.Is(err, ErrClosed) {
 							return
 						}
+						continue
+					}
+					select {
+					case firstWrite <- struct{}{}:
+					default:
 					}
 				}
 			}
 		}(i)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	// 等待每个写者至少完成一次写入后再触发关闭。
+	for i := 0; i < 5; i++ {
+		<-firstWrite
+	}
 	close(writeDone)
 
 	// 并发重复 Close
@@ -203,13 +199,13 @@ func TestRotatingWriter_ConcurrentWriteAndClose(t *testing.T) {
 	closeWg.Wait()
 	wg.Wait()
 
-	// Close 后再次写必须拒绝
-	_, err = w.Write([]byte("after close"))
+	// Close 后再次写必须拒绝，且 ErrClosed 仍然可达。
+	_, err := w.Write([]byte("after close"))
 	if !errors.Is(err, ErrClosed) {
 		t.Fatalf("expected ErrClosed after Close, got: %v", err)
 	}
 
-	// 再次 Close 必须幂等安全
+	// 再次 Close 必须幂等安全。
 	if err := w.Close(); err != nil {
 		t.Fatalf("repeat Close failed: %v", err)
 	}
@@ -223,15 +219,7 @@ func TestRotatingWriter_CloseWaitsForArchivalBarrier(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	w, err := NewRotatingWriter(RotatorConfig{
-		Dir:      dir,
-		BaseName: "app",
-		Ext:      ".log",
-		MaxSize:  1024,
-	})
-	if err != nil {
-		t.Fatalf("NewRotatingWriter failed: %v", err)
-	}
+	w := newTestWriter(t, dir, "app", 1024)
 
 	barrierHold := make(chan struct{})
 	barrierEntered := make(chan struct{})
@@ -245,21 +233,22 @@ func TestRotatingWriter_CloseWaitsForArchivalBarrier(t *testing.T) {
 
 	// 异步启动归档登记
 	w.triggerArchiveAsync()
-
 	// 等待归档进入障碍点
 	<-barrierEntered
 
 	closeReturned := make(chan error, 1)
+	closeStarted := make(chan struct{})
 	go func() {
+		close(closeStarted)
 		closeReturned <- w.Close()
 	}()
+	<-closeStarted
 
-	// 确认在 release barrier 前，Close 并未返回
+	// 归档仍被障碍阻塞，Close 不可能已经返回：无需依赖时间等待。
 	select {
 	case err := <-closeReturned:
 		t.Fatalf("Close returned prematurely before archive finished: %v", err)
-	case <-time.After(50 * time.Millisecond):
-		// 符合预期，Close 正在等待
+	default:
 	}
 
 	// 启动第二个并发 Close，验证其同样在 barrier release 前不能返回
@@ -271,8 +260,7 @@ func TestRotatingWriter_CloseWaitsForArchivalBarrier(t *testing.T) {
 	select {
 	case err := <-secondCloseReturned:
 		t.Fatalf("Second Close returned prematurely before archive finished: %v", err)
-	case <-time.After(50 * time.Millisecond):
-		// 符合预期，第二个 Close 必须等待 closeDone
+	default:
 	}
 
 	// 解除归档障碍
@@ -286,13 +274,11 @@ func TestRotatingWriter_CloseWaitsForArchivalBarrier(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("Close timed out waiting for archive barrier")
 	}
-
 	select {
 	case err2 = <-secondCloseReturned:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("Second Close timed out waiting for archive barrier")
 	}
-
 	if err1 != err2 {
 		t.Fatalf("Close results mismatch: err1=%v, err2=%v", err1, err2)
 	}

@@ -122,7 +122,7 @@
 //
 //   - 早退故障捕获：在 [StateRunning] 阶段，若某个 Worker 的 Run 异常返回
 //     （即使返回 nil），看门狗均将其判定为非预期崩溃，触发应用级自动平滑关机，
-//     并记录 [ErrWorkerUnexpectedExit]；
+//     并记录 [ErrWorkerUnexpectedExit]（错误链保留该哨兵与原始退出错误，可经 errors.Is / errors.As 精确判定）；
 //   - Panic 隔离与诊断：任何插件工厂函数、Start、Expose、Run、Quiesce、Stop 发生 panic，
 //     内核均会安全捕获并包装为结构化错误 [HookPanicError]，保留调用阶段、插件主键、
 //     实例标识与完整堆栈，防止工作进程裸崩溃。

@@ -3,7 +3,6 @@ package ctxkey
 import (
 	"database/sql/driver"
 	"encoding/xml"
-	"fmt"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/typed"
 )
@@ -14,6 +13,11 @@ import (
 // 合法键由 ASCII 字母开头，仅含字母、数字、下划线与连字符，
 // 长度为 1 至 128 字节；零值为空键，等价于 [Nil]，
 // 参与编码与校验时会得到否定结果。
+//
+// 十三个标准接口方法保留标准库要求的固定签名，失败时返回 [*apperr.Error]：
+// 受控键名语法不合法为 40013，输入源类型不合法（JSON null 与非字符串、
+// 嵌套 XML 子元素、SQL NULL 与非 string/[]byte）为 40015，
+// 接收器为 nil 为 50019。
 type Key typed.String
 
 var (
@@ -75,10 +79,10 @@ func (k Key) MarshalText() ([]byte, error) {
 
 // UnmarshalText 实现 encoding.TextUnmarshaler 接口。
 // 仅在校验成功后写回键值，校验失败时返回错误且原键值保持不变；
-// nil 接收器返回错误。
+// nil 接收器返回错误（50019）。
 func (k *Key) UnmarshalText(text []byte) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalText(text); err != nil {
@@ -97,10 +101,10 @@ func (k Key) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary 实现 encoding.BinaryUnmarshaler 接口。
 // 仅在校验成功后写回键值，校验失败时返回错误且原键值保持不变；
-// nil 接收器返回错误。
+// nil 接收器返回错误（50019）。
 func (k *Key) UnmarshalBinary(data []byte) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalBinary(data); err != nil {
@@ -118,10 +122,10 @@ func (k Key) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口。
 // 仅接受 JSON 字符串，严格拒绝 null 与非字符串；
-// 校验失败时返回错误且原键值保持不变，nil 接收器返回错误。
+// 校验失败时返回错误且原键值保持不变，nil 接收器返回错误（50019）。
 func (k *Key) UnmarshalJSON(raw []byte) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalJSON(raw); err != nil {
@@ -139,10 +143,10 @@ func (k Key) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 // UnmarshalXML 实现 xml.Unmarshaler 接口。
 // 仅在校验成功后写回键值，校验失败时返回错误且原键值保持不变；
-// nil 接收器返回错误。
+// nil 接收器返回错误（50019）。
 func (k *Key) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalXML(d, start); err != nil {
@@ -160,10 +164,10 @@ func (k Key) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 
 // UnmarshalXMLAttr 实现 xml.UnmarshalerAttr 接口。
 // 仅在校验成功后写回键值，校验失败时返回错误且原键值保持不变；
-// nil 接收器返回错误。
+// nil 接收器返回错误（50019）。
 func (k *Key) UnmarshalXMLAttr(attr xml.Attr) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalXMLAttr(attr); err != nil {
@@ -181,10 +185,10 @@ func (k Key) Value() (driver.Value, error) {
 
 // Scan 实现 sql.Scanner 接口。
 // 仅接受 string 与 []byte，拒绝 SQL NULL；仅在校验成功后写回键值，
-// 失败时原键值保持不变；nil 接收器返回错误。
+// 失败时原键值保持不变；nil 接收器返回错误（50019）。
 func (k *Key) Scan(src any) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.Scan(src); err != nil {
@@ -196,10 +200,10 @@ func (k *Key) Scan(src any) error {
 
 // Set 实现 flag.Value 接口，配合 [Key.String] 使 *Key 可直接用作
 // 命令行标志。仅在校验成功后写回键值，失败时原键值保持不变；
-// nil 接收器返回错误。
+// nil 接收器返回错误（50019）。
 func (k *Key) Set(raw string) error {
 	if k == nil {
-		return fmt.Errorf("ctxkey.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.Set(raw); err != nil {

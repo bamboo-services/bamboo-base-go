@@ -16,14 +16,14 @@ func ExampleLookup() {
 	raw, ok := env.Lookup(demoKey)
 	fmt.Println("set:", ok, raw.IsEmpty())
 	port, err := raw.Int()
-	fmt.Println("port:", port, err)
+	fmt.Println("port:", port, err == nil)
 
 	_, ok = env.Lookup("EXAMPLE_BAMBOO_MISSING")
 	fmt.Println("missing:", ok)
 
 	// Output:
 	// set: true false
-	// port: 8080 <nil>
+	// port: 8080 true
 	// missing: false
 }
 

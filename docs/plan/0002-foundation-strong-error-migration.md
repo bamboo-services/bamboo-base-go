@@ -7,7 +7,7 @@
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2–P7未执行，Worker丢链、生命周期与真实原生RPC信封接入仍未修。**不自动创建工作卡、提交推送或发布，不以P1代替整计划完成。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3–P7未执行，生命周期切换与真实原生RPC信封接入仍未实施。**不自动创建工作卡、提交推送或发布，不以P2代替整计划完成。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -191,7 +191,68 @@ P7先经隔离代理验证候选，再在每次另获授权后发布公开RC。R
 - 动作：先把 `application/app.go:948` 的Worker原错误丢失变成持久回归，再按规范修复保留cause；迁移typed解析、snowflake、logging、toolkit自有出口。编解码、SQL、flag、slog、io方法用强类型内部核心及nil安全薄适配。
 - 交付：Worker返回自定义错误后，`errors.As`、`errors.Is(original)`、`errors.Is(ErrWorkerUnexpectedExit)`均保留的测试；标准接口编译断言；成功编码、日志写入和关闭的真实nil测试。
 - 准出：`go test ./foundation/... ./application/... -count=1` 及相同范围 `-race`；`go list -deps ./foundation/...`无application/plugins依赖。此阶段可用错误链先行修复，但不能以此宣称整个application已经强类型化。
-- 状态：未执行；Worker目前仍有基线缺陷。
+- 状态：2026-11-09实现及Leader准出完成，待用户审阅；Worker丢链已修复，词表追加7项至91项。P3及以后未执行。
+
+#### P2开工准备包（2026-11-09）
+
+P1已提交为 `7c4f7fed106ad36d6127e5f19d212b7bbc12897c`（`feat: 实现 V2 强类型错误核心与协议分类`），候选树与最终提交树一致，未推送。该提交是P2的起点。用户本轮只要求提交和准备后续内容，不将准备视为P2实现或派工授权；本节及索引在P1提交后补写，尚未提交。
+
+**先后关系：**先写Worker丢链失败回归并修复，再迁移foundation。Leader先统一公共签名、错误归属和调用方适配约定，再允许限定目录并行。以下是拟议分工，不是已派发任务；后续获准开工时沿用 `minimax-m3.1-flash`、max。
+
+| 工作包          | 改动范围                                                  | 必须交付                                                                                               | 依赖与边界                                                                    |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| P2.1 Worker丢链 | `application/app.go` 看门狗分支及相邻持久测试             | 先红后绿：保留原始统一错误/诊断对象、原始cause和 `ErrWorkerUnexpectedExit`，三类Is/As均可达            | 先完成；不切换Plugin/RunHandle/Activator、RunResult与停机账本签名             |
+| P2.2 值转换     | `foundation/typed`、`foundation/ctxkey`、`foundation/env` | 自有转换核心返回统一指针，真实输入分支映射valueerr；13种标准编解码/SQL/flag方法保留原签名并显式nil适配 | 根据P0逐符号台账重新核对当前调用方；不把标准方法当自有接口迁移                |
+| P2.3 雪花与工具 | `foundation/snowflake`、`foundation/toolkit`              | 自有构造/生成/解析等失败强类型；SnowflakeID的JSON/Binary/SQL方法保持固定签名与原格式                   | 与值转换公共签名协调；拒绝目标/API契约和非法输入不能混为一类                  |
+| P2.4 日志       | `foundation/logging`                                      | 构造、双路写入、轮转/归档与延迟错误账本强类型；slog/io方法保留薄适配                                   | 不新增Info/Error等无返回方法的失败API；保留部分写入字节数及Close幂等/真实收尾 |
+| P2.L Leader集成 | spec0002词表、调用方桥接、协议/编译回归及阶段文档         | 全库编译、旧码不漂移、跨层nil真实为nil、依赖无环、完整准出证据                                         | 新增码集中登记；不让多个实现者各自抢号或修改另一人的目录                      |
+
+**必须守住的行为：**
+
+- Worker在Running且非预期停止时，即使Run返回nil也仍属意外退出。不能只修 `%v` 文本包装而漏掉nil分支；不能因为根因包含context.Canceled就吞掉真实意外退出。关机/预期停止分支原行为保持。
+- 所有异步断言用完成通道或确定性屏障同步；不使用sleep，也不在释放屏障后立即读取尚未发布的计数。真实成员cause、原统一Code及诊断对象必须保留；框架意外退出的外层责任与内层原码分开断言。
+- 保留typed/ctxkey/env现有13种标准方法集、失败不写回原值及各自SQL NULL处理。SnowflakeID仍以十进制字符串传JSON、十进制文本字节传Binary，Scan(nil)仍置零成功，不借错误迁移改变格式或容忍输入。
+- `error` 固定签名的适配层必须在强类型结果为nil时显式返回原生nil。builtin、GORM hook、示例及其它调用方若引用了已改函数，同一补丁只补必需桥接，不提前整体切换其生命周期或插件接口。
+- 日志一路失败仍尝试另一路，聚合保留全部cause；关闭后ErrClosed仍可Is。Close必须等待原有scheduler/归档真实完成，保留启动归档与后台延迟错误，不能只把账本类型改成指针而漏掉异步发布。
+
+**错误码准备与容量：**现有84项不动，复用已批准control/valueerr及框架意外退出码。logging/snowflake等尚无足够具体所属码的分支，开工先按实际失败列归属、分组、安全Message和原因类型，依E04核算新增容量并集中登记；当前500组26项、400组17项，分别余24/33个SDK槽位。这里不抢占新号，不将日志/雪花故障一律塞入FRAMEWORK内部兜底，不按错误文本猜400/500责任。
+
+**准出命令（全部尚未作为P2执行）：**
+
+- `go test ./foundation/... ./application/... -count=1` 与 `go test -race ./foundation/... ./application/... -count=1`：Worker、值转换、标准方法集、日志异步收尾与失败原因保留。
+- `go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1`：新增或复用码的状态与安全信封回归；不冒充P6拦截器接入。
+- `make error-codes-check`、`make test-scripts`、`make test`、`make race`、`make vet`、`make lint-go`、`make lint-docs`：定义、根因、调用方及全部14模块不受破坏。
+- `make check-examples`、`bash .github/scripts/consumer/check-v2-consumers.sh`：固定签名桥接与独立消费，不用本地replace掩盖调用方不匹配。
+- `GOTOOLCHAIN=go1.25.11 GOFLAGS=-mod=readonly go list -deps ./foundation/...`：另检输出中无application/plugins反向依赖；`git diff --check` 及受影响Go文件格式输出为空。
+
+任一包无法同时保留根因、成功nil、标准方法集或确定性收尾时，停在对应包修复，不把失败留给P3。必要回退以P1提交为锚点，只在另获授权后执行完整补丁回退；不自动reset、变基或重写历史。P3–P7、真实外部环境和发布仍不在本次准备的实施范围内。
+
+#### P2准出记录（2026-11-09，待用户审阅）
+
+用户于2026-11-09批准P2开工并裁决7项新码（50026–50032，归属snowflake/logging/toolkit），子代理按 `minimax-m3.1-flash`（effort: medium）并行实施，Leader统一集成。以P1提交 `7c4f7fed106ad36d6127e5f19d212b7bbc12897c` 为基线，39个改动文件全部落在授权边界内（`/tmp/opencode/v2-p2/verify.py` 校验通过）。
+
+**各工作包结果：**
+
+- P2.1 Worker丢链：`application/app.go` 看门狗Running非预期分支改 `apperr.New(FrameworkWorkerUnexpectedExit, …, ErrWorkerUnexpectedExit[, runErr])` 双根因；nil早退同样判失败。`application/worker_chain_test.go` 三条持久回归（原始哨兵Is、外层50023 As、内层统一错误保链）先红后绿；账本与通道签名未动。
+- P2.2 值转换：typed 14个解析方法改返回统一指针（语法非法40013、strconv范围40014、非有限值/非布尔词40013）；13种标准方法保留原签名、内部强类型核心显式nil适配（键语法40013、目标类型40015、nil接收器50019）；ctxkey/env同构迁移并保留各自哨兵根因；编码器I/O失败包FrameworkInternalError保留原错误。
+- P2.3 雪花与工具：NewNode参数非法50026、时钟回退50027（根因ErrClockBackwards）；nil node/receiver复用VALUE_INVALID_RECEIVER并保留哨兵；基因越界40014、ID解析40013、Scan类型40015；SnowflakeID六方法固定签名薄适配，2^53精度与Scan(nil)置零格式固化。toolkit密码三函数50032（bcrypt根因、消息不含密码）、time.Parse 40013（*time.ParseError根因）；Must*与(值,bool)签名不动。
+- P2.4 日志：New 50028、配置校验50029、双路写入失败单路From/双路Join(WriteFailed 50030)保留全部cause、IO/轮转失败50031；Handle/Write/Close保持slog/io签名薄适配；closeErr/bgErrors账本强类型；Close幂等并等待schedulerDone+archiveWg真实收尾；rotator测试去sleep改完成通道。
+- P2.L Leader集成：spec0002登记7码（84→91项）与检查器白名单；builtin调用点经指针nil判定天然兼容未改；`plugins/database/models/models_test.go` GORM hook返回值改独立变量适配；本准出记录与planREADME/spec0002同步。
+
+**准出结果（基线7c4f7fe + dirty，日志 `/tmp/opencode/v2-p2/gate-*.log`）：**
+
+| 检查                                                                           | 结果                                   |
+| ------------------------------------------------------------------------------ | -------------------------------------- |
+| `make test` / `make race` / `make vet`（14模块）                               | 通过                                   |
+| `make lint-go` / `make lint-docs`                                              | 通过（spec0002表格列宽经Prettier重排） |
+| `make error-codes-check`（91项全库唯一且与定义精确对应）                       | 通过                                   |
+| `make test-scripts`（含CI守卫race）                                            | 通过                                   |
+| `make check-examples` / `bash .github/scripts/consumer/check-v2-consumers.sh`  | 通过                                   |
+| `go list -deps ./foundation/...` 无application/plugins反向依赖                 | 通过                                   |
+| `gofmt -l application foundation plugins` / `git diff --check`                 | 空输出 / 通过                          |
+| `python3 /tmp/opencode/v2-p2/verify.py`（39文件边界+91项归属计数+P1/P2码完整） | 通过                                   |
+
+外部Redis/SMTP/数据库集成仍默认跳过；P3生命周期切换、P4–P7与发布验收未执行。本记录不将P2升级为已验收完成，待用户审阅；未提交推送。
 
 ### P3：原子切换application生命周期契约与全部实现者
 

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -311,6 +312,7 @@ func (a *App) Activator() Activator {
 //  6. 启动 Worker 看门狗：为所有 Worker 启动独立协程运行 [RunnablePlugin.Run]；
 //     在 Running 期间若任何 Worker 提前退出（包括返回 nil），看门狗将其判定为异常崩溃，
 //     触发应用级平滑关机并记录 [ErrWorkerUnexpectedExit]；
+//     错误链同时保留 [ErrWorkerUnexpectedExit] 与原始退出错误，可经 errors.Is / errors.As 精确判定；
 //  7. 阻塞等待：等待关机协调器完成或 Worker 看门狗错误触发停机，并返回合并后的错误。
 //
 // # 并发与时序语义
@@ -941,11 +943,24 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 			a.stateMu.Unlock()
 
 			if currentState == StateRunning && !isExpected {
-				// 在 Running 状态下提前退出，无论 nil 还是错误，均触发失败关机
+				// 在 Running 状态下提前退出，无论 nil 还是错误，均触发失败关机。
+				//
+				// 错误链必须同时保留框架哨兵 [ErrWorkerUnexpectedExit] 与原始退出错误，
+				// 使下游可通过 errors.Is / errors.As 精确识别失败原因，
+				// 禁止将原始错误降级为文本。
 				if runErr == nil {
-					watchdogErrChan <- fmt.Errorf("%w: worker %s exited unexpectedly with nil error", ErrWorkerUnexpectedExit, currentRec.info.Key)
+					watchdogErrChan <- apperr.New(
+						apperr.FrameworkWorkerUnexpectedExit,
+						apperr.ErrMessage("worker "+string(currentRec.info.Key)+" 以 nil 错误意外退出"),
+						ErrWorkerUnexpectedExit,
+					)
 				} else {
-					watchdogErrChan <- fmt.Errorf("%w: worker %s: %v", ErrWorkerUnexpectedExit, currentRec.info.Key, runErr)
+					watchdogErrChan <- apperr.New(
+						apperr.FrameworkWorkerUnexpectedExit,
+						apperr.ErrMessage("worker "+string(currentRec.info.Key)+" 意外退出"),
+						ErrWorkerUnexpectedExit,
+						runErr,
+					)
 				}
 			} else {
 				// 正常关机或预期停止

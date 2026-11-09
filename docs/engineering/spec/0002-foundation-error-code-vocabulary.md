@@ -84,6 +84,9 @@ errors.Is/errors.As 根因、JSON不含底层Err、HTTP信封/RPC Details脱敏�
 | `plugins/database`           | `DATABASE_`       | 8              |
 | `plugins/cache`              | `CACHE_`          | 1              |
 | `plugins/email`              | `EMAIL_`          | 1              |
+| `foundation/snowflake`       | `SNOWFLAKE_`      | 2              |
+| `foundation/logging`         | `LOGGING_`        | 4              |
+| `foundation/toolkit`         | `TOOLKIT_`        | 1              |
 
 ### P1登记记录（2026-11-09）
 
@@ -94,6 +97,12 @@ errors.Is/errors.As 根因、JSON不含底层Err、HTTP信封/RPC Details脱敏�
 499为非标准扩展，内部deadline默认504是本项目约定，连接断开时不承诺能够写回。VALUE_INVALID_TYPE指输入源类型不合法；VALUE_UNSUPPORTED_TARGET和VALUE_INVALID_RECEIVER分别表示目标/API与接收器契约错误，不能靠错误文本猜责任。FrameworkMultipleFailures只作框架多阶段失败显式总码，不成为所有插件的通用失败桶。
 
 19项的完整三元组只保留在下方机器词表，不再维护第二份候选分配表。4项框架新码在P1建立定义和聚合诊断原语测试；Worker/钩子/停机流程接入仍留P2/P3。其他日志、雪花、调度、任务池细分类仍按对应阶段登记，本次84项不是全部SDK失败出口已经归一化的证明。
+
+### P2登记记录（2026-11-09）
+
+用户于2026-11-09批准P2按提案追加7项，当前active由84项变为91项；旧84项逐字保留，500组从26项变为33项，SDK槽位余16个。新增 `foundation/snowflake`（2项）、`foundation/logging`（4项）、`foundation/toolkit`（1项）三个归属域及检查器白名单，均在既有foundation模块内，不新增module。
+
+值转换失败复用已批准的valueerr码（格式/范围/类型非法归400组，不支持目标与无效接收器归500组），不重复占号；snowflake的nil node/nil receiver调用按无效接收器（50019）归一并保留原哨兵根因，时钟回退与NewNode参数非法使用SNOWFLAKE_码；logging处理器缺失、配置非法、写入与轮转失败使用LOGGING_码；密码加密或校验失败使用TOOLKIT_PASSWORD_FAILED并保留bcrypt原始错误为根因。各出口的强类型迁移已于2026-11-09按[plan0002 P2准出记录](../../plan/0002-foundation-strong-error-migration.md#p2准出记录2026-11-09待用户审阅)完成并通过全量门禁（91项词表、14模块测试、示例与独立消费者全绿）；开工依据与分工见[plan0002 P2开工准备包](../../plan/0002-foundation-strong-error-migration.md#p2开工准备包2026-11-09)。
 
 ### 原生gRPC缺信封时的P1兼容分类
 
@@ -126,92 +135,99 @@ OK不制造失败信封；非标准/非法RPC状态不在这16项承诺内，需
 
 <!-- error-code-vocabulary:start -->
 
-| Code  | Output                              | 归属包                       | Go符号                           | Message              | 状态   |
-| ----- | ----------------------------------- | ---------------------------- | -------------------------------- | -------------------- | ------ |
-| 40000 | `HTTP_BAD_REQUEST`                  | `plugins/web-gin/httpresult` | `BadRequest`                     | 错误请求             | active |
-| 40001 | `HTTP_DISABLED`                     | `plugins/web-gin/httpresult` | `Disabled`                       | 内容已禁用           | active |
-| 40002 | `HTTP_INVALID_STATE`                | `plugins/web-gin/httpresult` | `InvalidState`                   | 无效状态             | active |
-| 40003 | `HTTP_PARAMETER_EMPTY`              | `plugins/web-gin/httpresult` | `ParameterEmpty`                 | 参数缺失             | active |
-| 40004 | `HTTP_PARAMETER_TYPE`               | `plugins/web-gin/httpresult` | `ParameterType`                  | 参数类型错误         | active |
-| 40005 | `HTTP_BIND_PARAMETER_ERROR`         | `plugins/web-gin/bind`       | `ParameterError`                 | 参数错误             | active |
-| 40006 | `HTTP_VALIDATOR_BODY_ERROR`         | `plugins/web-gin/validator`  | `BodyError`                      | 请求体错误           | active |
-| 40007 | `HTTP_VALIDATOR_VALIDATION_ERROR`   | `plugins/web-gin/validator`  | `ValidationError`                | 验证错误             | active |
-| 40008 | `GRPC_PARAMETER_ERROR`              | `plugins/grpc/grpcresult`    | `ParameterError`                 | 参数错误             | active |
-| 40009 | `GRPC_PARAMETER_EMPTY`              | `plugins/grpc/grpcresult`    | `ParameterEmpty`                 | 参数缺失             | active |
-| 40010 | `GRPC_PARAMETER_TYPE`               | `plugins/grpc/grpcresult`    | `ParameterType`                  | 参数类型错误         | active |
-| 40011 | `GRPC_DISABLED`                     | `plugins/grpc/grpcresult`    | `Disabled`                       | 内容已禁用           | active |
-| 40012 | `GRPC_METADATA_MISSING`             | `plugins/grpc/grpcresult`    | `MetadataMissing`                | 请求元数据缺失       | active |
-| 40013 | `VALUE_INVALID_FORMAT`              | `foundation/valueerr`        | `InvalidFormat`                  | 值格式非法           | active |
-| 40014 | `VALUE_OUT_OF_RANGE`                | `foundation/valueerr`        | `OutOfRange`                     | 值超出范围           | active |
-| 40015 | `VALUE_INVALID_TYPE`                | `foundation/valueerr`        | `InvalidType`                    | 值类型非法           | active |
-| 40016 | `GRPC_OUT_OF_RANGE`                 | `plugins/grpc/grpcresult`    | `OutOfRange`                     | 参数超出范围         | active |
-| 40100 | `HTTP_UNAUTHORIZED`                 | `plugins/web-gin/httpresult` | `Unauthorized`                   | 未授权               | active |
-| 40101 | `GRPC_UNAUTHORIZED`                 | `plugins/grpc/grpcresult`    | `Unauthorized`                   | 未授权               | active |
-| 40300 | `HTTP_FORBIDDEN`                    | `plugins/web-gin/httpresult` | `Forbidden`                      | 禁止访问             | active |
-| 40301 | `HTTP_PERMISSION_DENIED`            | `plugins/web-gin/httpresult` | `PermissionDenied`               | 权限不足             | active |
-| 40302 | `HTTP_OPERATION_DENIED`             | `plugins/web-gin/httpresult` | `OperationDenied`                | 操作被拒绝           | active |
-| 40303 | `GRPC_FORBIDDEN`                    | `plugins/grpc/grpcresult`    | `Forbidden`                      | 禁止访问             | active |
-| 40304 | `GRPC_PERMISSION_DENIED`            | `plugins/grpc/grpcresult`    | `PermissionDenied`               | 权限不足             | active |
-| 40305 | `GRPC_OPERATION_DENIED`             | `plugins/grpc/grpcresult`    | `OperationDenied`                | 操作被拒绝           | active |
-| 40400 | `HTTP_NOT_FOUND`                    | `plugins/web-gin/httpresult` | `NotFound`                       | 未找到               | active |
-| 40401 | `GRPC_NOT_FOUND`                    | `plugins/grpc/grpcresult`    | `NotFound`                       | 未找到               | active |
-| 40402 | `DATABASE_RECORD_NOT_FOUND`         | `plugins/database`           | `RecordNotFound`                 | 记录未找到           | active |
-| 40500 | `HTTP_METHOD_NOT_ALLOWED`           | `plugins/web-gin/httpresult` | `MethodNotAllowed`               | 方法不允许           | active |
-| 40600 | `HTTP_NOT_ACCEPTABLE`               | `plugins/web-gin/httpresult` | `NotAcceptable`                  | 不可接受             | active |
-| 40800 | `HTTP_TIMEOUT`                      | `plugins/web-gin/httpresult` | `Timeout`                        | 请求超时             | active |
-| 40801 | `GRPC_TIMEOUT`                      | `plugins/grpc/grpcresult`    | `Timeout`                        | 请求超时             | active |
-| 40802 | `CONTROL_REQUEST_TIMEOUT`           | `foundation/control`         | `RequestTimeout`                 | 请求接收超时         | active |
-| 40900 | `HTTP_CONFLICT`                     | `plugins/web-gin/httpresult` | `Conflict`                       | 冲突                 | active |
-| 40901 | `GRPC_CONFLICT`                     | `plugins/grpc/grpcresult`    | `Conflict`                       | 冲突                 | active |
-| 40902 | `DATABASE_OPTIMISTIC_LOCK`          | `plugins/database`           | `OptimisticLock`                 | 乐观锁冲突           | active |
-| 40903 | `DATABASE_DUPLICATE_ENTRY`          | `plugins/database`           | `DuplicateEntry`                 | 重复条目             | active |
-| 40904 | `DATABASE_UNIQUE_CONSTRAINT`        | `plugins/database`           | `UniqueConstraint`               | 唯一约束冲突         | active |
-| 40905 | `DATABASE_FOREIGN_KEY_ERROR`        | `plugins/database`           | `ForeignKeyError`                | 外键约束错误         | active |
-| 40906 | `DATABASE_INTEGRITY_ERROR`          | `plugins/database`           | `IntegrityError`                 | 完整性约束错误       | active |
-| 40907 | `GRPC_ABORTED`                      | `plugins/grpc/grpcresult`    | `Aborted`                        | 操作已中止           | active |
-| 41000 | `HTTP_GONE`                         | `plugins/web-gin/httpresult` | `Gone`                           | 资源已删除           | active |
-| 41200 | `GRPC_INVALID_STATE`                | `plugins/grpc/grpcresult`    | `InvalidState`                   | 无效状态             | active |
-| 41201 | `GRPC_PRECONDITION_FAILED`          | `plugins/grpc/grpcresult`    | `PreconditionFailed`             | 前置条件未满足       | active |
-| 41300 | `HTTP_PAYLOAD_TOO_LARGE`            | `plugins/web-gin/httpresult` | `PayloadTooLarge`                | 请求体过大           | active |
-| 41500 | `HTTP_UNSUPPORTED_MEDIA`            | `plugins/web-gin/httpresult` | `UnsupportedMedia`               | 不支持的媒体类型     | active |
-| 42200 | `HTTP_UNPROCESSABLE_ENTITY`         | `plugins/web-gin/httpresult` | `UnprocessableEntity`            | 无法处理的实体       | active |
-| 42900 | `HTTP_TOO_MANY_REQUESTS`            | `plugins/web-gin/httpresult` | `TooManyRequests`                | 请求过多             | active |
-| 42901 | `GRPC_TOO_MANY_REQUESTS`            | `plugins/grpc/grpcresult`    | `TooManyRequests`                | 请求过多             | active |
-| 42902 | `GRPC_RESOURCE_EXHAUSTED`           | `plugins/grpc/grpcresult`    | `ResourceExhausted`              | 资源耗尽             | active |
-| 49900 | `CONTROL_CANCELED`                  | `foundation/control`         | `Canceled`                       | 操作已取消           | active |
-| 50000 | `FRAMEWORK_INTERNAL_ERROR`          | `foundation/apperr`          | `FrameworkInternalError`         | 框架内部错误         | active |
-| 50001 | `FRAMEWORK_CONTAINER_NOT_MOUNTED`   | `foundation/apperr`          | `FrameworkContainerNotMounted`   | 应用容器未挂载       | active |
-| 50002 | `FRAMEWORK_DEPENDENCY_UNDECLARED`   | `foundation/apperr`          | `FrameworkDependencyUndeclared`  | 组件依赖未声明       | active |
-| 50003 | `FRAMEWORK_COMPONENT_NOT_FOUND`     | `foundation/apperr`          | `FrameworkComponentNotFound`     | 组件未找到           | active |
-| 50004 | `FRAMEWORK_COMPONENT_TYPE_MISMATCH` | `foundation/apperr`          | `FrameworkComponentTypeMismatch` | 组件类型不匹配       | active |
-| 50005 | `FRAMEWORK_COMPONENT_STOPPED`       | `foundation/apperr`          | `FrameworkComponentStopped`      | 组件已停止           | active |
-| 50006 | `FRAMEWORK_COMPONENT_UNAVAILABLE`   | `foundation/apperr`          | `FrameworkComponentUnavailable`  | 组件不可用           | active |
-| 50007 | `FRAMEWORK_COMPONENT_INVALID_STATE` | `foundation/apperr`          | `FrameworkComponentInvalidState` | 组件状态无效         | active |
-| 50008 | `HTTP_INTERNAL_ERROR`               | `plugins/web-gin/httpresult` | `InternalError`                  | 服务器内部错误       | active |
-| 50009 | `HTTP_RESPONSE_MISSING`             | `plugins/web-gin/httpresult` | `ResponseMissing`                | 处理器未输出响应     | active |
-| 50010 | `HTTP_UNKNOWN_ERROR`                | `plugins/web-gin/httpresult` | `UnknownError`                   | 未知错误             | active |
-| 50011 | `GRPC_INTERNAL_ERROR`               | `plugins/grpc/grpcresult`    | `InternalError`                  | 服务器内部错误       | active |
-| 50012 | `GRPC_RESPONSE_MISSING`             | `plugins/grpc/grpcresult`    | `ResponseMissing`                | 处理器未返回响应     | active |
-| 50013 | `GRPC_CONTEXT_MISSING`              | `plugins/grpc/grpcresult`    | `ContextMissing`                 | RPC上下文缺失        | active |
-| 50014 | `DATABASE_ERROR`                    | `plugins/database`           | `DatabaseError`                  | 数据库错误           | active |
-| 50015 | `DATABASE_TRANSACTION_FAILED`       | `plugins/database`           | `TransactionFailed`              | 事务失败             | active |
-| 50016 | `CACHE_ERROR`                       | `plugins/cache`              | `CacheError`                     | 缓存错误             | active |
-| 50017 | `EMAIL_ERROR`                       | `plugins/email`              | `EmailError`                     | 邮件服务错误         | active |
-| 50018 | `VALUE_UNSUPPORTED_TARGET`          | `foundation/valueerr`        | `UnsupportedTarget`              | 不支持的转换目标     | active |
-| 50019 | `VALUE_INVALID_RECEIVER`            | `foundation/valueerr`        | `InvalidReceiver`                | 值接收器无效         | active |
-| 50020 | `FRAMEWORK_MULTIPLE_FAILURES`       | `foundation/apperr`          | `FrameworkMultipleFailures`      | 多个框架阶段失败     | active |
-| 50021 | `FRAMEWORK_HOOK_PANIC`              | `foundation/apperr`          | `FrameworkHookPanic`             | 框架生命周期钩子异常 | active |
-| 50022 | `FRAMEWORK_SHUTDOWN_INCOMPLETE`     | `foundation/apperr`          | `FrameworkShutdownIncomplete`    | 框架关闭未完成       | active |
-| 50023 | `FRAMEWORK_WORKER_UNEXPECTED_EXIT`  | `foundation/apperr`          | `FrameworkWorkerUnexpectedExit`  | 后台服务意外退出     | active |
-| 50024 | `GRPC_UNKNOWN_ERROR`                | `plugins/grpc/grpcresult`    | `UnknownError`                   | RPC未知错误          | active |
-| 50025 | `GRPC_DATA_LOSS`                    | `plugins/grpc/grpcresult`    | `DataLoss`                       | 数据丢失             | active |
-| 50100 | `GRPC_UNIMPLEMENTED`                | `plugins/grpc/grpcresult`    | `Unimplemented`                  | 功能未实现           | active |
-| 50200 | `HTTP_GATEWAY_ERROR`                | `plugins/web-gin/httpresult` | `GatewayError`                   | 网关错误             | active |
-| 50300 | `HTTP_SERVICE_UNAVAILABLE`          | `plugins/web-gin/httpresult` | `ServiceUnavailable`             | 服务不可用           | active |
-| 50301 | `HTTP_RESOURCE_EXHAUSTED`           | `plugins/web-gin/httpresult` | `ResourceExhausted`              | 资源耗尽             | active |
-| 50302 | `GRPC_SERVICE_UNAVAILABLE`          | `plugins/grpc/grpcresult`    | `ServiceUnavailable`             | 服务不可用           | active |
-| 50400 | `HTTP_GATEWAY_TIMEOUT`              | `plugins/web-gin/httpresult` | `GatewayTimeout`                 | 网关超时             | active |
-| 50401 | `CONTROL_DEADLINE_EXCEEDED`         | `foundation/control`         | `DeadlineExceeded`               | 操作超过截止时间     | active |
+| Code  | Output                              | 归属包                       | Go符号                           | Message                | 状态   |
+| ----- | ----------------------------------- | ---------------------------- | -------------------------------- | ---------------------- | ------ |
+| 40000 | `HTTP_BAD_REQUEST`                  | `plugins/web-gin/httpresult` | `BadRequest`                     | 错误请求               | active |
+| 40001 | `HTTP_DISABLED`                     | `plugins/web-gin/httpresult` | `Disabled`                       | 内容已禁用             | active |
+| 40002 | `HTTP_INVALID_STATE`                | `plugins/web-gin/httpresult` | `InvalidState`                   | 无效状态               | active |
+| 40003 | `HTTP_PARAMETER_EMPTY`              | `plugins/web-gin/httpresult` | `ParameterEmpty`                 | 参数缺失               | active |
+| 40004 | `HTTP_PARAMETER_TYPE`               | `plugins/web-gin/httpresult` | `ParameterType`                  | 参数类型错误           | active |
+| 40005 | `HTTP_BIND_PARAMETER_ERROR`         | `plugins/web-gin/bind`       | `ParameterError`                 | 参数错误               | active |
+| 40006 | `HTTP_VALIDATOR_BODY_ERROR`         | `plugins/web-gin/validator`  | `BodyError`                      | 请求体错误             | active |
+| 40007 | `HTTP_VALIDATOR_VALIDATION_ERROR`   | `plugins/web-gin/validator`  | `ValidationError`                | 验证错误               | active |
+| 40008 | `GRPC_PARAMETER_ERROR`              | `plugins/grpc/grpcresult`    | `ParameterError`                 | 参数错误               | active |
+| 40009 | `GRPC_PARAMETER_EMPTY`              | `plugins/grpc/grpcresult`    | `ParameterEmpty`                 | 参数缺失               | active |
+| 40010 | `GRPC_PARAMETER_TYPE`               | `plugins/grpc/grpcresult`    | `ParameterType`                  | 参数类型错误           | active |
+| 40011 | `GRPC_DISABLED`                     | `plugins/grpc/grpcresult`    | `Disabled`                       | 内容已禁用             | active |
+| 40012 | `GRPC_METADATA_MISSING`             | `plugins/grpc/grpcresult`    | `MetadataMissing`                | 请求元数据缺失         | active |
+| 40013 | `VALUE_INVALID_FORMAT`              | `foundation/valueerr`        | `InvalidFormat`                  | 值格式非法             | active |
+| 40014 | `VALUE_OUT_OF_RANGE`                | `foundation/valueerr`        | `OutOfRange`                     | 值超出范围             | active |
+| 40015 | `VALUE_INVALID_TYPE`                | `foundation/valueerr`        | `InvalidType`                    | 值类型非法             | active |
+| 40016 | `GRPC_OUT_OF_RANGE`                 | `plugins/grpc/grpcresult`    | `OutOfRange`                     | 参数超出范围           | active |
+| 40100 | `HTTP_UNAUTHORIZED`                 | `plugins/web-gin/httpresult` | `Unauthorized`                   | 未授权                 | active |
+| 40101 | `GRPC_UNAUTHORIZED`                 | `plugins/grpc/grpcresult`    | `Unauthorized`                   | 未授权                 | active |
+| 40300 | `HTTP_FORBIDDEN`                    | `plugins/web-gin/httpresult` | `Forbidden`                      | 禁止访问               | active |
+| 40301 | `HTTP_PERMISSION_DENIED`            | `plugins/web-gin/httpresult` | `PermissionDenied`               | 权限不足               | active |
+| 40302 | `HTTP_OPERATION_DENIED`             | `plugins/web-gin/httpresult` | `OperationDenied`                | 操作被拒绝             | active |
+| 40303 | `GRPC_FORBIDDEN`                    | `plugins/grpc/grpcresult`    | `Forbidden`                      | 禁止访问               | active |
+| 40304 | `GRPC_PERMISSION_DENIED`            | `plugins/grpc/grpcresult`    | `PermissionDenied`               | 权限不足               | active |
+| 40305 | `GRPC_OPERATION_DENIED`             | `plugins/grpc/grpcresult`    | `OperationDenied`                | 操作被拒绝             | active |
+| 40400 | `HTTP_NOT_FOUND`                    | `plugins/web-gin/httpresult` | `NotFound`                       | 未找到                 | active |
+| 40401 | `GRPC_NOT_FOUND`                    | `plugins/grpc/grpcresult`    | `NotFound`                       | 未找到                 | active |
+| 40402 | `DATABASE_RECORD_NOT_FOUND`         | `plugins/database`           | `RecordNotFound`                 | 记录未找到             | active |
+| 40500 | `HTTP_METHOD_NOT_ALLOWED`           | `plugins/web-gin/httpresult` | `MethodNotAllowed`               | 方法不允许             | active |
+| 40600 | `HTTP_NOT_ACCEPTABLE`               | `plugins/web-gin/httpresult` | `NotAcceptable`                  | 不可接受               | active |
+| 40800 | `HTTP_TIMEOUT`                      | `plugins/web-gin/httpresult` | `Timeout`                        | 请求超时               | active |
+| 40801 | `GRPC_TIMEOUT`                      | `plugins/grpc/grpcresult`    | `Timeout`                        | 请求超时               | active |
+| 40802 | `CONTROL_REQUEST_TIMEOUT`           | `foundation/control`         | `RequestTimeout`                 | 请求接收超时           | active |
+| 40900 | `HTTP_CONFLICT`                     | `plugins/web-gin/httpresult` | `Conflict`                       | 冲突                   | active |
+| 40901 | `GRPC_CONFLICT`                     | `plugins/grpc/grpcresult`    | `Conflict`                       | 冲突                   | active |
+| 40902 | `DATABASE_OPTIMISTIC_LOCK`          | `plugins/database`           | `OptimisticLock`                 | 乐观锁冲突             | active |
+| 40903 | `DATABASE_DUPLICATE_ENTRY`          | `plugins/database`           | `DuplicateEntry`                 | 重复条目               | active |
+| 40904 | `DATABASE_UNIQUE_CONSTRAINT`        | `plugins/database`           | `UniqueConstraint`               | 唯一约束冲突           | active |
+| 40905 | `DATABASE_FOREIGN_KEY_ERROR`        | `plugins/database`           | `ForeignKeyError`                | 外键约束错误           | active |
+| 40906 | `DATABASE_INTEGRITY_ERROR`          | `plugins/database`           | `IntegrityError`                 | 完整性约束错误         | active |
+| 40907 | `GRPC_ABORTED`                      | `plugins/grpc/grpcresult`    | `Aborted`                        | 操作已中止             | active |
+| 41000 | `HTTP_GONE`                         | `plugins/web-gin/httpresult` | `Gone`                           | 资源已删除             | active |
+| 41200 | `GRPC_INVALID_STATE`                | `plugins/grpc/grpcresult`    | `InvalidState`                   | 无效状态               | active |
+| 41201 | `GRPC_PRECONDITION_FAILED`          | `plugins/grpc/grpcresult`    | `PreconditionFailed`             | 前置条件未满足         | active |
+| 41300 | `HTTP_PAYLOAD_TOO_LARGE`            | `plugins/web-gin/httpresult` | `PayloadTooLarge`                | 请求体过大             | active |
+| 41500 | `HTTP_UNSUPPORTED_MEDIA`            | `plugins/web-gin/httpresult` | `UnsupportedMedia`               | 不支持的媒体类型       | active |
+| 42200 | `HTTP_UNPROCESSABLE_ENTITY`         | `plugins/web-gin/httpresult` | `UnprocessableEntity`            | 无法处理的实体         | active |
+| 42900 | `HTTP_TOO_MANY_REQUESTS`            | `plugins/web-gin/httpresult` | `TooManyRequests`                | 请求过多               | active |
+| 42901 | `GRPC_TOO_MANY_REQUESTS`            | `plugins/grpc/grpcresult`    | `TooManyRequests`                | 请求过多               | active |
+| 42902 | `GRPC_RESOURCE_EXHAUSTED`           | `plugins/grpc/grpcresult`    | `ResourceExhausted`              | 资源耗尽               | active |
+| 49900 | `CONTROL_CANCELED`                  | `foundation/control`         | `Canceled`                       | 操作已取消             | active |
+| 50000 | `FRAMEWORK_INTERNAL_ERROR`          | `foundation/apperr`          | `FrameworkInternalError`         | 框架内部错误           | active |
+| 50001 | `FRAMEWORK_CONTAINER_NOT_MOUNTED`   | `foundation/apperr`          | `FrameworkContainerNotMounted`   | 应用容器未挂载         | active |
+| 50002 | `FRAMEWORK_DEPENDENCY_UNDECLARED`   | `foundation/apperr`          | `FrameworkDependencyUndeclared`  | 组件依赖未声明         | active |
+| 50003 | `FRAMEWORK_COMPONENT_NOT_FOUND`     | `foundation/apperr`          | `FrameworkComponentNotFound`     | 组件未找到             | active |
+| 50004 | `FRAMEWORK_COMPONENT_TYPE_MISMATCH` | `foundation/apperr`          | `FrameworkComponentTypeMismatch` | 组件类型不匹配         | active |
+| 50005 | `FRAMEWORK_COMPONENT_STOPPED`       | `foundation/apperr`          | `FrameworkComponentStopped`      | 组件已停止             | active |
+| 50006 | `FRAMEWORK_COMPONENT_UNAVAILABLE`   | `foundation/apperr`          | `FrameworkComponentUnavailable`  | 组件不可用             | active |
+| 50007 | `FRAMEWORK_COMPONENT_INVALID_STATE` | `foundation/apperr`          | `FrameworkComponentInvalidState` | 组件状态无效           | active |
+| 50008 | `HTTP_INTERNAL_ERROR`               | `plugins/web-gin/httpresult` | `InternalError`                  | 服务器内部错误         | active |
+| 50009 | `HTTP_RESPONSE_MISSING`             | `plugins/web-gin/httpresult` | `ResponseMissing`                | 处理器未输出响应       | active |
+| 50010 | `HTTP_UNKNOWN_ERROR`                | `plugins/web-gin/httpresult` | `UnknownError`                   | 未知错误               | active |
+| 50011 | `GRPC_INTERNAL_ERROR`               | `plugins/grpc/grpcresult`    | `InternalError`                  | 服务器内部错误         | active |
+| 50012 | `GRPC_RESPONSE_MISSING`             | `plugins/grpc/grpcresult`    | `ResponseMissing`                | 处理器未返回响应       | active |
+| 50013 | `GRPC_CONTEXT_MISSING`              | `plugins/grpc/grpcresult`    | `ContextMissing`                 | RPC上下文缺失          | active |
+| 50014 | `DATABASE_ERROR`                    | `plugins/database`           | `DatabaseError`                  | 数据库错误             | active |
+| 50015 | `DATABASE_TRANSACTION_FAILED`       | `plugins/database`           | `TransactionFailed`              | 事务失败               | active |
+| 50016 | `CACHE_ERROR`                       | `plugins/cache`              | `CacheError`                     | 缓存错误               | active |
+| 50017 | `EMAIL_ERROR`                       | `plugins/email`              | `EmailError`                     | 邮件服务错误           | active |
+| 50018 | `VALUE_UNSUPPORTED_TARGET`          | `foundation/valueerr`        | `UnsupportedTarget`              | 不支持的转换目标       | active |
+| 50019 | `VALUE_INVALID_RECEIVER`            | `foundation/valueerr`        | `InvalidReceiver`                | 值接收器无效           | active |
+| 50020 | `FRAMEWORK_MULTIPLE_FAILURES`       | `foundation/apperr`          | `FrameworkMultipleFailures`      | 多个框架阶段失败       | active |
+| 50021 | `FRAMEWORK_HOOK_PANIC`              | `foundation/apperr`          | `FrameworkHookPanic`             | 框架生命周期钩子异常   | active |
+| 50022 | `FRAMEWORK_SHUTDOWN_INCOMPLETE`     | `foundation/apperr`          | `FrameworkShutdownIncomplete`    | 框架关闭未完成         | active |
+| 50023 | `FRAMEWORK_WORKER_UNEXPECTED_EXIT`  | `foundation/apperr`          | `FrameworkWorkerUnexpectedExit`  | 后台服务意外退出       | active |
+| 50024 | `GRPC_UNKNOWN_ERROR`                | `plugins/grpc/grpcresult`    | `UnknownError`                   | RPC未知错误            | active |
+| 50025 | `GRPC_DATA_LOSS`                    | `plugins/grpc/grpcresult`    | `DataLoss`                       | 数据丢失               | active |
+| 50026 | `SNOWFLAKE_NODE_INVALID`            | `foundation/snowflake`       | `NodeInvalid`                    | 数据中心或节点编号非法 | active |
+| 50027 | `SNOWFLAKE_CLOCK_BACKWARDS`         | `foundation/snowflake`       | `ClockBackwards`                 | 系统时钟回退           | active |
+| 50028 | `LOGGING_HANDLER_INVALID`           | `foundation/logging`         | `HandlerInvalid`                 | 日志处理器缺失         | active |
+| 50029 | `LOGGING_CONFIG_INVALID`            | `foundation/logging`         | `ConfigInvalid`                  | 日志配置非法           | active |
+| 50030 | `LOGGING_WRITE_FAILED`              | `foundation/logging`         | `WriteFailed`                    | 日志写入失败           | active |
+| 50031 | `LOGGING_ROTATION_FAILED`           | `foundation/logging`         | `RotationFailed`                 | 日志轮转失败           | active |
+| 50032 | `TOOLKIT_PASSWORD_FAILED`           | `foundation/toolkit`         | `PasswordFailed`                 | 密码加密或校验失败     | active |
+| 50100 | `GRPC_UNIMPLEMENTED`                | `plugins/grpc/grpcresult`    | `Unimplemented`                  | 功能未实现             | active |
+| 50200 | `HTTP_GATEWAY_ERROR`                | `plugins/web-gin/httpresult` | `GatewayError`                   | 网关错误               | active |
+| 50300 | `HTTP_SERVICE_UNAVAILABLE`          | `plugins/web-gin/httpresult` | `ServiceUnavailable`             | 服务不可用             | active |
+| 50301 | `HTTP_RESOURCE_EXHAUSTED`           | `plugins/web-gin/httpresult` | `ResourceExhausted`              | 资源耗尽               | active |
+| 50302 | `GRPC_SERVICE_UNAVAILABLE`          | `plugins/grpc/grpcresult`    | `ServiceUnavailable`             | 服务不可用             | active |
+| 50400 | `HTTP_GATEWAY_TIMEOUT`              | `plugins/web-gin/httpresult` | `GatewayTimeout`                 | 网关超时               | active |
+| 50401 | `CONTROL_DEADLINE_EXCEEDED`         | `foundation/control`         | `DeadlineExceeded`               | 操作超过截止时间       | active |
 
 <!-- error-code-vocabulary:end -->
 

@@ -261,9 +261,8 @@ func Test_BaseEntity_BeforeCreate_InvalidGene(t *testing.T) {
 			Dest:    bad,
 		}
 		tx := &gorm.DB{Statement: stmt}
-
-		err = bad.BeforeCreate(tx)
-		if err == nil {
+		hookErr := bad.BeforeCreate(tx)
+		if hookErr == nil {
 			t.Fatalf("expected error on invalid gene")
 		}
 		if !bad.ID.IsZero() {

@@ -4,11 +4,11 @@
 
 ## 进行中计划
 
-| 编号 | 计划                                                                     | Scope      | 状态  |
-| ---- | ------------------------------------------------------------------------ | ---------- | ----- |
-| 0002 | [v2 强类型错误返回迁移计划](./0002-foundation-strong-error-migration.md) | foundation | draft |
+| 编号 | 计划                                                                     | Scope      | 状态        |
+| ---- | ------------------------------------------------------------------------ | ---------- | ----------- |
+| 0002 | [v2 强类型错误返回迁移计划](./0002-foundation-strong-error-migration.md) | foundation | in-progress |
 
-0002已完成规范/计划起草、方向裁决、[P0技术台账](../engineering/research/0005-foundation-strong-error-p0-inventory.md)与[引用/实现者](../engineering/research/0006-foundation-strong-error-p0-callers.md)，现补[P1开工准备](./0002-foundation-strong-error-migration.md#p1开工准备包2026-11-09仅文档)：候选码、16种原生RPC兼容分类、实施边界与门禁。2026-11-09用户确认没有仓外V2消费者，已知范围仅仓内C01–C06；P0整体待用户审阅准出，P1尚未获Go实施授权，继续draft，不自动ready。
+0002已完成规范/计划起草、方向裁决、[P0技术台账](../engineering/research/0005-foundation-strong-error-p0-inventory.md)与[引用/实现者](../engineering/research/0006-foundation-strong-error-p0-callers.md)。2026-11-09按用户授权完成[P1错误核心与准出记录](./0002-foundation-strong-error-migration.md#p1准出记录2026-11-09)：19项追加码、16种原生RPC纯分类、nil安全原语和持久编译/协议测试，已由Leader复核。已知消费者仅仓内C01–C06，无仓外V2消费者；计划仍为in-progress，P2–P7及发布不因P1通过而获得授权。
 
 ## 已归档计划
 

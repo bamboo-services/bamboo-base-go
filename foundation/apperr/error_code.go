@@ -11,4 +11,8 @@ var (
 	FrameworkComponentStopped      = &ErrorCode{Code: 50005, Output: "FRAMEWORK_COMPONENT_STOPPED", Message: "组件已停止"}         // 组件已停止。
 	FrameworkComponentUnavailable  = &ErrorCode{Code: 50006, Output: "FRAMEWORK_COMPONENT_UNAVAILABLE", Message: "组件不可用"}     // 组件不可用。
 	FrameworkComponentInvalidState = &ErrorCode{Code: 50007, Output: "FRAMEWORK_COMPONENT_INVALID_STATE", Message: "组件状态无效"}  // 组件状态无效。
+	FrameworkMultipleFailures      = &ErrorCode{Code: 50020, Output: "FRAMEWORK_MULTIPLE_FAILURES", Message: "多个框架阶段失败"}      // 多个框架阶段失败。
+	FrameworkHookPanic             = &ErrorCode{Code: 50021, Output: "FRAMEWORK_HOOK_PANIC", Message: "框架生命周期钩子异常"}           // 框架生命周期钩子异常。
+	FrameworkShutdownIncomplete    = &ErrorCode{Code: 50022, Output: "FRAMEWORK_SHUTDOWN_INCOMPLETE", Message: "框架关闭未完成"}     // 框架关闭未完成。
+	FrameworkWorkerUnexpectedExit  = &ErrorCode{Code: 50023, Output: "FRAMEWORK_WORKER_UNEXPECTED_EXIT", Message: "后台服务意外退出"} // 后台服务意外退出。
 )

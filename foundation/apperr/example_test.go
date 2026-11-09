@@ -68,3 +68,28 @@ func ExampleError() {
 	// Output:
 	// {"code":{"Code":50000,"Output":"FRAMEWORK_INTERNAL_ERROR","Message":"框架内部错误"},"error_message":"读取组件失败"}
 }
+
+// ExampleFrom 演示转接原生原因时沿用既有统一错误的分类，并保留原始原因链。
+func ExampleFrom() {
+	inner := apperr.New(apperr.FrameworkComponentNotFound, "组件 database 未注册")
+	appErr := apperr.From(apperr.FrameworkInternalError, "启动失败", fmt.Errorf("装配阶段: %w", inner))
+
+	fmt.Println(appErr.Code.GetCode(), appErr.Code.GetOutput())
+	fmt.Println(errors.Is(appErr, inner))
+	// Output:
+	// 50003 FRAMEWORK_COMPONENT_NOT_FOUND
+	// true
+}
+
+// ExampleJoin 演示多个失败聚合时由调用方显式给出总码，子失败全部保留。
+func ExampleJoin() {
+	first := apperr.New(apperr.FrameworkComponentNotFound, "组件未注册")
+	second := apperr.New(apperr.FrameworkComponentUnavailable, "组件不可用")
+	appErr := apperr.Join(apperr.FrameworkMultipleFailures, "多个阶段失败", first, second)
+
+	fmt.Println(appErr.Code.GetCode(), appErr.Code.GetOutput())
+	fmt.Println(errors.Is(appErr, first), errors.Is(appErr, second))
+	// Output:
+	// 50020 FRAMEWORK_MULTIPLE_FAILURES
+	// true true
+}

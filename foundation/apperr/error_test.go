@@ -29,8 +29,8 @@ func TestErrorCodesInventorySnapshot(t *testing.T) {
 	if err := json.Unmarshal(data, &expected); err != nil {
 		t.Fatalf("decode error code snapshot: %v", err)
 	}
-	if len(allExportedCodes) != 8 || len(expected) != len(allExportedCodes) {
-		t.Fatalf("expected 8 framework error codes, got inventory=%d snapshot=%d", len(allExportedCodes), len(expected))
+	if len(allExportedCodes) != 12 || len(expected) != len(allExportedCodes) {
+		t.Fatalf("expected 12 framework error codes, got inventory=%d snapshot=%d", len(allExportedCodes), len(expected))
 	}
 
 	codeSet := make(map[apperr.Code]apperr.ErrorCode)

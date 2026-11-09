@@ -19,6 +19,8 @@ const vocabularyPath = "docs/engineering/spec/0002-foundation-error-code-vocabul
 
 var ownerPrefixes = map[string]string{
 	"foundation/apperr":          "FRAMEWORK_",
+	"foundation/control":         "CONTROL_",
+	"foundation/valueerr":        "VALUE_",
 	"plugins/web-gin/httpresult": "HTTP_",
 	"plugins/web-gin/bind":       "HTTP_BIND_",
 	"plugins/web-gin/validator":  "HTTP_VALIDATOR_",

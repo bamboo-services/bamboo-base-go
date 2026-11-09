@@ -21,9 +21,9 @@ SDK 自有失败出口必须以 `*apperr.Error` 表达，不能只依赖 `error`
 | 标准接口   | 编解码、SQL、日志、网络和gRPC存在固定签名                   | 固定签名薄适配，防止 typed-nil，保留标准控制流 |
 | 门禁       | 现有词表检查器不检查错误返回签名                            | 增加全库类型契约、例外台账和运行行为检查       |
 
-上述是源码核查结论，不代表目标已经实现。本文只起草规范；Go实现、返回签名、错误码定义、CI均未因本规范而迁移。P0已展开[逐符号分类/固定签名/消费者模板](../research/0005-foundation-strong-error-p0-inventory.md)和[引用/接口实现者](../research/0006-foundation-strong-error-p0-callers.md)；临时探针不作为长期验收依赖。
+上述是源码核查结论，不代表目标已经实现。本轮只实施P1错误核心及追加目录，不表示全SDK返回签名、生命周期或P7类型CI已经迁移。P0已展开[逐符号分类/固定签名/消费者模板](../research/0005-foundation-strong-error-p0-inventory.md)和[引用/接口实现者](../research/0006-foundation-strong-error-p0-callers.md)；临时探针不作为长期验收依赖。
 
-2026-11-09仅补P1开工准备：19项候选码与16种原生RPC状态兼容提案统一见[spec0002](./0002-foundation-error-code-vocabulary.md#p1开工候选码2026-11-09未登记)，范围、持久测试和命令见[plan0002 P1](../../plan/0002-foundation-strong-error-migration.md#p1先稳定错误核心码映射和负向编译测试)。候选未占号，用户尚未批准具体提案或Go开工，规范继续draft。
+2026-11-09用户已批准按[plan0002 P1](../../plan/0002-foundation-strong-error-migration.md#p1先稳定错误核心码映射和负向编译测试)实施；19项追加码与16种原生RPC纯分类见[spec0002登记记录](./0002-foundation-error-code-vocabulary.md#p1登记记录2026-11-09)。规范仍为draft，不因实现获准而自动冻结；真实RPC信封接入留P6。
 
 ## 规范条款
 
@@ -37,7 +37,7 @@ SDK 自己控制的函数和方法只要返回失败结果，该结果位置就�
 
 每个自有失败出口必须按所属域选择已登记的 Code/Output，并由统一错误构造器返回。禁止所有失败都套 `FrameworkInternalError` 以通过类型检查；禁止用裸 `&apperr.Error{}`、错误码零值或把原始文本当作机器语义。预期字段、参数、资源、配置、状态、依赖与操作错误必须分别确认责任和协议含义。
 
-错误码继续由 [0002](./0002-foundation-error-code-vocabulary.md) 分配。当前65项不重新排序或复用，新增语义先评审归属、状态与容量，再登记；本轮不预占未批准的编号。`foundation/apperr` 仍不得重新成为协议/领域码全集，基础层不得反向依赖 application/plugins，插件不得为取码横向依赖。
+错误码继续由 [0002](./0002-foundation-error-code-vocabulary.md) 分配。基线65项不重新排序或复用，新增语义先评审归属、状态与容量，再登记；本轮仅追加已批准的P1编号。`foundation/apperr` 仍不得重新成为协议/领域码全集，基础层不得反向依赖 application/plugins，插件不得为取码横向依赖。
 
 ### R03：原始错误是原因，不是自有失败的最终返回
 
@@ -89,7 +89,7 @@ HTTP 的 `httpresult.Error/AbortError` 和gRPC的转换入口接受统一错误�
 
 ### R11：取消、超时与值转换按已确认的归属和分组表达
 
-2026-11-07用户已逐项确认以下规则。下表是目标契约，不是现有定义清单：`foundation/control` 和 `foundation/valueerr` 均为规划新增基础子包，本轮未创建；`xx` 仅表示以后按全局词表分配的SDK组内序号，不是已占用的Code。
+2026-11-07用户已逐项确认下表规则；表内xx表达状态分组，不是独立分配台账。2026-11-09已批准P1实施，foundation/control和foundation/valueerr在现有foundation模块内落地，具体Code/Output/符号统一以spec0002已登记词表为准。
 
 | 场景                                             | 规划归属 / Output                                   | Code分组 | HTTP | gRPC             |
 | ------------------------------------------------ | --------------------------------------------------- | -------- | ---- | ---------------- |
@@ -105,9 +105,9 @@ HTTP 的 `httpresult.Error/AbortError` 和gRPC的转换入口接受统一错误�
 转换底层只陈述“值格式/范围/目标类型”等事实，不凭字符串内容推断来自请求还是服务配置。请求边界直接传播400类值错误；部署/启动时读取服务自身配置的入口必须按服务配置责任使用所属500码，并把原始统一值错误保留为原因。只有该明确的责任边界可以重分类，不能沿调用栈每层随意改码，也不能把控制取消/超时误归为配置非法。
 管理API提交配置时的请求校验仍按输入责任400处理，不因字段名含“配置”就归500；只有确认是在读取/建立服务自身配置的责任边界，才作配置500包装。
 
-`VALUE_INVALID_FORMAT`、`VALUE_OUT_OF_RANGE`、`VALUE_UNSUPPORTED_TARGET` 是待词表评审的候选标识，不是本轮完成登记的变量名。错误分类须使用实际校验分支及可识别的原始类型/哨兵，禁止解析人读错误文本来猜分类；安全Message/ErrorMessage不得直接复制可能包含凭据的原始输入。
+`VALUE_INVALID_FORMAT`、`VALUE_OUT_OF_RANGE`、`VALUE_INVALID_TYPE`、`VALUE_UNSUPPORTED_TARGET`、`VALUE_INVALID_RECEIVER` 已按P1授权登记。错误分类须使用实际校验分支及可识别的原始类型/哨兵，禁止解析人读错误文本来猜分类；安全Message/ErrorMessage不得直接复制可能包含凭据的原始输入。
 
-规划依赖为 `control/valueerr → apperr`，以及 `typed/ctxkey/env/toolkit → valueerr`（按实际需要导入）；不得出现 `apperr → control/valueerr/typed` 的反向依赖，不新增Go模块、不引入插件横向依赖。两个新归属在实施前必须同步登记spec0002、源码目录和检查器白名单，当前65项不重排、不占具体新号。
+规划依赖为 `control/valueerr → apperr`，以及 `typed/ctxkey/env/toolkit → valueerr`（按实际需要导入）；不得出现 `apperr → control/valueerr/typed` 的反向依赖，不新增Go模块、不引入插件横向依赖。两个新归属在实施前必须同步登记spec0002、源码目录和检查器白名单，既有65项不重排，P1批准追加19项；其他调用方迁移仍未完成。
 
 当前gRPC分组映射已支持400/408/499/500/504；本次没有选择422，不新增422到InvalidArgument的映射。本结论只说明分组规则可沿用，构造、归一化、错误链和协议Details仍必须在后续迁移中实现并测试。
 
@@ -127,7 +127,7 @@ HTTP 的 `httpresult.Error/AbortError` 和gRPC的转换入口接受统一错误�
 
 原生status的Message作为调用方显式选择的协议文案保留。只取显式 `GRPCStatus` 提供的文案，禁止将未知包装层的 `err.Error()` 或原始cause文本自动抄入Message、ErrorMessage或Data。SDK自有错误仍须经过安全文案边界，不能先制造含敏感信息的原生status来绕过要求。
 
-**兼容信封的码来源必须明确。**原生status只证明RPC状态类别，不证明发生的是数据库、缓存、认证逻辑或某个业务资源。缺少原信封时，仅能复用语义完全吻合的已登记通用RPC/控制码，或在P1新增通用RPC状态兼容码；禁止把所有NotFound反推成DATABASE_RECORD_NOT_FOUND，或把所有ResourceExhausted说成“请求过多”。具体符号和数值仍待全局词表登记，本轮不分配。
+**兼容信封的码来源必须明确。**原生status只证明RPC状态类别，不证明发生的是数据库、缓存、认证逻辑或某个业务资源。缺少原信封时，仅能复用语义完全吻合的已登记通用RPC/控制码，或在P1新增通用RPC状态兼容码；禁止把所有NotFound反推成DATABASE_RECORD_NOT_FOUND，或把所有ResourceExhausted说成“请求过多”。P1具体符号和数值已在spec0002追加登记；不得将纯分类当作真实拦截器接入已完成。
 
 原生status是该分支的权威gRPC状态。补Details不能把它重新经Code/100映射一遍：正向映射不是一一对应，例如既有409→AlreadyExists、500→Internal，不能因此把原生Aborted/DataLoss改成另一状态。兼容信封的业务Code可采用对应HTTP语义分组，但原生RPC Code保持不变；此为已有原生状态输入的明确例外，不改变SDK统一错误的既定正向映射。
 
@@ -135,7 +135,7 @@ HTTP 的 `httpresult.Error/AbortError` 和gRPC的转换入口接受统一错误�
 
 后续实现必须在P1/P6为全部合法非OK的标准 `codes.Code` 建立确定的兼容码/HTTP语义分类表，并测出“状态不改、已有Details不丢、缺信封只追加一个”。未经分类登记不能以通用500补信封掩盖缺口。原生编码/头部大小/传输失败不能被承诺为无条件成功；若补充Details本身无法编码，不得改写原状态或泄漏内部原因，应保留原status/Details并记录受控诊断，作为显式可观测降级，不宣称该响应满足已补齐信封。
 
-本轮不新增Go包、Code或映射实现。`plugins/grpc/plugin.go` 当前context原生分支仍不带信封、native status仍透传；R12为待实施的目标，不以文档裁决冒充代码已通过。
+P1仅新增错误核心、预置码及纯分类契约，不接入实际拦截器。`plugins/grpc/plugin.go` 当前context原生分支仍不带信封、native status仍透传；R12的真实信封接入留P6，不以P1分类测试冒充全链已通过。
 
 ### R13：首发前集中迁移，下游通过RC后发布首个V2正式版
 
@@ -245,6 +245,6 @@ func (w *Writer) Write(p []byte) (int, error) {
 
 用户已确认：自有错误返回采用统一指针、固定外部接口保留薄适配；R11控制/值错误归属与映射；R12原生gRPC输入补齐信封且保留原生语义；R13首个V2稳定版前集中同步已知消费者，RC验证后首批14模块发布v2.0.0。上述原待确认方向均已有裁决，不再反复询问。
 
-**原列的方向性待确认项已清零，但本文仍为draft，未冻结ADR，计划也不因本次问答自动转ready。**用户仅授权本轮写回文档，未授权修改Go、执行迁移、派工或发布。
+**原列的方向性待确认项已清零，本文仍为draft，未冻结ADR。**2026-11-09用户另行明确批准P1实现及Leader派发指定模型子代理；该授权只覆盖P1，不自动扩大到P2–P7、提交推送或发布。
 
-实施前还须完成的登记/核验工作：按已确认归属细化具体符号、分配全局序号并核算容量；完成原生非OK标准gRPC状态到兼容信封码的分类表；将P0逐符号固定签名/类型核对结果实现为带失效检查的自动门禁并验证动态语义；由用户补齐仓外受控消费者真实清单并逐项验收；验证RC和正式候选发布链路。P0技术台账/模板已交付不等于这些人工、实现或发布前置完成；其他错误类别和聚合主码仍按P1评审。
+P1按已确认归属追加19码、核算容量并建立16种原生非OK状态的纯分类。后续仍须将P0精确类型与固定签名台账落实为P7带失效检查的全库门禁，完成P2–P6调用方迁移与动态语义、真实信封链路及RC/正式候选验收。用户已确认当前无仓外V2消费者，已知仓内C01–C06按对应阶段验证；出现新增消费者时补登记。P1不代表这些后续任务已经完成，其他领域错误按所属阶段继续细化登记。

@@ -11,4 +11,8 @@ var allExportedCodes = []*apperr.ErrorCode{
 	apperr.FrameworkComponentStopped,
 	apperr.FrameworkComponentUnavailable,
 	apperr.FrameworkComponentInvalidState,
+	apperr.FrameworkMultipleFailures,
+	apperr.FrameworkHookPanic,
+	apperr.FrameworkShutdownIncomplete,
+	apperr.FrameworkWorkerUnexpectedExit,
 }

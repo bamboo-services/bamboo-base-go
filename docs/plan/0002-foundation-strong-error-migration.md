@@ -1,13 +1,13 @@
 # v2.0.0 强类型错误返回迁移计划
 
-> 状态：draft · 日期：2026-11-07 · Scope：foundation
+> 状态：in-progress · 日期：2026-11-09 · Scope：foundation
 > 承接：[强类型错误返回与协议适配规范](../engineering/spec/0003-foundation-strong-error-contract.md) · [错误码受控词表](../engineering/spec/0002-foundation-error-code-vocabulary.md)
 
 ## 目标与范围
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**已完成规范/计划草案、R11–R13裁决、P0技术台账及P1开工准备材料。2026-11-09用户确认没有仓外V2消费者；P0整体仍待用户审阅准出，P1待明确实施授权。P1–P7实现未执行，Worker丢链未修，Go签名、接口、错误码和CI未修改。**计划不会自动派发Agent或创建工作卡，不以文档状态代替代码验收，不自动提交推送。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2–P7未执行，Worker丢链、生命周期与真实原生RPC信封接入仍未修。**不自动创建工作卡、提交推送或发布，不以P1代替整计划完成。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -24,8 +24,8 @@
 
 ## 前置条件与风险
 
-1. spec0003原列方向性待确认已全部裁决：独立control/valueerr及分组、原生gRPC补齐信封、首发前集中同步已知消费者、RC验证后14模块首版v2.0.0。本文仍为draft，完成P0逐符号台账/消费者登记并经人工确认前不自动升级ready。
-2. 保留 `apperr → 标准库` 的基础依赖；目标依赖为 `control/valueerr → apperr`、`typed/ctxkey/env/toolkit → valueerr`（按实际需要），ctxkey/env可继续委托typed。两个新包尚未创建，实施时检查无环；其他基础包不得借协议插件取码。
+1. spec0003原列方向性待确认已全部裁决：独立control/valueerr及分组、原生gRPC补齐信封、首发前集中同步已知消费者、RC验证后14模块首版v2.0.0。用户于2026-11-09明确授权P1实施，计划进入in-progress；规范仍为draft，不因实现获准而自动冻结为ADR。
+2. 保留 `apperr → 标准库` 的基础依赖；P1新增依赖为 `control/valueerr → apperr`。后续 `typed/ctxkey/env/toolkit → valueerr`（按实际需要）仍待P2；ctxkey/env可继续委托typed。P1检查无环，其他基础包不得借协议插件取码。
 3. 500组已有18项，SDK剩余32个槽位；新增语义必须先核算各状态组容量。超出容量须重评编号规范，不用万能500或业务号段掩盖。
 4. Go接口方法和函数类型没有返回类型协变。改 `Plugin.Start/Stop` 会同时影响application、所有插件、builtin、测试替身、示例及下游实现者；中间补丁可在本地推进，但禁止交付不编译的混合版本。
 5. 强类型nil跨 `error` 会成为非nil接口。GORM钩子/事务、JSON/XML、日志、gRPC以及错误聚合均需成功路径测试，不能只验证错误路径。
@@ -45,7 +45,7 @@
 | 不支持的目标或非法API契约  | `foundation/valueerr` / `VALUE_*`                  | `500xx`  | 500 / Internal         |
 | 服务自身配置入口失败       | 所属框架/插件配置码，保留值错误原因                | `500xx`  | 500 / Internal         |
 
-499是非标准HTTP扩展，断连不保证能写回；内部deadline用504是项目约定，不宣称它必然是网关。值转换底层不猜调用来源，配置入口按责任重新包装，禁止每层随意改码；不采用422方案。两个新包属于现有foundation模块，不新增模块；具体序号、完整符号、源码与检查器归属均待P1登记，现有65项不变。
+499是非标准HTTP扩展，断连不保证能写回；内部deadline用504是项目约定，不宣称它必然是网关。值转换底层不猜调用来源，配置入口按责任重新包装，禁止每层随意改码；不采用422方案。两个新包属于现有foundation模块，不新增模块；P1按spec0002登记19项追加，既有65项不变；真实消费者迁移仍按后续阶段验收。
 
 ## 已确认的原生gRPC信封策略
 
@@ -53,7 +53,7 @@
 
 P1需完成原生标准状态到兼容信封码的分类表，P6按该表实施和测试；不得猜测不存在的业务领域码，也不得把兼容业务Code/100再映射后覆盖原生Aborted/DataLoss等状态。原始Any须保留，含重复/冲突/不可解码信封的输入不擅自修复；未知包装层文本不抄到对外文案。编码/传输故障有明确降级诊断，不能承诺在物理故障下信封总能送达。
 
-策略已选不代表原生分支已经修改；本轮不改Go、无新增码，全部实施项仍未执行。
+策略已选不代表原生分支已经修改；P1仅建立分类原语及预置码，真实normalizeRPCError和拦截器接入仍属P6。
 
 ## 已确认的下游窗口与RC首发策略
 
@@ -65,7 +65,7 @@ P7先经隔离代理验证候选，再在每次另获授权后发布公开RC。R
 
 正式V2后遵守patch兼容修复/minor兼容新增/破坏性API变更新主版本路径。当前发布工具限定V2且Action会改依赖、打tag并推送，未来新主版本或后续按需发版须另行适配/验收；本次首发统一14模块不自动扩大为永远全量重打tag的决定。
 
-现阶段未创建任何RC或正式tag、未修改Go/依赖/CI，未证明发布链路已可安全执行。全部发布与消费者实施项仍未执行，原方向性待确认清零不等于计划ready或规范ADR。
+现阶段未创建任何RC或正式tag，未改发布依赖与Release CI，未证明发布链路已可安全执行。P1只扩展错误目录守卫，不将其作为发布验收；全部发布与消费者迁移实施项仍待后续阶段。
 
 ## 全库迁移清单
 
@@ -97,21 +97,31 @@ P7先经隔离代理验证候选，再在每次另获授权后发布公开RC。R
 - 动作：以 `.github/scripts/manifest/v2-modules.txt` 为14模块权威清单，枚举生产函数/方法结果、接口方法、匿名回调、函数类型、错误字段和错误通道。分为自有强类型、固定外部签名、原生原因/输入、无失败返回四类。
 - 交付：符号到所属域/阶段/例外理由/调用方的台账；按spec W01–W12逐符号展开。记录完整签名、外部接口与验证方式，不以目录或方法名整体豁免。过期白名单也必须失败。
 - 准出：14模块逐一有记录；spec待确认项有用户裁决；候选文件没有未归类符号。现有模块图和 `go list -deps ./foundation/...` 无反向依赖。
-- 状态：技术核对与模板已交付，P0整体待用户审阅准出。Go1.25.11类型加载覆盖39生产包、287个生产/测试/示例源文件，0类型诊断；517条契约记录、2277处精确引用与133条接口关系分开记录。2026-11-09用户确认无仓外V2消费者，已知范围为仓内C01–C06；实际候选模块图、实现切换与动态nil/控制语义仍按阶段验收，不以无外部消费者冒充已通过。
-- 成果：[逐符号/例外/消费者模板](../engineering/research/0005-foundation-strong-error-p0-inventory.md)与[仓内调用方/实现者](../engineering/research/0006-foundation-strong-error-p0-callers.md)。本轮未改Go/依赖/CI、未派工、未提交推送；状态保持draft，不自动启动P1。
+- 状态：技术核对与模板已交付，2026-11-09用户明确授权P1实施，P0据此准出。基线类型加载覆盖39生产包、287源文件、517契约、2277精确引用和133接口关系。已知消费者为仓内C01–C06；候选模块图、动态nil与真实控制语义仍按对应阶段验收，不把开工授权当作这些回归已通过。
+- 成果：[逐符号/例外/消费者模板](../engineering/research/0005-foundation-strong-error-p0-inventory.md)与[仓内调用方/实现者](../engineering/research/0006-foundation-strong-error-p0-callers.md)。P0记录是基线只读证据；本轮仅按后述P1范围实施，不回写历史类型快照为新代码现状。
 
 ### P1：先稳定错误核心、码映射和负向编译测试
 
 - 动作：确认统一错误构造/转接的nil语义；控制和值错误直接按spec0003 R11已选方向执行，不重新立题。细化具体符号与全局序号，确定其他新增错误、配置重分类和聚合主码；保留原始cause及诊断类型，不把未知错误全归一个500。
 - 交付：按spec0002追加的control/valueerr及其他已批准定义、词表与守卫归属；全部合法非OK标准gRPC状态到兼容信封码/HTTP语义的分类登记表；typed-nil/Is/As/聚合和负向编译测试。原生status本身保留权威RPC Code，不经兼容码重新正向映射；不得从状态反推领域原因。
 - 准出：`go test ./foundation/apperr -count=1`、`make error-codes-check`；新增control/valueerr包完整测试与无环检查；负向编译夹具确定失败；成功nil不变接口错误，已选分组/责任分类通过协议回归，具体序号与容量完成登记核验。
-- 状态：未执行。当前65项不因本计划重排，不新增未批准的码。
+- 状态：2026-11-09实现及Leader技术准出完成，待用户审阅；追加19项，保留旧65项。P1通过不自动启动P2，整计划仍为in-progress。
 
-#### P1开工准备包（2026-11-09，仅文档）
+#### P1开工准备包（2026-11-09，已获实施授权）
 
-用户本轮选择先完成开工准备，并确认目前没有仓外V2分支、伪版本或本地replace消费者。已知受控范围为仓内C01–C06，名单沿用[P0消费者台账](../engineering/research/0005-foundation-strong-error-p0-inventory.md)。此事实解除“仓外范围未知”的等待，不等于仓内候选验收已通过，也不等于授权P1改Go。计划继续draft；下一次明确批准P0准出和P1范围后才开工，不需要再次询问已经确认的消费者范围。发现新增消费者时补登记并重评影响。
+用户本轮选择先完成开工准备，并确认目前没有仓外V2分支、伪版本或本地replace消费者。已知受控范围为仓内C01–C06，名单沿用[P0消费者台账](../engineering/research/0005-foundation-strong-error-p0-inventory.md)。该范围确认最初仅解除“仓外未知”的等待；同日用户另行明确授权P1实施和Leader派发子代理，计划据此进入in-progress，不等于仓内候选验收已通过。发现新增消费者时补登记并重评影响。
 
-**建议首个实施边界：**只做P1错误核心、19项候选定义和分类契约测试。候选码/Message与16种原生RPC兼容分类的唯一提案见[spec0002开工候选码](../engineering/spec/0002-foundation-error-code-vocabulary.md#p1开工候选码2026-11-09未登记)及[原生RPC兼容提案](../engineering/spec/0002-foundation-error-code-vocabulary.md#原生grpc缺信封时的p1兼容提案)。编号尚不占号；开工先复核active/retired，若号码被其他变更占用，重算提案后再登记，禁止挤掉既有号码。
+**本轮批准的实施边界：**只做P1错误核心、19项已批准定义和分类契约测试。19项已批准码/Message与16种原生RPC兼容分类见[spec0002开工候选码](../engineering/spec/0002-foundation-error-code-vocabulary.md#p1登记记录2026-11-09)及[原生RPC兼容提案](../engineering/spec/0002-foundation-error-code-vocabulary.md#原生grpc缺信封时的p1兼容分类)。开工已复核active/retired无冲突，按E04追加登记，禁止挤掉既有号码。
+
+#### P1公开原语契约
+
+- `apperr.IsNil(err error) bool`：只识别nil与typed-nil原因，不调用Error方法。
+- `apperr.Find(cause error) *Error`：只提取已有非nil统一错误；遵循节点类型、标准As、子原因的深度优先顺序，跳过nil投影，不以固定深度截断合法链。
+- `apperr.From(code *ErrorCode, msg ErrMessage, cause error) *Error`：无原因返回nil，已有统一错误保留Code/安全描述/Data与整条根因链；未知原因按显式所属码包装，不把原始文本复制为安全描述。
+- `apperr.Join(code *ErrorCode, msg ErrMessage, errs ...*Error) *Error`：零项nil、单项原对象、多项由责任层显式选总码，全部原因保持输入顺序；不自动应用框架总码。`New`仍始终非nil，原生原因协议不改。
+- `control.Classify(cause error, phase Phase) *apperr.Error`：只识别已有统一错误或真实取消/超时。nil也可能表示未知普通原因，调用方必须用所属域apperr.From兜底，不能把未识别当成功；`PhaseOperation`默认504，`PhaseRequestRead`明确读取408。
+- `valueerr.From(kind Kind, msg apperr.ErrMessage, cause error) *apperr.Error`：按显式值类别区分400/500，已有统一错误不重分类；服务自身配置需所属域apperr.New显式重包。
+- `grpcresult.ClassifyStatus(st *status.Status, phase control.Phase) *apperr.Error`：只取16态兼容分类并保存原status根因，不修改原状态/文案/Details；不能将分类结果经ToStatusError回转后替代原status，真实缺信封追加仍留P6。
 
 | 顺序 | 允许修改的位置与动作                                                                                            | 交付与停止边界                                                                                                   |
 | ---- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -137,18 +147,44 @@ P7先经隔离代理验证候选，再在每次另获授权后发布公开RC。R
 | 16种原生非OK状态的兼容分类                                  | 表完整且无重复；尤其Aborted≠AlreadyExists、OutOfRange≠InvalidArgument、DataLoss≠Internal；ResourceExhausted不等于请求过多         |
 | 外部标准签名与自有结果正反例                                | 固定Unwrap/error链及外部方法集保留；自有结果返回errors.New、字段/回调装原生error的负例必须编译失败，对应*apperr.Error正例必须通过 |
 
-聚合辅助不自动把所有域包装成FrameworkMultipleFailures；单个失败外层已有明确责任码时保留，多个独立框架阶段才选框架聚合码。HookPanic/ShutdownIncomplete/WorkerUnexpectedExit等明确场景优先用自己的场景码并保全其余cause；Factory及未派发取消的既有调度优先级不因通用聚合辅助改变。日志双路失败使用日志所属码，缓存关闭失败使用缓存所属码，不为借用总码引入跨插件依赖。所有新公开辅助的最终名称/签名须在P1补丁中给出编译断言；本文没有宣称辅助API已存在。
+聚合辅助不自动把所有域包装成FrameworkMultipleFailures；单个失败外层已有明确责任码时保留，多个独立框架阶段才选框架聚合码。HookPanic/ShutdownIncomplete/WorkerUnexpectedExit等明确场景优先用自己的场景码并保全其余cause；Factory及未派发取消的既有调度优先级不因通用聚合辅助改变。日志双路失败使用日志所属码，缓存关闭失败使用缓存所属码，不为借用总码引入跨插件依赖。公开原语的精确签名由持久`positive_api`与RPC包编译断言约束；真实Join拒绝原生成员另有`negative_join`反例，防止只验证虚构的强类型样例而遗漏实际API。
 
-#### P1准出命令（待实施后执行，本轮未运行这些回归）
+#### P1准出命令（实施完成后记录实际结果）
 
 - `go test ./foundation/apperr/... ./foundation/control/... ./foundation/valueerr/... -count=1`：包含持久负向编译测试驱动；负例失败必须由预期类型位置引发，不把依赖下载失败当负例成功。
 - `go test -race ./foundation/apperr/... ./foundation/control/... ./foundation/valueerr/... -count=1`：核心并发与nil/根因回归。
 - `go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1`：19项码的正向出口及RPC分类契约；P6再测实际拦截器全链。
 - `make error-codes-check`、`make test-scripts`：定义、归属、全库唯一/连续追加、守卫正反例通过。
 - `GOTOOLCHAIN=go1.25.11 GOFLAGS=-mod=readonly go list -deps ./foundation/...`：逐项确认无application/plugins反向依赖；不是只凭命令退出0判无反向依赖。
-- `make test`、`make vet`、`make lint-go`、`make lint-docs`、`git diff --check`：现有14模块及文档/格式门禁；新增包还不存在，不得在本轮记录为已通过。
+- `make test`、`make vet`、`make lint-go`、`make lint-docs`、`git diff --check`：覆盖现有14模块及新增包、文档与格式门禁，实际结果按准出记录，不沿用开工前历史结果。
 
 每项保存准确命令、SHA及dirty状态；未跑/跳过与通过分开。P1夹具只证明已测试API和语言契约，不覆盖全部517条记录；全仓类型守卫仍属P7。P1通过后先交用户审阅，不自动启动P2、提交推送、创建卡或发布。若准出失败，停在P1保留证据并修复，不为了变绿顺带重写生命周期或放宽例外。不得用清理工作树的方式删掉本次既有文档。
+
+#### P1准出记录（2026-11-09）
+
+实现基线为 `9a2efca4ad13544f8bd7c9634eccc8b6c3899626`，本轮源码与测试均在该提交的未提交工作树上验证（dirty=true），没有新提交、推送或发布。3个限定实现子任务与1个只读复核均按用户要求使用 `minimax-m3.1-flash`、max；Leader实际复读差异并执行下列检查，不直接将子代理总结视为验收。
+
+- 旧65项六列保持原值，追加19项后共84项；新域仍在既有foundation模块内，无go.mod/go.work/go.sum或生成pb修改。
+- 交付 `IsNil/Find/From/Join`、control/valueerr及16态原生RPC纯分类；标准As短路、深层包装、动态不可比较值、nil投影与全兄弟cause已补持久回归。无cause失败用New的示例已编译执行。
+- 4个正向/4个负向持久编译夹具覆盖实际公开API签名、真实Join成员和返回/字段/回调位置；先验证环境可编译正例，再要求反例命中具体类型拒绝。它们不是P7全库类型扫描。
+- 19项新码两端出口分别验证状态、三元组和脱敏；RPC纯分类保存原status/文案/Any顺序与字节，不伪造context cause，不接入真实拦截器。
+
+下表记录本轮实际执行范围；所有Go检查使用 `GOTOOLCHAIN=go1.25.11`。完整运行日志与SHA/dirty证据同步保存在卡片workpad，临时日志目录为 `/tmp/opencode/v2-p1/`；文档/范围检查在写回记录后再复验，以workpad最后一轮为准。
+
+| 验证范围                 | 执行命令                                                                                                                    | 实际结果                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 错误核心与编译夹具       | `go test ./foundation/apperr/... ./foundation/control/... ./foundation/valueerr/... -count=1`，以及相同范围 `go test -race` | 通过                                               |
+| HTTP/RPC新增码与原生分类 | `go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1`                                     | 通过                                               |
+| 14模块普通/竞态          | `make test`、`make race`                                                                                                    | 通过                                               |
+| 14模块静态与Go规范       | `make vet`、`make lint-go`                                                                                                  | 通过                                               |
+| 词表与脚本自身           | `make error-codes-check`、`make test-scripts`                                                                               | 通过                                               |
+| 示例与独立消费           | `make check-examples`、`bash .github/scripts/consumer/check-v2-consumers.sh`                                                | 通过；不能等同全部自定义业务/真实外部环境验收      |
+| 文档                     | `make lint-docs`                                                                                                            | 通过；记录写回后复验                               |
+| foundation依赖           | `GOTOOLCHAIN=go1.25.11 GOFLAGS=-mod=readonly go list -deps ./foundation/...`                                                | 通过，并显式检查无application/plugins反向依赖      |
+| P1补丁范围与链接         | `python3 /tmp/opencode/v2-p1/verify.py`                                                                                     | 通过；旧65项与P0历史快照未漂移，最终记录写回后复验 |
+| 差异与Go格式             | `git diff --check && git status --short`、已修改/新增Go文件的 `gofmt -l`                                                    | 通过，格式输出为空                                 |
+
+真实Redis/SMTP/专属数据库环境集成仍由测试开关默认跳过，不因本轮单测、SQLite或独立消费通过而标为真实服务验收。Worker丢链及其真实诊断对象/终态、生命周期强类型切换、typed/logging等调用点、原生RPC实际补Details和P7完整类型守卫仍留P2–P7。计划保持in-progress、规范保持draft；P1技术准出待用户审阅，不将长期细节优化整卡或整计划标完成。
 
 ### P2：修复Worker丢链并迁移foundation强类型核心
 
@@ -203,7 +239,7 @@ P7先经隔离代理验证候选，再在每次另获授权后发布公开RC。R
 ## 验收与归档标准
 
 - [x] P0技术核对：逐符号分类、固定方法集、仓内引用/实现者和受控消费者模板已展开；方向性问题已有用户裁决。
-- [ ] P0整体准出：用户审阅技术台账并批准P1边界；2026-11-09已确认无仓外V2消费者，已知仓内C01–C06的候选精确模块图和自定义实现随阶段验证，不以模板、无外部消费者或会话结束代替验收。
+- [x] P0整体准出：2026-11-09用户明确批准P1开工，已确认无仓外V2消费者；基线技术台账准出，仓内C01–C06候选图与行为仍随阶段验收。
 - [ ] 自有错误结果全部为 `*apperr.Error`，固定签名只保留已核实薄适配；Code/Output不是统一通用500。
 - [ ] Worker原错误、所有子cause、Is/As、成功nil、标准控制流及诊断账本全部有持久回归。
 - [ ] `make error-contract-check`（规划）、`make error-codes-check`、`make test-scripts`通过。

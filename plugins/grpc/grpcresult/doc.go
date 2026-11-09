@@ -41,6 +41,13 @@
 // 参数错误 [ParameterError]、准入拒绝 [ServiceUnavailable] 等 RPC 预置码由本包维护，
 // Code/Output按spec/0002统一词表分配，状态按编号分组映射；不依赖 HTTP 插件的错误码目录，定义应视为只读。
 //
+// # 原生状态归类
+//
+// [ClassifyStatus] 把原生 gRPC 状态归类为框架统一错误，只做兼容码选取：
+// 16 种标准非 OK 状态按 spec/0002 的兼容分类表取码，原生状态作为根因保留，
+// 原生显式文案与全部原 Details 原样不变。该结果不得再经 [ToStatusError]
+// 回转替换原生状态，否则 Aborted、OutOfRange、DataLoss 的语义会变义。
+//
 // # 并发安全
 //
 // 本包所有导出函数均为无外部可变状态的纯函数或构造函数，输入独立的 ctx 即可并发安全调用。

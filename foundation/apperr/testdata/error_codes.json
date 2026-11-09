@@ -38,5 +38,25 @@
     "output": "FRAMEWORK_COMPONENT_INVALID_STATE",
     "code": 50007,
     "message": "组件状态无效"
+  },
+  {
+    "output": "FRAMEWORK_MULTIPLE_FAILURES",
+    "code": 50020,
+    "message": "多个框架阶段失败"
+  },
+  {
+    "output": "FRAMEWORK_HOOK_PANIC",
+    "code": 50021,
+    "message": "框架生命周期钩子异常"
+  },
+  {
+    "output": "FRAMEWORK_SHUTDOWN_INCOMPLETE",
+    "code": 50022,
+    "message": "框架关闭未完成"
+  },
+  {
+    "output": "FRAMEWORK_WORKER_UNEXPECTED_EXIT",
+    "code": 50023,
+    "message": "后台服务意外退出"
   }
 ]

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
 	"gorm.io/gorm"
@@ -42,11 +43,11 @@ type testSnowflakeTool struct {
 	node *snowflake.Node
 }
 
-func (t *testSnowflakeTool) Start(ctx context.Context) error {
+func (t *testSnowflakeTool) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (t *testSnowflakeTool) Stop(ctx context.Context) error {
+func (t *testSnowflakeTool) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -60,15 +61,15 @@ type testWorker struct {
 	ctxChan chan<- context.Context
 }
 
-func (w *testWorker) Start(ctx context.Context) error {
+func (w *testWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testWorker) Stop(ctx context.Context) error {
+func (w *testWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testWorker) Run(ctx context.Context) error {
+func (w *testWorker) Run(ctx context.Context) *apperr.Error {
 	select {
 	case w.ctxChan <- ctx:
 	default:
@@ -112,7 +113,7 @@ func runInTestApp(t *testing.T, node *snowflake.Node, testFn func(ctx context.Co
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrChan := make(chan error, 1)
+	runErrChan := make(chan *apperr.Error, 1)
 	go func() {
 		runErrChan <- app.Run()
 	}()

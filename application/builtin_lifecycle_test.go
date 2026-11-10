@@ -34,7 +34,7 @@ type testWorker struct {
 
 // Start 在 Worker 启动阶段从上下文提取日志器与雪花算法发号节点。
 // 若任一受管组件未注册或类型不符，返回对应的错误并终止启动。
-func (w *testWorker) Start(ctx context.Context) error {
+func (w *testWorker) Start(ctx context.Context) *apperr.Error {
 	var errLogger *apperr.Error
 	w.logger, errLogger = application.Get[*logging.Logger](ctx, builtin.LoggerKey)
 	if errLogger != nil {
@@ -51,7 +51,7 @@ func (w *testWorker) Start(ctx context.Context) error {
 
 // Run 执行 Worker 的主事件循环。
 // 生成首个雪花 ID，记录运行日志，通知就绪通道，并阻塞等待退出或上下文取消。
-func (w *testWorker) Run(ctx context.Context) error {
+func (w *testWorker) Run(ctx context.Context) *apperr.Error {
 	id, genErr := w.node.Generate()
 	if genErr != nil {
 		return genErr
@@ -70,7 +70,7 @@ func (w *testWorker) Run(ctx context.Context) error {
 
 // Stop 停止 Worker 并释放资源。
 // 关闭内部 stopCh 唤醒 Run 退出，并在底层 Logger 关闭前输出停止确认日志。
-func (w *testWorker) Stop(ctx context.Context) error {
+func (w *testWorker) Stop(ctx context.Context) *apperr.Error {
 	close(w.stopCh)
 	if w.logger != nil {
 		w.logger.WithName("TEST").Info(ctx, "worker-stop-before-logger-close")
@@ -80,7 +80,7 @@ func (w *testWorker) Stop(ctx context.Context) error {
 
 // Quiesce 执行 Worker 的静默收拢阶段。
 // 本测试 Worker 无需额外静默逻辑，直接返回 nil。
-func (w *testWorker) Quiesce(ctx context.Context) error {
+func (w *testWorker) Quiesce(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -147,7 +147,7 @@ func TestAppLifecycle_BuiltinLoggingAndSnowflake(t *testing.T) {
 	appA, workerA := setupApp(t, dirA, 1, 1)
 
 	var runDoneA = make(chan struct{})
-	var runErrA error
+	var runErrA *apperr.Error
 	t.Cleanup(func() {
 		_ = appA.Shutdown()
 		select {
@@ -179,7 +179,7 @@ func TestAppLifecycle_BuiltinLoggingAndSnowflake(t *testing.T) {
 	appB, workerB := setupApp(t, dirB, 2, 2)
 
 	var runDoneB = make(chan struct{})
-	var runErrB error
+	var runErrB *apperr.Error
 	t.Cleanup(func() {
 		_ = appB.Shutdown()
 		select {
@@ -313,7 +313,7 @@ func TestAppLifecycle_IllegalSnowflakeNodeFailsRun(t *testing.T) {
 	_ = app.RegisterWorker(wInfo, wFac)
 
 	var runDone = make(chan struct{})
-	var runErr error
+	var runErr *apperr.Error
 	t.Cleanup(func() {
 		_ = app.Shutdown()
 		select {

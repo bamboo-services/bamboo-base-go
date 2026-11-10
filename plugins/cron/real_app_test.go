@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 type activateRecord struct {
 	handle application.RunHandle
-	err    error
+	err    *apperr.Error
 	time   time.Time
 }
 
@@ -32,7 +33,7 @@ func newRecordingProxy(inner application.Activator) *recordingProxy {
 	}
 }
 
-func (p *recordingProxy) Activate(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, error) {
+func (p *recordingProxy) Activate(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, *apperr.Error) {
 	h, err := p.inner.Activate(ctx, compKey, opts...)
 	rec := activateRecord{
 		handle: h,
@@ -51,26 +52,26 @@ func (p *recordingProxy) Activate(ctx context.Context, compKey ctxkey.Key, opts 
 }
 
 type realAppTestComponent struct {
-	runFunc  func(ctx context.Context) error
-	stopFunc func(ctx context.Context) error
+	runFunc  func(ctx context.Context) *apperr.Error
+	stopFunc func(ctx context.Context) *apperr.Error
 }
 
-func (c *realAppTestComponent) Start(_ context.Context) error {
+func (c *realAppTestComponent) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (c *realAppTestComponent) Run(ctx context.Context) error {
+func (c *realAppTestComponent) Run(ctx context.Context) *apperr.Error {
 	if c.runFunc != nil {
 		return c.runFunc(ctx)
 	}
 	return nil
 }
 
-func (c *realAppTestComponent) Quiesce(_ context.Context) error {
+func (c *realAppTestComponent) Quiesce(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (c *realAppTestComponent) Stop(ctx context.Context) error {
+func (c *realAppTestComponent) Stop(ctx context.Context) *apperr.Error {
 	if c.stopFunc != nil {
 		return c.stopFunc(ctx)
 	}
@@ -111,7 +112,7 @@ func TestRealApp_CronSkip_RealComponentLifecycle(t *testing.T) {
 	}, func() application.RunnablePlugin {
 		callNum := atomic.AddInt32(&factoryCalls, 1)
 		return &realAppTestComponent{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				if callNum == 1 {
 					if meta, ok := application.InstanceMetaFrom(ctx); ok {
 						firstMeta = meta
@@ -135,7 +136,7 @@ func TestRealApp_CronSkip_RealComponentLifecycle(t *testing.T) {
 				}
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				atomic.AddInt32(&stopCalls, 1)
 				if callNum == 1 {
 					close(stop1Entered)
@@ -159,7 +160,7 @@ func TestRealApp_CronSkip_RealComponentLifecycle(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()

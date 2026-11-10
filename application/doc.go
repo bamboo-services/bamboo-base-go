@@ -116,6 +116,25 @@
 //
 // [App.Run] 具备单次消耗性语义，多次调用同一实例的 Run 将返回 [ErrAlreadyRun]。
 //
+// # 错误出口契约
+//
+// 本包全部自有失败出口统一为 [*foundation/v2/apperr.Error] 强类型错误：
+//
+//   - 生命周期钩子：[Plugin.Start]、[Plugin.Stop]、[RunnablePlugin.Run] 与 [Quiescer.Quiesce]
+//     的失败结果均为强类型错误，成功路径返回真正的 nil 指针；
+//   - 内核出口：[App.Run]、[App.Shutdown]、[App.RegisterTool] 等注册方法、
+//     [Activator.Activate] 与 [RunHandle.Wait] 同样返回强类型错误；
+//   - 结果账本：[RunResult] 的各阶段错误字段与 [StuckInstance.Err] 均为强类型错误。
+//
+// 错误语义保持稳定：
+//
+//   - 原有哨兵（如 [ErrAlreadyRun]、[ErrWorkerUnexpectedExit]、[ErrComponentSkipped]）
+//     继续作为错误链根因保留，调用方仍可用 errors.Is 精确判定；
+//   - 框架诊断对象 [HookPanicError] 与 [StopIncompleteError] 继续可经 errors.As 命中，
+//     且关机残留清单中每个成员的结构化错误逐个可达；
+//   - 取消与超时经 [foundation/v2/control] 归一为控制类错误码，
+//     原生 context 哨兵同时保留为根因。
+//
 // # 看门狗与错误隔离
 //
 // 内核看门狗协程在应用运行期间持续监督常驻 Worker：

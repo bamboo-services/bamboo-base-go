@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -15,8 +16,8 @@ type dummyNilPtr struct{}
 // 漏键插件
 type missingKeysPlugin struct{}
 
-func (p *missingKeysPlugin) Start(ctx context.Context) error { return nil }
-func (p *missingKeysPlugin) Stop(ctx context.Context) error  { return nil }
+func (p *missingKeysPlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *missingKeysPlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *missingKeysPlugin) Expose() map[ctxkey.Key]any {
 	return map[ctxkey.Key]any{}
 }
@@ -24,8 +25,8 @@ func (p *missingKeysPlugin) Expose() map[ctxkey.Key]any {
 // 多键插件
 type extraKeysPlugin struct{}
 
-func (p *extraKeysPlugin) Start(ctx context.Context) error { return nil }
-func (p *extraKeysPlugin) Stop(ctx context.Context) error  { return nil }
+func (p *extraKeysPlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *extraKeysPlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *extraKeysPlugin) Expose() map[ctxkey.Key]any {
 	return map[ctxkey.Key]any{
 		"k1": "val1",
@@ -36,8 +37,8 @@ func (p *extraKeysPlugin) Expose() map[ctxkey.Key]any {
 // typednil 插件
 type typedNilPlugin struct{}
 
-func (p *typedNilPlugin) Start(ctx context.Context) error { return nil }
-func (p *typedNilPlugin) Stop(ctx context.Context) error  { return nil }
+func (p *typedNilPlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *typedNilPlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *typedNilPlugin) Expose() map[ctxkey.Key]any {
 	var ptr *dummyNilPtr
 	return map[ctxkey.Key]any{
@@ -48,8 +49,8 @@ func (p *typedNilPlugin) Expose() map[ctxkey.Key]any {
 // panic 插件
 type panicExposePlugin struct{}
 
-func (p *panicExposePlugin) Start(ctx context.Context) error { return nil }
-func (p *panicExposePlugin) Stop(ctx context.Context) error  { return nil }
+func (p *panicExposePlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *panicExposePlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *panicExposePlugin) Expose() map[ctxkey.Key]any {
 	panic("expose explosive")
 }
@@ -60,8 +61,8 @@ type blockingExposePlugin struct {
 	release  chan struct{}
 }
 
-func (p *blockingExposePlugin) Start(ctx context.Context) error { return nil }
-func (p *blockingExposePlugin) Stop(ctx context.Context) error  { return nil }
+func (p *blockingExposePlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *blockingExposePlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *blockingExposePlugin) Expose() map[ctxkey.Key]any {
 	close(p.inExpose)
 	<-p.release
@@ -73,8 +74,8 @@ func (p *blockingExposePlugin) Expose() map[ctxkey.Key]any {
 // 正常成功插件
 type successPlugin struct{}
 
-func (p *successPlugin) Start(ctx context.Context) error { return nil }
-func (p *successPlugin) Stop(ctx context.Context) error  { return nil }
+func (p *successPlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (p *successPlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (p *successPlugin) Expose() map[ctxkey.Key]any {
 	return map[ctxkey.Key]any{
 		"res1": "val1",
@@ -209,7 +210,7 @@ func TestExposeAtomic_UserCodeDoesNotHoldLock(t *testing.T) {
 	}
 	info := PluginInfo{Key: "p_block", Provides: []ctxkey.Key{"res_block"}}
 
-	var pubErr error
+	var pubErr *apperr.Error
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

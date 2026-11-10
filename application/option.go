@@ -1,10 +1,10 @@
 package application
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/typed"
 )
@@ -99,7 +99,7 @@ func WithShutdownTimeout(v time.Duration) Option {
 }
 
 // resolveConfig 解析配置，优先级：显式 Option > 环境变量 > 默认值。
-func resolveConfig(opts ...Option) (Config, error) {
+func resolveConfig(opts ...Option) (Config, *apperr.Error) {
 	var collector optionCollector
 	for _, opt := range opts {
 		if opt != nil {
@@ -114,7 +114,7 @@ func resolveConfig(opts ...Option) (Config, error) {
 		defaultStartTimeout,
 	)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid StartTimeout: %w", err)
+		return Config{}, normalizeErr(apperr.FrameworkInternalError, "StartTimeout 配置非法", err)
 	}
 
 	grace, err := resolveField(
@@ -124,7 +124,7 @@ func resolveConfig(opts ...Option) (Config, error) {
 		defaultGraceTimeout,
 	)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid GraceTimeout: %w", err)
+		return Config{}, normalizeErr(apperr.FrameworkInternalError, "GraceTimeout 配置非法", err)
 	}
 
 	cleanup, err := resolveField(
@@ -134,7 +134,7 @@ func resolveConfig(opts ...Option) (Config, error) {
 		defaultCleanupTimeout,
 	)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid CleanupTimeout: %w", err)
+		return Config{}, normalizeErr(apperr.FrameworkInternalError, "CleanupTimeout 配置非法", err)
 	}
 
 	shutdown, err := resolveField(
@@ -144,11 +144,11 @@ func resolveConfig(opts ...Option) (Config, error) {
 		defaultShutdownTimeout,
 	)
 	if err != nil {
-		return Config{}, fmt.Errorf("invalid ShutdownTimeout: %w", err)
+		return Config{}, normalizeErr(apperr.FrameworkInternalError, "ShutdownTimeout 配置非法", err)
 	}
 
 	if grace >= shutdown {
-		return Config{}, fmt.Errorf("invalid timeout budgets: GraceTimeout (%v) must be strictly less than ShutdownTimeout (%v)", grace, shutdown)
+		return Config{}, apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("超时预算冲突: GraceTimeout (%v) 必须严格小于 ShutdownTimeout (%v)", grace, shutdown)))
 	}
 
 	return Config{
@@ -159,10 +159,10 @@ func resolveConfig(opts ...Option) (Config, error) {
 	}, nil
 }
 
-func resolveField(explicit bool, explicitVal time.Duration, envKey env.Key, defVal time.Duration) (time.Duration, error) {
+func resolveField(explicit bool, explicitVal time.Duration, envKey env.Key, defVal time.Duration) (time.Duration, *apperr.Error) {
 	if explicit {
 		if explicitVal <= 0 {
-			return 0, fmt.Errorf("duration must be positive, got %v", explicitVal)
+			return 0, apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("时长必须为正数, got %v", explicitVal)))
 		}
 		return explicitVal, nil
 	}
@@ -171,15 +171,15 @@ func resolveField(explicit bool, explicitVal time.Duration, envKey env.Key, defV
 	if ok {
 		raw := string(strVal)
 		if raw == "" {
-			return 0, errors.New("environment variable is set but empty")
+			return 0, apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("环境变量 %s 已设置但为空", envKey)))
 		}
 		// typed.String.Duration 不接受裸数字，纯数字没有单位时会失败
 		d, err := typed.String(raw).Duration()
 		if err != nil {
-			return 0, fmt.Errorf("failed to parse environment variable %s: %w", envKey, err)
+			return 0, normalizeErr(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("解析环境变量 %s 失败", envKey)), err)
 		}
 		if d <= 0 {
-			return 0, fmt.Errorf("parsed duration from %s must be positive, got %v", envKey, d)
+			return 0, apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("从 %s 解析出的时长必须为正数, got %v", envKey, d)))
 		}
 		return d, nil
 	}

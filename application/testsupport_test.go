@@ -4,8 +4,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
+
+// ctxErrToAppErr 将上下文取消或超时原因转换为统一错误，供测试替身复用。
+//
+// 测试替身必须遵守新的强类型契约，因此不能直接返回原生 context 错误；
+// 该助手保留原始哨兵作为根因，取消与超时仍可经 errors.Is 精确判定。
+func ctxErrToAppErr(err error) *apperr.Error {
+	if err == nil {
+		return nil
+	}
+	return normalizeErr(apperr.FrameworkInternalError, "上下文已结束", err)
+}
 
 // waitForStaticStopDone 阻塞等待指定静态实例 Stop 收尾完成信号。
 //

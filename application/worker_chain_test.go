@@ -11,7 +11,7 @@ import (
 
 // errWorkerBoom 是 Worker.Run 返回的自定义哨兵错误，
 // 用于验证看门狗链路在包装后仍保留原始错误类型与 cause。
-var errWorkerBoom = errors.New("worker boom")
+var errWorkerBoom = apperr.New(apperr.FrameworkInternalError, "worker boom")
 
 // 提取链中最外层的统一错误对象。
 func extractAppErr(t *testing.T, err error) *apperr.Error {
@@ -31,7 +31,7 @@ func TestApp_WorkerUnexpectedExit_PreservesErrorChain(t *testing.T) {
 
 	if err := app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				return errWorkerBoom
 			},
 		}
@@ -66,7 +66,7 @@ func TestApp_WorkerUnexpectedExit_NilErrorStillFails(t *testing.T) {
 
 	if err := app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				return nil
 			},
 		}
@@ -96,7 +96,7 @@ func TestApp_WorkerUnexpectedExit_PreservesNestedAppErr(t *testing.T) {
 
 	if err := app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				return inner
 			},
 		}

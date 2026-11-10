@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -20,7 +21,7 @@ func (h *fakeRunHandle) InstanceID() string {
 	return h.id
 }
 
-func (h *fakeRunHandle) Wait(_ context.Context) (application.RunResult, error) {
+func (h *fakeRunHandle) Wait(_ context.Context) (application.RunResult, *apperr.Error) {
 	return application.RunResult{
 		InstanceID: h.id,
 		Outcome:    application.OutcomeSuccess,
@@ -32,7 +33,7 @@ type fakeActivator struct {
 	calls        []time.Time
 	targets      []ctxkey.Key
 	notifyCh     chan time.Time
-	activateFunc func(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, error)
+	activateFunc func(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, *apperr.Error)
 }
 
 func newFakeActivator(buffer int) *fakeActivator {
@@ -41,7 +42,7 @@ func newFakeActivator(buffer int) *fakeActivator {
 	}
 }
 
-func (f *fakeActivator) Activate(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, error) {
+func (f *fakeActivator) Activate(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, *apperr.Error) {
 	if f.activateFunc != nil {
 		return f.activateFunc(ctx, compKey, opts...)
 	}
@@ -107,7 +108,7 @@ func TestPlugin_IntervalJobTriggerAndCleanStop(t *testing.T) {
 	act := newFakeActivator(10)
 	var activeCount int64
 
-	act.activateFunc = func(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, error) {
+	act.activateFunc = func(ctx context.Context, compKey ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, *apperr.Error) {
 		atomic.AddInt64(&activeCount, 1)
 		defer atomic.AddInt64(&activeCount, -1)
 
@@ -139,7 +140,7 @@ func TestPlugin_IntervalJobTriggerAndCleanStop(t *testing.T) {
 	}
 
 	runCtx, cancelRun := context.WithCancel(context.Background())
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- p.Run(runCtx)
 	}()

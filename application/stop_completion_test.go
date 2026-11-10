@@ -8,21 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 type blockingMockPlugin struct {
 	stopCalls atomic.Int32
 	blockCh   chan struct{}
-	stopErr   error
+	stopErr   *apperr.Error
 	panicVal  any
 }
 
-func (m *blockingMockPlugin) Start(ctx context.Context) error {
+func (m *blockingMockPlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (m *blockingMockPlugin) Stop(ctx context.Context) error {
+func (m *blockingMockPlugin) Stop(ctx context.Context) *apperr.Error {
 	m.stopCalls.Add(1)
 	if m.blockCh != nil {
 		<-m.blockCh
@@ -49,7 +50,7 @@ func TestStopCompletion_ConcurrentWaitAndSingleExecution(t *testing.T) {
 
 	mock := &blockingMockPlugin{
 		blockCh: blockCh,
-		stopErr: errors.New("underlying stop error"),
+		stopErr: apperr.New(apperr.FrameworkInternalError, "underlying stop error"),
 	}
 
 	key := ctxkey.Key("test.plugin.concurrent")

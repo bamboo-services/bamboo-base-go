@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	ctxkey "github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -15,17 +16,17 @@ type witnessWorker struct {
 	ready chan struct{}
 }
 
-func (w *witnessWorker) Start(ctx context.Context) error {
+func (w *witnessWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *witnessWorker) Run(ctx context.Context) error {
+func (w *witnessWorker) Run(ctx context.Context) *apperr.Error {
 	close(w.ready)
 	<-ctx.Done()
 	return nil
 }
 
-func (w *witnessWorker) Stop(ctx context.Context) error {
+func (w *witnessWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -34,11 +35,11 @@ type blockingStopPlugin struct {
 	stopUnblock chan struct{}
 }
 
-func (p *blockingStopPlugin) Start(ctx context.Context) error {
+func (p *blockingStopPlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (p *blockingStopPlugin) Stop(ctx context.Context) error {
+func (p *blockingStopPlugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	<-p.stopUnblock
 	return nil
@@ -50,12 +51,12 @@ type dummyProviderPlugin struct {
 	stopCalled  atomic.Int32
 }
 
-func (p *dummyProviderPlugin) Start(ctx context.Context) error {
+func (p *dummyProviderPlugin) Start(ctx context.Context) *apperr.Error {
 	close(p.started)
 	return nil
 }
 
-func (p *dummyProviderPlugin) Stop(ctx context.Context) error {
+func (p *dummyProviderPlugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	return nil
 }
@@ -121,7 +122,7 @@ func TestApp_StopBudget_TimeoutRetainsDepsAndUnblocks(t *testing.T) {
 		t.Fatalf("failed to register witness worker: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()

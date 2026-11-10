@@ -45,7 +45,7 @@ type readyWeb struct {
 	startedAddr chan<- string
 }
 
-func (w *readyWeb) Start(ctx context.Context) error {
+func (w *readyWeb) Start(ctx context.Context) *apperr.Error {
 	if err := w.Plugin.Start(ctx); err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func TestHTTPDBCacheLifecycle_EndToEnd(t *testing.T) {
 	}
 
 	appDone := make(chan struct{})
-	var appRunErr error
+	var appRunErr *apperr.Error
 	var runOnce sync.Once
 	shutdownApp := func() {
 		runOnce.Do(func() {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	cron "github.com/bamboo-services/bamboo-base-go/plugins/cron/v2"
 )
@@ -16,7 +17,7 @@ import (
 type recordEvent struct {
 	Index   int
 	Handle  application.RunHandle
-	Err     error
+	Err     *apperr.Error
 	Payload any
 }
 
@@ -27,7 +28,7 @@ type recordingActivator struct {
 	ch    chan recordEvent
 }
 
-func (r *recordingActivator) Activate(ctx context.Context, key ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, error) {
+func (r *recordingActivator) Activate(ctx context.Context, key ctxkey.Key, opts ...application.ActivateOption) (application.RunHandle, *apperr.Error) {
 	h, err := r.inner.Activate(ctx, key, opts...)
 	r.mu.Lock()
 	rec := recordEvent{
@@ -52,9 +53,9 @@ type barrierComponent struct {
 	stopRelease chan struct{}
 }
 
-func (c *barrierComponent) Start(context.Context) error { return nil }
+func (c *barrierComponent) Start(context.Context) *apperr.Error { return nil }
 
-func (c *barrierComponent) Run(ctx context.Context) error {
+func (c *barrierComponent) Run(ctx context.Context) *apperr.Error {
 	select {
 	case c.runEntered <- struct{}{}:
 	default:
@@ -67,7 +68,7 @@ func (c *barrierComponent) Run(ctx context.Context) error {
 	}
 }
 
-func (c *barrierComponent) Stop(context.Context) error {
+func (c *barrierComponent) Stop(context.Context) *apperr.Error {
 	select {
 	case c.stopEntered <- struct{}{}:
 	default:
@@ -87,7 +88,7 @@ func TestCron_RealApp_QueueFIFOAndFullBehavior(t *testing.T) {
 	)
 
 	runDone := make(chan struct{})
-	var runErr error
+	var runErr *apperr.Error
 
 	runEntered1 := make(chan struct{}, 1)
 	runRelease1 := make(chan struct{})
@@ -278,7 +279,7 @@ func TestCron_RealApp_QueueFIFOAndFullBehavior(t *testing.T) {
 	}
 
 	// 5. 启动 App.Shutdown 关闸
-	shutdownErrCh := make(chan error, 1)
+	shutdownErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		shutdownErrCh <- app.Shutdown()
 	}()

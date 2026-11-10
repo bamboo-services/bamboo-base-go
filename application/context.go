@@ -401,18 +401,6 @@ func ForceContext(ctx context.Context) context.Context {
 	return context.Background()
 }
 
-func newAppErr(code *apperr.ErrorCode, msg string, cause error) *apperr.Error {
-	var errCode apperr.ErrorCode
-	if code != nil {
-		errCode = *code
-	}
-	return &apperr.Error{
-		Code:         errCode,
-		ErrorMessage: apperr.ErrMessage(msg),
-		Err:          cause,
-	}
-}
-
 // Get 从上下文 ctx 挂载的共享容器中按 key 提取类型化组件实例。
 //
 // 该函数是 Bamboo Base Go v2 框架中提取依赖组件的标准且唯一方式，
@@ -440,7 +428,7 @@ func newAppErr(code *apperr.ErrorCode, msg string, cause error) *apperr.Error {
 func Get[T any](ctx context.Context, key ctxkey.Key) (T, *apperr.Error) {
 	var zero T
 	if ctx == nil {
-		return zero, newAppErr(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
+		return zero, apperr.New(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
 	}
 
 	// 1. 检查启动期受限视图
@@ -450,12 +438,12 @@ func Get[T any](ctx context.Context, key ctxkey.Key) (T, *apperr.Error) {
 			entry, err := view.getEntry(key)
 			if err != nil {
 				if errors.Is(err, ErrUndeclaredDependency) {
-					return zero, newAppErr(apperr.FrameworkDependencyUndeclared, fmt.Sprintf("插件 [%s] 未在 Requires 中声明依赖 [%s]，禁止在 Start 阶段越权读取", view.ownerKey, key), ErrUndeclaredDependency)
+					return zero, apperr.New(apperr.FrameworkDependencyUndeclared, apperr.ErrMessage(fmt.Sprintf("插件 [%s] 未在 Requires 中声明依赖 [%s]，禁止在 Start 阶段越权读取", view.ownerKey, key)), ErrUndeclaredDependency)
 				}
 				if errors.Is(err, ErrComponentNotFound) {
-					return zero, newAppErr(apperr.FrameworkComponentNotFound, fmt.Sprintf("组件 [%s] 未找到", key), ErrComponentNotFound)
+					return zero, apperr.New(apperr.FrameworkComponentNotFound, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 未找到", key)), ErrComponentNotFound)
 				}
-				return zero, newAppErr(apperr.FrameworkInternalError, err.Error(), err)
+				return zero, apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(err.Error()), err)
 			}
 			return castEntry[T](key, entry)
 		}
@@ -464,11 +452,11 @@ func Get[T any](ctx context.Context, key ctxkey.Key) (T, *apperr.Error) {
 	// 2. 检查共享容器
 	containerVal := ctx.Value(containerCtxKey)
 	if containerVal == nil {
-		return zero, newAppErr(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
+		return zero, apperr.New(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
 	}
 	container, ok := containerVal.(*sharedContainer)
 	if !ok || container == nil {
-		return zero, newAppErr(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
+		return zero, apperr.New(apperr.FrameworkContainerNotMounted, "上下文未挂载应用 SharedContainer，请检查是否漏调 BridgeRequest/Detach", ErrContainerNotMounted)
 	}
 
 	entry, ok := container.getEntry(key)
@@ -482,11 +470,11 @@ func Get[T any](ctx context.Context, key ctxkey.Key) (T, *apperr.Error) {
 			typedVal, ok := val.(T)
 			if !ok {
 				var targetZero T
-				return zero, newAppErr(apperr.FrameworkComponentTypeMismatch, fmt.Sprintf("组件 [%s] 实际类型为 %T，无法断言为目标类型 %T", key, val, targetZero), ErrComponentTypeMismatch)
+				return zero, apperr.New(apperr.FrameworkComponentTypeMismatch, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 实际类型为 %T，无法断言为目标类型 %T", key, val, targetZero)), ErrComponentTypeMismatch)
 			}
 			return typedVal, nil
 		}
-		return zero, newAppErr(apperr.FrameworkComponentNotFound, fmt.Sprintf("组件 [%s] 未找到", key), ErrComponentNotFound)
+		return zero, apperr.New(apperr.FrameworkComponentNotFound, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 未找到", key)), ErrComponentNotFound)
 	}
 
 	return castEntry[T](key, entry)
@@ -497,19 +485,19 @@ func castEntry[T any](key ctxkey.Key, entry *containerEntry) (T, *apperr.Error) 
 	state := EntryState(atomic.LoadUint32(&entry.state))
 	switch state {
 	case EntryStopped:
-		return zero, newAppErr(apperr.FrameworkComponentStopped, fmt.Sprintf("组件 [%s] 已停止卸载，禁止继续访问", key), ErrComponentStopped)
+		return zero, apperr.New(apperr.FrameworkComponentStopped, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 已停止卸载，禁止继续访问", key)), ErrComponentStopped)
 	case EntryUnavailable:
-		return zero, newAppErr(apperr.FrameworkComponentUnavailable, fmt.Sprintf("组件 [%s] 提供者故障隔离中，禁止访问", key), ErrComponentUnavailable)
+		return zero, apperr.New(apperr.FrameworkComponentUnavailable, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 提供者故障隔离中，禁止访问", key)), ErrComponentUnavailable)
 	case EntryReady:
 		// 正常读取
 	default:
-		return zero, newAppErr(apperr.FrameworkComponentInvalidState, fmt.Sprintf("组件 [%s] 状态无效", key), ErrComponentUnavailable)
+		return zero, apperr.New(apperr.FrameworkComponentInvalidState, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 状态无效", key)), ErrComponentUnavailable)
 	}
 
 	if entry.value == nil {
 		var targetZero T
 		if reflect.ValueOf(targetZero).IsValid() && reflect.TypeOf(targetZero).Kind() != reflect.Pointer && reflect.TypeOf(targetZero).Kind() != reflect.Interface {
-			return zero, newAppErr(apperr.FrameworkComponentTypeMismatch, fmt.Sprintf("组件 [%s] 实际类型为 nil，无法断言为目标类型 %T", key, targetZero), ErrComponentTypeMismatch)
+			return zero, apperr.New(apperr.FrameworkComponentTypeMismatch, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 实际类型为 nil，无法断言为目标类型 %T", key, targetZero)), ErrComponentTypeMismatch)
 		}
 		return zero, nil
 	}
@@ -517,7 +505,7 @@ func castEntry[T any](key ctxkey.Key, entry *containerEntry) (T, *apperr.Error) 
 	typedVal, ok := entry.value.(T)
 	if !ok {
 		var targetZero T
-		return zero, newAppErr(apperr.FrameworkComponentTypeMismatch, fmt.Sprintf("组件 [%s] 实际类型为 %T，无法断言为目标类型 %T", key, entry.value, targetZero), ErrComponentTypeMismatch)
+		return zero, apperr.New(apperr.FrameworkComponentTypeMismatch, apperr.ErrMessage(fmt.Sprintf("组件 [%s] 实际类型为 %T，无法断言为目标类型 %T", key, entry.value, targetZero)), ErrComponentTypeMismatch)
 	}
 	return typedVal, nil
 }

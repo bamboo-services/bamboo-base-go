@@ -181,7 +181,7 @@ func TestPlugin_BasicLifecycleAndUnary(t *testing.T) {
 		t.Fatalf("Addr() 返回了未解析的地址: %s", addr)
 	}
 
-	runDone := make(chan error, 1)
+	runDone := make(chan *apperr.Error, 1)
 	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
 	defer cancelLifetime()
 
@@ -433,11 +433,11 @@ func TestPlugin_GracefulStopAndForceCancel(t *testing.T) {
 	defer cancel()
 
 	stopStart := time.Now()
-	err := plugin.Stop(stopCtx)
+	stopErr := plugin.Stop(stopCtx)
 	stopCost := time.Since(stopStart)
 
-	if err == nil && stopCost < 100*time.Millisecond {
-		t.Logf("Stop 正常返回: %v", err)
+	if stopErr == nil && stopCost < 100*time.Millisecond {
+		t.Logf("Stop 正常返回: %v", stopErr)
 	}
 
 	// 验证 Handler 真正被 cancel 打退并完成计数退还

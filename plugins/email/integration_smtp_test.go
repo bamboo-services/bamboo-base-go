@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	email "github.com/bamboo-services/bamboo-base-go/plugins/email/v2"
 )
@@ -48,18 +49,18 @@ type emailWorker struct {
 	ctxChan chan context.Context
 }
 
-func (w *emailWorker) Start(ctx context.Context) error {
+func (w *emailWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *emailWorker) Run(ctx context.Context) error {
+func (w *emailWorker) Run(ctx context.Context) *apperr.Error {
 	w.ctxChan <- ctx
 	close(w.ready)
 	<-ctx.Done()
 	return nil
 }
 
-func (w *emailWorker) Stop(ctx context.Context) error {
+func (w *emailWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -128,7 +129,7 @@ func TestIntegration_SMTPSendAndLifecycle(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -308,7 +309,7 @@ func TestIntegration_StopDrainsInflightPhysicalConn(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()

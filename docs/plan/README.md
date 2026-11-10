@@ -10,7 +10,7 @@
 
 0002已完成规范/计划起草、方向裁决、[P0技术台账](../engineering/research/0005-foundation-strong-error-p0-inventory.md)与[引用/实现者](../engineering/research/0006-foundation-strong-error-p0-callers.md)。2026-11-09按用户授权完成[P1错误核心与准出记录](./0002-foundation-strong-error-migration.md#p1准出记录2026-11-09)：19项追加码、16种原生RPC纯分类、nil安全原语和持久编译/协议测试，已由Leader复核。已知消费者仅仓内C01–C06，无仓外V2消费者；计划仍为in-progress，P2–P7及发布不因P1通过而获得授权。
 
-P1已提交为 `7c4f7fe`，未推送。2026-11-09按用户授权完成P2实现：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移与[准出记录](./0002-foundation-strong-error-migration.md#p2准出记录2026-11-09待用户审阅)（词表84→91项，全量门禁通过）；开工依据见[P2开工准备包](./0002-foundation-strong-error-migration.md#p2开工准备包2026-11-09)。P2改动尚未提交，P3–P7及发布仍待另行授权。
+P1已提交为 `7c4f7fe`、P2已提交为 `fad7597`（均未推送）。2026-11-09按用户授权完成P2实现：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移与[准出记录](./0002-foundation-strong-error-migration.md#p2准出记录2026-11-09待用户审阅)（词表84→91项，全量门禁通过）；开工依据见[P2开工准备包](./0002-foundation-strong-error-migration.md#p2开工准备包2026-11-09)。2026-11-10用户批准P3开工并已完成：application内核契约/账本与全部插件实现者、examples及test消费者[一次原子切换](./0002-foundation-strong-error-migration.md#p3准出记录2026-11-10待用户审阅)为*apperr.Error（零新增码，全量门禁通过），改动未提交；cron/async专属码列为P5准备项。P4–P7实现及发布仍待另行授权。
 
 ## 已归档计划
 

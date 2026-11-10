@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 )
 
@@ -90,24 +91,24 @@ func TestSnapshot_RunConsumedRepeatAndClosed(t *testing.T) {
 func TestSnapshot_ErrorLedgerConcurrent(t *testing.T) {
 	app := New()
 
-	errA := errors.New("error A")
-	errB := errors.New("error B")
+	errA := apperr.New(apperr.FrameworkInternalError, "错误 A")
+	errB := apperr.New(apperr.FrameworkInternalError, "错误 B")
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(2)
 		go func(idx int) {
 			defer wg.Done()
-			app.recordRunErr(fmt.Errorf("%w: %d", errA, idx))
+			app.recordRunErr(apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("错误 A: %d", idx)), errA))
 		}(i)
 		go func(idx int) {
 			defer wg.Done()
-			app.recordRunErr(fmt.Errorf("%w: %d", errB, idx))
+			app.recordRunErr(apperr.New(apperr.FrameworkInternalError, apperr.ErrMessage(fmt.Sprintf("错误 B: %d", idx)), errB))
 		}(i)
 	}
 	wg.Wait()
 
-	joined := app.getRunErr()
+	joined := aggregateErrs(app.getRunErrs()...)
 	if !errors.Is(joined, errA) || !errors.Is(joined, errB) {
 		t.Fatalf("expected joined error to contain errA and errB, got %v", joined)
 	}

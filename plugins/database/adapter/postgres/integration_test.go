@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	postgres "github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/postgres/v2"
 	rootdatabase "github.com/bamboo-services/bamboo-base-go/plugins/database/v2"
@@ -20,11 +21,11 @@ type witnessWorker struct {
 	workCtx chan context.Context
 }
 
-func (w *witnessWorker) Start(ctx context.Context) error {
+func (w *witnessWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *witnessWorker) Run(ctx context.Context) error {
+func (w *witnessWorker) Run(ctx context.Context) *apperr.Error {
 	select {
 	case w.workCtx <- ctx:
 	default:
@@ -34,7 +35,7 @@ func (w *witnessWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (w *witnessWorker) Stop(ctx context.Context) error {
+func (w *witnessWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -79,7 +80,7 @@ func TestIntegration_PostgresReal(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()

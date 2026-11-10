@@ -3,12 +3,12 @@ package async
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 	"github.com/panjf2000/ants/v2"
@@ -161,7 +161,7 @@ type Plugin struct {
 	zeroMu   sync.Mutex
 	stopOnce sync.Once
 	stopDone chan struct{}
-	stopErr  error
+	stopErr  *apperr.Error
 }
 
 // New 构造 Async Tool 插件定义与工厂，主键为 [PluginKey]，Provides 包含 [PoolKey]。
@@ -199,7 +199,10 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 
 // Start 在生命周期启动阶段创建私有底层的并发协程池。
 // 若已启动则幂等返回 nil；若容量参数非法返回 [ErrInvalidPoolCapacity]。
-func (p *Plugin) Start(_ context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 容量非法哨兵与 ants 原生错误继续作为根因保留，调用方仍可通过 errors.Is 精确判定。
+func (p *Plugin) Start(_ context.Context) *apperr.Error {
 	p.poolMu.Lock()
 	defer p.poolMu.Unlock()
 
@@ -208,7 +211,7 @@ func (p *Plugin) Start(_ context.Context) error {
 	}
 
 	if p.cfg.capacity <= 0 {
-		return ErrInvalidPoolCapacity
+		return lifecycleErr("async: 协程池容量非法", ErrInvalidPoolCapacity)
 	}
 
 	antsOpts := []ants.Option{
@@ -223,7 +226,7 @@ func (p *Plugin) Start(_ context.Context) error {
 
 	pool, err := ants.NewPool(p.cfg.capacity, antsOpts...)
 	if err != nil {
-		return fmt.Errorf("async: 创建协程池失败: %w", err)
+		return lifecycleErr("async: 创建底层协程池失败", err)
 	}
 
 	p.pool = pool
@@ -239,7 +242,10 @@ func (p *Plugin) Expose() map[ctxkey.Key]any {
 
 // Stop 关闭准入门禁，阻塞等待在途活跃任务真实归零后释放底层协程池。
 // 即使传入的 ctx 超时，本方法也绝不虚假提前返回；多次重复调用共享相同退出结果与等待同一完成。
-func (p *Plugin) Stop(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 底层协程池释放失败以兜底错误码归一，ants 原生错误继续作为根因保留。
+func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 	if p == nil {
 		return nil
 	}
@@ -253,7 +259,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return p.stopErr
 }
 
-func (p *Plugin) doStop(_ context.Context) error {
+func (p *Plugin) doStop(_ context.Context) *apperr.Error {
 	// 1. 关闭准入，后续所有 Submit 立即失败
 	p.admitMu.Lock()
 	p.closed = true
@@ -272,7 +278,7 @@ func (p *Plugin) doStop(_ context.Context) error {
 	defer p.poolMu.Unlock()
 	if p.pool != nil {
 		if err := p.pool.ReleaseContext(context.Background()); err != nil {
-			return err
+			return lifecycleErr("async: 释放底层协程池失败", err)
 		}
 		p.pool = nil
 	}

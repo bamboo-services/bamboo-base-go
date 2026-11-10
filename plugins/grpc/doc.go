@@ -62,6 +62,18 @@
 //   - [context.Canceled] 与 [context.DeadlineExceeded] 归一化为标准状态码，
 //     避免下游包装错误扩散。
 //
+// # 生命周期错误契约
+//
+// [Plugin.Start]、[Plugin.Run]、[Plugin.Quiesce] 与 [Plugin.Stop] 统一返回
+// [*apperr.Error]，成功路径返回真正的 nil 指针，失败路径按下表归一：
+//
+//   - 重复启动：[grpcresult.InvalidState]，根因保留 [ErrServerAlreadyStarted]；
+//   - 未启动即调用 [Plugin.Run]：[grpcresult.ServiceUnavailable]，根因保留 [ErrNotStarted]；
+//   - 端口监听失败、服务循环异常退出、优雅停机与监听器关闭失败：
+//     [grpcresult.InternalError]，底层错误继续作为根因保留；
+//   - 启动或停机上下文取消与超时：经 [foundation/v2/control] 归一为控制类错误码，
+//     原生 context 哨兵继续作为根因保留。
+//
 // # 并发安全与资源边界
 //
 // [Plugin] 实例在配置完成并启动后，所有网络请求并发由 gRPC 原生协程池调度，

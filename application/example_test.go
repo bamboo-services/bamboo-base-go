@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -13,11 +14,11 @@ type sampleService struct {
 	name string
 }
 
-func (s *sampleService) Start(ctx context.Context) error {
+func (s *sampleService) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (s *sampleService) Stop(ctx context.Context) error {
+func (s *sampleService) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -25,15 +26,15 @@ type sampleWorker struct {
 	app *application.App
 }
 
-func (w *sampleWorker) Start(ctx context.Context) error {
+func (w *sampleWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *sampleWorker) Run(ctx context.Context) error {
+func (w *sampleWorker) Run(ctx context.Context) *apperr.Error {
 	// 从运行期上下文中安全提取依赖的 Tool 共享服务
 	svc, err := application.Get[*sampleService](ctx, ctxkey.Key("sample_service"))
 	if err != nil {
-		return err.Err
+		return err
 	}
 	fmt.Println("Loaded Service:", svc.name)
 
@@ -52,7 +53,7 @@ func (w *sampleWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (w *sampleWorker) Stop(ctx context.Context) error {
+func (w *sampleWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 

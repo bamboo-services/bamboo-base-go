@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/constant"
@@ -297,11 +298,11 @@ type toolResourcePlugin struct {
 	val    string
 }
 
-func (t *toolResourcePlugin) Start(ctx context.Context) error {
+func (t *toolResourcePlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (t *toolResourcePlugin) Stop(ctx context.Context) error {
+func (t *toolResourcePlugin) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -315,17 +316,17 @@ type witnessPlugin struct {
 	readyCh chan struct{}
 }
 
-func (w *witnessPlugin) Start(ctx context.Context) error {
+func (w *witnessPlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *witnessPlugin) Run(ctx context.Context) error {
+func (w *witnessPlugin) Run(ctx context.Context) *apperr.Error {
 	close(w.readyCh)
 	<-ctx.Done()
 	return nil
 }
 
-func (w *witnessPlugin) Stop(ctx context.Context) error {
+func (w *witnessPlugin) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -333,11 +334,11 @@ type dummyComponent struct {
 	actCh chan application.InstanceMeta
 }
 
-func (d *dummyComponent) Start(ctx context.Context) error {
+func (d *dummyComponent) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (d *dummyComponent) Run(ctx context.Context) error {
+func (d *dummyComponent) Run(ctx context.Context) *apperr.Error {
 	meta, _ := application.InstanceMetaFrom(ctx)
 	select {
 	case d.actCh <- meta:
@@ -346,7 +347,7 @@ func (d *dummyComponent) Run(ctx context.Context) error {
 	return nil
 }
 
-func (d *dummyComponent) Stop(ctx context.Context) error {
+func (d *dummyComponent) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -824,7 +825,7 @@ func TestPlugin_AppContext_StartACLUndeclared(t *testing.T) {
 
 	_ = app.RegisterWorker(grpcInfo, grpcFac)
 
-	var runErr error
+	var runErr *apperr.Error
 	runDone := make(chan struct{})
 
 	t.Cleanup(func() {

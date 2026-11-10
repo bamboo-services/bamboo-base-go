@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -15,17 +16,17 @@ type testWorker struct {
 	stopCh    chan struct{}
 }
 
-func (w *testWorker) Start(_ context.Context) error {
+func (w *testWorker) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testWorker) Run(lifetimeCtx context.Context) error {
+func (w *testWorker) Run(lifetimeCtx context.Context) *apperr.Error {
 	w.startedCh <- lifetimeCtx
 	<-w.stopCh
 	return nil
 }
 
-func (w *testWorker) Stop(_ context.Context) error {
+func (w *testWorker) Stop(_ context.Context) *apperr.Error {
 	close(w.stopCh)
 	return nil
 }
@@ -53,7 +54,7 @@ func setupTestApp(t *testing.T, asyncOpts ...Option) (*application.App, context.
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	appRunErr := make(chan error, 1)
+	appRunErr := make(chan *apperr.Error, 1)
 	go func() {
 		appRunErr <- app.Run()
 	}()
@@ -348,7 +349,7 @@ func TestPlugin_RejectDuringStoppingAndClosed(t *testing.T) {
 	}
 	<-started
 
-	shutdownDone := make(chan error, 1)
+	shutdownDone := make(chan *apperr.Error, 1)
 	go func() {
 		shutdownDone <- app.Shutdown()
 	}()
@@ -430,7 +431,7 @@ func TestPlugin_IgnoreCancelTaskMakesStopWait(t *testing.T) {
 	}
 	<-started
 
-	stopReturned := make(chan error, 1)
+	stopReturned := make(chan *apperr.Error, 1)
 	go func() {
 		stopReturned <- p.(*Plugin).Stop(context.Background())
 	}()

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 	"github.com/go-co-op/gocron/v2"
@@ -24,6 +25,9 @@ var (
 
 	ErrInvalidJobTarget   = errors.New("cron: 任务目标 Component Key 无效") // 任务目标 Component Key 为空或非法。
 	ErrInvalidJobSchedule = errors.New("cron: 任务调度表达式或间隔非法")          // 任务调度表达式语法错误或周期时间间隔非法（如小于等于 0）。
+
+	// errSchedulerNotReady 表示 Run 阶段调度器尚未完成 Start 初始化。
+	errSchedulerNotReady = errors.New("cron: 调度器尚未 Start 或 Start 失败")
 )
 
 type jobKind uint8
@@ -140,10 +144,10 @@ type Plugin struct {
 
 	scheduler gocron.Scheduler
 	startOnce sync.Once
-	startErr  error
+	startErr  *apperr.Error
 
 	stopOnce sync.Once
-	stopErr  error
+	stopErr  *apperr.Error
 	doneChan chan struct{}
 
 	namedLog *logging.LogNamedLogger
@@ -195,16 +199,20 @@ func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlu
 // Start 校验表达式语法、检查激活器并构建底层调度器。
 // 若未注入 [application.Activator] 返回 [ErrNoActivator]；若表达式或目标 Key 非法返回相应错误。
 // 本方法在生命周期中保证仅执行一次，多次调用幂等返回相同结果。
-func (p *Plugin) Start(_ context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 哨兵错误（[ErrNoActivator]、[ErrInvalidJobTarget]、[ErrInvalidJobSchedule]）继续作为根因保留，
+// 调用方仍可通过 errors.Is 精确判定。
+func (p *Plugin) Start(_ context.Context) *apperr.Error {
 	p.startOnce.Do(func() {
 		p.startErr = p.doStart()
 	})
 	return p.startErr
 }
 
-func (p *Plugin) doStart() error {
+func (p *Plugin) doStart() *apperr.Error {
 	if p.cfg.activator == nil {
-		return ErrNoActivator
+		return lifecycleErr("cron: 缺少组件激活器", ErrNoActivator)
 	}
 
 	var schedOpts []gocron.SchedulerOption
@@ -214,13 +222,13 @@ func (p *Plugin) doStart() error {
 
 	s, err := gocron.NewScheduler(schedOpts...)
 	if err != nil {
-		return fmt.Errorf("cron: 创建 gocron 调度器失败: %w", err)
+		return lifecycleErr("cron: 创建底层调度器失败", err)
 	}
 
 	for idx, j := range p.cfg.jobs {
 		if !j.targetKey.IsValid() {
 			_ = s.Shutdown()
-			return fmt.Errorf("%w: job[%d] key 为空或无效", ErrInvalidJobTarget, idx)
+			return lifecycleErr("cron: 任务目标 Key 非法", fmt.Errorf("%w: job[%d] key 为空或无效", ErrInvalidJobTarget, idx))
 		}
 
 		target := j.targetKey
@@ -232,7 +240,7 @@ func (p *Plugin) doStart() error {
 		case jobKindCron:
 			if j.spec == "" {
 				_ = s.Shutdown()
-				return fmt.Errorf("%w: job[%d] cron 表达式为空", ErrInvalidJobSchedule, idx)
+				return lifecycleErr("cron: 任务调度表达式非法", fmt.Errorf("%w: job[%d] cron 表达式为空", ErrInvalidJobSchedule, idx))
 			}
 			_, err = s.NewJob(
 				gocron.CronJob(j.spec, false), // 5 段标准 cron，不启用秒级
@@ -240,12 +248,12 @@ func (p *Plugin) doStart() error {
 			)
 			if err != nil {
 				_ = s.Shutdown()
-				return fmt.Errorf("%w: job[%d] 表达式 [%s] 无效: %v", ErrInvalidJobSchedule, idx, j.spec, err)
+				return lifecycleErr("cron: 任务调度表达式非法", fmt.Errorf("%w: job[%d] 表达式 [%s] 无效: %v", ErrInvalidJobSchedule, idx, j.spec, err))
 			}
 		case jobKindInterval:
 			if j.interval <= 0 {
 				_ = s.Shutdown()
-				return fmt.Errorf("%w: job[%d] 间隔必须大于 0", ErrInvalidJobSchedule, idx)
+				return lifecycleErr("cron: 任务周期非法", fmt.Errorf("%w: job[%d] 间隔必须大于 0", ErrInvalidJobSchedule, idx))
 			}
 			_, err = s.NewJob(
 				gocron.DurationJob(j.interval),
@@ -253,11 +261,11 @@ func (p *Plugin) doStart() error {
 			)
 			if err != nil {
 				_ = s.Shutdown()
-				return fmt.Errorf("%w: job[%d] 间隔 [%v] 注册失败: %v", ErrInvalidJobSchedule, idx, j.interval, err)
+				return lifecycleErr("cron: 任务周期注册失败", fmt.Errorf("%w: job[%d] 间隔 [%v] 注册失败: %v", ErrInvalidJobSchedule, idx, j.interval, err))
 			}
 		default:
 			_ = s.Shutdown()
-			return fmt.Errorf("%w: job[%d] 未知任务类型", ErrInvalidJobSchedule, idx)
+			return lifecycleErr("cron: 未知任务类型", fmt.Errorf("%w: job[%d] 未知任务类型", ErrInvalidJobSchedule, idx))
 		}
 	}
 
@@ -267,9 +275,11 @@ func (p *Plugin) doStart() error {
 
 // Run 启动调度器并在 lifetimeCtx 保持运行，直到 lifetimeCtx 结束时退出。
 // 若调度器未执行 Start 初始化，返回错误。
-func (p *Plugin) Run(lifetimeCtx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+func (p *Plugin) Run(lifetimeCtx context.Context) *apperr.Error {
 	if p.scheduler == nil {
-		return errors.New("cron: 调度器尚未 Start 或 Start 失败")
+		return lifecycleErr("cron: 调度器尚未 Start 或 Start 失败", errSchedulerNotReady)
 	}
 
 	p.lifetimeMu.Lock()
@@ -283,7 +293,9 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 }
 
 // Quiesce 原子关闭 tick 触发准入，确保在应用进入关机缓冲阶段后不再发起新的组件激活。
-func (p *Plugin) Quiesce(_ context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+func (p *Plugin) Quiesce(_ context.Context) *apperr.Error {
 	p.gateMu.Lock()
 	p.quiesced = true
 	p.gateMu.Unlock()
@@ -293,7 +305,10 @@ func (p *Plugin) Quiesce(_ context.Context) error {
 // Stop 停止调度器，阻塞等待所有已发起的激活调用真实返回后收尾退出。
 // 若等待期间传入的 ctx 超时，本方法仍保证等待完成并返回包含超时的复合错误。
 // 多次重复调用 Stop 共享相同退出结果与等待同一完成。
-func (p *Plugin) Stop(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 调度器关闭失败以兜底错误码归一，ctx 取消与超时经控制类错误码归一并保留原生哨兵。
+func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)
 		close(p.doneChan)
@@ -302,7 +317,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return p.stopErr
 }
 
-func (p *Plugin) doStop(ctx context.Context) error {
+func (p *Plugin) doStop(ctx context.Context) *apperr.Error {
 	p.gateMu.Lock()
 	p.quiesced = true
 	p.stopped = true
@@ -317,11 +332,14 @@ func (p *Plugin) doStop(ctx context.Context) error {
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if schedErr != nil {
-			return errors.Join(schedErr, ctxErr)
+			return lifecycleErr("cron: 停止调度器失败", errors.Join(schedErr, ctxErr))
 		}
-		return ctxErr
+		return lifecycleErr("cron: 停止调度器时上下文已取消", ctxErr)
 	}
-	return schedErr
+	if schedErr != nil {
+		return lifecycleErr("cron: 停止调度器失败", schedErr)
+	}
+	return nil
 }
 
 func (p *Plugin) dispatchTick(target ctxkey.Key) {

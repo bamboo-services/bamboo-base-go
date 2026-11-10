@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -48,12 +49,12 @@ type testResourceProviderTool struct {
 	stopCalled  atomic.Int32
 }
 
-func (p *testResourceProviderTool) Start(_ context.Context) error {
+func (p *testResourceProviderTool) Start(_ context.Context) *apperr.Error {
 	p.startCalled.Add(1)
 	return nil
 }
 
-func (p *testResourceProviderTool) Stop(_ context.Context) error {
+func (p *testResourceProviderTool) Stop(_ context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	return nil
 }
@@ -65,14 +66,14 @@ func (p *testResourceProviderTool) Expose() map[ctxkey.Key]any {
 }
 
 type testLifecycleWorker struct {
-	runFn func(ctx context.Context) error
+	runFn func(ctx context.Context) *apperr.Error
 }
 
-func (w *testLifecycleWorker) Start(_ context.Context) error {
+func (w *testLifecycleWorker) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testLifecycleWorker) Run(ctx context.Context) error {
+func (w *testLifecycleWorker) Run(ctx context.Context) *apperr.Error {
 	if w.runFn != nil {
 		return w.runFn(ctx)
 	}
@@ -80,7 +81,7 @@ func (w *testLifecycleWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (w *testLifecycleWorker) Stop(_ context.Context) error {
+func (w *testLifecycleWorker) Stop(_ context.Context) *apperr.Error {
 	return nil
 }
 
@@ -124,16 +125,19 @@ func TestAsyncDependencyLifecycle_CaseA_AppForceCancelsTask_OrderlyShutdown(t *t
 	}
 
 	worker := &testLifecycleWorker{
-		runFn: func(lifetimeCtx context.Context) error {
+		runFn: func(lifetimeCtx context.Context) *apperr.Error {
 			task, err := Submit(lifetimeCtx, func(taskCtx context.Context) {
 				close(taskStarted)
 				<-taskCtx.Done()
 				orderCh <- "task_done"
 			})
 			if err != nil {
-				return err
+				return apperr.From(apperr.FrameworkInternalError, "async: 提交任务失败", err)
 			}
-			return task.Wait()
+			if waitErr := task.Wait(); waitErr != nil {
+				return apperr.From(apperr.FrameworkInternalError, "async: 等待任务完成失败", waitErr)
+			}
+			return nil
 		},
 	}
 
@@ -147,7 +151,7 @@ func TestAsyncDependencyLifecycle_CaseA_AppForceCancelsTask_OrderlyShutdown(t *t
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -214,7 +218,7 @@ func TestAsyncDependencyLifecycle_CaseB_TaskIgnoresCancel_RetainsResource_Incomp
 		application.WithCleanupTimeout(100*time.Millisecond),
 		application.WithShutdownTimeout(150*time.Millisecond),
 	)
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	t.Cleanup(func() {
 		releaseOnce.Do(func() {
 			close(releaseTask)
@@ -238,7 +242,7 @@ func TestAsyncDependencyLifecycle_CaseB_TaskIgnoresCancel_RetainsResource_Incomp
 	}
 
 	worker := &testLifecycleWorker{
-		runFn: func(lifetimeCtx context.Context) error {
+		runFn: func(lifetimeCtx context.Context) *apperr.Error {
 			resVal, resErr := application.Get[string](lifetimeCtx, resKey)
 			if resErr != nil {
 				return resErr
@@ -249,7 +253,7 @@ func TestAsyncDependencyLifecycle_CaseB_TaskIgnoresCancel_RetainsResource_Incomp
 				_ = resVal
 			})
 			if submitErr != nil {
-				return submitErr
+				return apperr.From(apperr.FrameworkInternalError, "async: 提交任务失败", submitErr)
 			}
 			taskCh <- tSub
 			<-lifetimeCtx.Done()
@@ -370,7 +374,7 @@ func TestAsyncDependencyLifecycle_CaseC_CtxDoneBeforeTaskDone_OriginCancelIsolat
 		application.WithCleanupTimeout(100*time.Millisecond),
 		application.WithShutdownTimeout(150*time.Millisecond),
 	)
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	t.Cleanup(func() {
 		_ = app.Shutdown()
 		<-runErrCh
@@ -391,7 +395,7 @@ func TestAsyncDependencyLifecycle_CaseC_CtxDoneBeforeTaskDone_OriginCancelIsolat
 	}
 
 	worker := &testLifecycleWorker{
-		runFn: func(lifetimeCtx context.Context) error {
+		runFn: func(lifetimeCtx context.Context) *apperr.Error {
 			p, err := application.Get[Pool](lifetimeCtx, PoolKey)
 			if err != nil {
 				return err

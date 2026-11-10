@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -51,12 +52,12 @@ type dynamicRetentionProvider struct {
 	stopEntered chan struct{}
 }
 
-func (p *dynamicRetentionProvider) Start(ctx context.Context) error {
+func (p *dynamicRetentionProvider) Start(ctx context.Context) *apperr.Error {
 	p.startCalled.Add(1)
 	return nil
 }
 
-func (p *dynamicRetentionProvider) Stop(ctx context.Context) error {
+func (p *dynamicRetentionProvider) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	if p.stopEntered != nil {
 		select {
@@ -127,7 +128,7 @@ func runSubtestRegressionA(t *testing.T, providerFirstInLexicographical bool) {
 		Requires: []ctxkey.Key{resourceKey},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case <-compRunEntered:
 				default:
@@ -136,7 +137,7 @@ func runSubtestRegressionA(t *testing.T, providerFirstInLexicographical bool) {
 				<-ctx.Done()
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				compStopCount.Add(1)
 				// 记录在 C.Stop 屏障执行瞬间 Provider 是否已被误提前停止
 				providerStopWhenCompStopped.Store(provider.stopCalled.Load())
@@ -162,7 +163,7 @@ func runSubtestRegressionA(t *testing.T, providerFirstInLexicographical bool) {
 		Requires: []ctxkey.Key{},
 	}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 				hRes, actErr := act.Activate(lifetimeCtx, compKey)
 				if actErr != nil {
@@ -183,7 +184,7 @@ func runSubtestRegressionA(t *testing.T, providerFirstInLexicographical bool) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -201,7 +202,7 @@ func runSubtestRegressionA(t *testing.T, providerFirstInLexicographical bool) {
 	}
 
 	// 触发 App.Shutdown
-	shutdownErrCh := make(chan error, 1)
+	shutdownErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		shutdownErrCh <- app.Shutdown()
 	}()
@@ -304,7 +305,7 @@ func TestDynamicRetention_RegressionB_StuckInRun_RetainsDependency(t *testing.T)
 		Requires: []ctxkey.Key{resourceKey},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case <-compRunEntered:
 				default:
@@ -314,7 +315,7 @@ func TestDynamicRetention_RegressionB_StuckInRun_RetainsDependency(t *testing.T)
 				<-releaseCompRun
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				return nil
 			},
 		}
@@ -330,7 +331,7 @@ func TestDynamicRetention_RegressionB_StuckInRun_RetainsDependency(t *testing.T)
 		Key: workerKey,
 	}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 				hRes, actErr := act.Activate(lifetimeCtx, compKey)
 				if actErr != nil {
@@ -352,7 +353,7 @@ func TestDynamicRetention_RegressionB_StuckInRun_RetainsDependency(t *testing.T)
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -491,7 +492,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 		Requires: []ctxkey.Key{resourceKey},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			startFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case <-startEntered:
 				default:
@@ -501,11 +502,11 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 				startFinished.Store(true)
 				return nil
 			},
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				runCalled.Store(true)
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				stopCalled.Add(1)
 				if !startFinished.Load() {
 					stopCalledBeforeStartReturn.Store(true)
@@ -525,7 +526,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 		Key: workerKey,
 	}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 				hRes, actErr := act.Activate(lifetimeCtx, compKey)
 				if actErr != nil {
@@ -546,7 +547,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_WithShutdown(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -680,7 +681,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_NoAppShutdown(t *testing.T) {
 		Requires: []ctxkey.Key{resourceKey},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			startFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case <-startEntered:
 				default:
@@ -689,11 +690,11 @@ func TestDynamicRetention_RegressionC_StartTimeout_NoAppShutdown(t *testing.T) {
 				<-releaseStart
 				return nil
 			},
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				runCalled.Store(true)
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				compStopped.Add(1)
 				return nil
 			},
@@ -707,7 +708,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_NoAppShutdown(t *testing.T) {
 		Key: workerKey,
 	}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 				hRes, actErr := act.Activate(lifetimeCtx, compKey)
 				if actErr != nil {
@@ -725,7 +726,7 @@ func TestDynamicRetention_RegressionC_StartTimeout_NoAppShutdown(t *testing.T) {
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -816,13 +817,13 @@ func TestDynamicRetention_RegressionD_StartError_StopPanic_CoordinatesAppFailure
 		Overlap:  OverlapPolicy{Kind: OverlapQueue, MaxQueue: 1},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			startFunc: func(ctx context.Context) error {
-				return errors.New("component start failed explicitly")
+			startFunc: func(ctx context.Context) *apperr.Error {
+				return apperr.New(apperr.FrameworkInternalError, "component start failed explicitly")
 			},
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				stopCallCount.Add(1)
 				panic("critical stop hardware failure")
 			},
@@ -839,7 +840,7 @@ func TestDynamicRetention_RegressionD_StartError_StopPanic_CoordinatesAppFailure
 		Key: workerKey,
 	}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 				hRes, actErr := act.Activate(lifetimeCtx, compKey)
 				if actErr != nil {
@@ -860,7 +861,7 @@ func TestDynamicRetention_RegressionD_StartError_StopPanic_CoordinatesAppFailure
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -872,7 +873,7 @@ func TestDynamicRetention_RegressionD_StartError_StopPanic_CoordinatesAppFailure
 	}
 
 	// 等待 App.Run 因 Stop panic 自动触发的失败关机协调退出
-	var appRunErr error
+	var appRunErr *apperr.Error
 	select {
 	case appRunErr = <-runErrCh:
 		if appRunErr == nil {

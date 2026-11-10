@@ -7,23 +7,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 // mockRetainedPlugin 辅助测试桩
 type mockRetainedPlugin struct {
-	startFunc func(ctx context.Context) error
-	stopFunc  func(ctx context.Context) error
+	startFunc func(ctx context.Context) *apperr.Error
+	stopFunc  func(ctx context.Context) *apperr.Error
 }
 
-func (m *mockRetainedPlugin) Start(ctx context.Context) error {
+func (m *mockRetainedPlugin) Start(ctx context.Context) *apperr.Error {
 	if m.startFunc != nil {
 		return m.startFunc(ctx)
 	}
 	return nil
 }
 
-func (m *mockRetainedPlugin) Stop(ctx context.Context) error {
+func (m *mockRetainedPlugin) Stop(ctx context.Context) *apperr.Error {
 	if m.stopFunc != nil {
 		return m.stopFunc(ctx)
 	}
@@ -64,7 +65,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 	// 1. 叶子节点 (Leaf)
 	_ = app.RegisterTool(PluginInfo{Key: leafKey}, func() Plugin {
 		return &mockRetainedPlugin{
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				leafStopCount.Add(1)
 				return nil
 			},
@@ -79,7 +80,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 	}, func() Plugin {
 		return &mockRetainedExposer{
 			mockRetainedPlugin: mockRetainedPlugin{
-				stopFunc: func(ctx context.Context) error {
+				stopFunc: func(ctx context.Context) *apperr.Error {
 					dbStopCount.Add(1)
 					return nil
 				},
@@ -94,7 +95,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 		Requires: []ctxkey.Key{dbResourceKey},
 	}, func() Plugin {
 		return &mockRetainedPlugin{
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				consumerPanicCount.Add(1)
 				panic("consumer stop panic")
 			},
@@ -104,7 +105,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 	// 4. 无关旁支: 独立插件，应正常执行 Stop
 	_ = app.RegisterTool(PluginInfo{Key: siblingKey}, func() Plugin {
 		return &mockRetainedPlugin{
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				siblingStopCount.Add(1)
 				return nil
 			},
@@ -116,7 +117,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 	workerDone := make(chan struct{})
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(ready)
 				<-ctx.Done()
 				close(workerDone)
@@ -125,7 +126,7 @@ func TestApp_RetainedDependency_PropagationAndClosure(t *testing.T) {
 		}
 	})
 
-	errChan := make(chan error, 1)
+	errChan := make(chan *apperr.Error, 1)
 	go func() {
 		errChan <- app.Run()
 	}()

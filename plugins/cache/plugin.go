@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/memory"
@@ -29,7 +30,7 @@ type pluginImpl struct {
 	mgr      *Manager
 
 	stopOnce sync.Once
-	stopErr  error
+	stopErr  *apperr.Error
 }
 
 // New 构造缓存插件元数据与工厂函数，作为 [application.ModeTool] 受管组件接入应用运行时。
@@ -91,12 +92,16 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 }
 
 // Start 启动插件生命周期，按需建立后端连接或内存存储。
-func (p *pluginImpl) Start(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 取消与超时类原因经 [foundation/v2/control] 归一，原生 context 根因保留；
+// 其余失败按所属域错误码 [CacheError] 兜底，Redis 原生错误继续作为根因保留。
+func (p *pluginImpl) Start(ctx context.Context) *apperr.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.initErr != nil {
-		return p.initErr
+		return lifecycleErr("cache: 缓存后端配置非法", p.initErr)
 	}
 
 	var logNamed *logging.LogNamedLogger
@@ -143,9 +148,9 @@ func (p *pluginImpl) Start(ctx context.Context) error {
 			closeErr := client.Close()
 			p.rdb = nil
 			if closeErr != nil {
-				return errors.Join(err, closeErr)
+				return lifecycleErr("cache: Redis 连通性探测失败", errors.Join(err, closeErr))
 			}
-			return err
+			return lifecycleErr("cache: Redis 连通性探测失败", err)
 		}
 
 		var mgrOpts []ManagerOption
@@ -158,12 +163,15 @@ func (p *pluginImpl) Start(ctx context.Context) error {
 		return nil
 
 	default:
-		return fmt.Errorf("cache plugin: unsupported cache backend type %q", p.mode)
+		return lifecycleErr("cache: 不支持的缓存后端类型", fmt.Errorf("cache plugin: unsupported cache backend type %q", p.mode))
 	}
 }
 
 // Stop 停止缓存插件，释放底层资源。重复调用共享结果与等待，不因 ctx.Done 提前返回假排空。
-func (p *pluginImpl) Stop(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 关闭失败按所属域错误码 [CacheError] 归一，Redis 原生错误继续作为根因保留。
+func (p *pluginImpl) Stop(ctx context.Context) *apperr.Error {
 	p.stopOnce.Do(func() {
 		p.mu.Lock()
 		store := p.memStore
@@ -188,7 +196,7 @@ func (p *pluginImpl) Stop(ctx context.Context) error {
 			}
 		}
 
-		p.stopErr = errors.Join(errs...)
+		p.stopErr = lifecycleErr("cache: 释放缓存后端资源失败", errors.Join(errs...))
 	})
 
 	return p.stopErr

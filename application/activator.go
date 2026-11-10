@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -28,7 +29,7 @@ type componentQueueItem struct {
 	stage       string             // 当前生命周期阶段（queued/factory/start/run/stop/stop-panic）
 	dispatched  bool               // 标识是否已成功分配槽位并派发执行
 	cancelled   bool               // 标识是否在派发前被取消
-	cancelErr   error              // 记录排队期取消的原因错误
+	cancelErr   *apperr.Error      // 记录排队期取消的原因错误
 	runCancel   context.CancelFunc // 派发后用于级联取消执行的 CancelFunc
 	executeDone chan struct{}      // 标识整个执行流程完全结束的信号通道
 }
@@ -44,14 +45,14 @@ type componentSlotState struct {
 
 // parentState 记录存活的父级（Worker 或 Component）状态。
 type parentState struct {
-	mu               sync.Mutex // 保护父级状态与子树计数的互斥锁
-	instanceID       string     // 父级实例的全局唯一标识
-	pluginKey        ctxkey.Key // 父级组件的插件标识键
-	parentID         string     // 若父级自身也是 Component，指向其上层祖先 ID
-	isComponent      bool       // 标识父级是否为 Component（用于嵌套激活规则校验）
-	closed           bool       // 标识父级是否已触发关闭流程
-	activeCancelSent bool       // 标识是否已向所有存活子任务发送取消信号
-	closeCause       error      // 记录父级关闭的诱因错误
+	mu               sync.Mutex    // 保护父级状态与子树计数的互斥锁
+	instanceID       string        // 父级实例的全局唯一标识
+	pluginKey        ctxkey.Key    // 父级组件的插件标识键
+	parentID         string        // 若父级自身也是 Component，指向其上层祖先 ID
+	isComponent      bool          // 标识父级是否为 Component（用于嵌套激活规则校验）
+	closed           bool          // 标识父级是否已触发关闭流程
+	activeCancelSent bool          // 标识是否已向所有存活子任务发送取消信号
+	closeCause       *apperr.Error // 记录父级关闭的诱因错误
 
 	// 子树计数
 	activeCount    int                            // 属于该父级的活跃与排队子任务总数
@@ -98,7 +99,7 @@ type componentEngine struct {
 
 	mu        sync.RWMutex                         // 保护引擎定义、槽位与全局状态的读写锁
 	stopped   bool                                 // 标识调度引擎是否已停止接收新任务
-	stopErr   error                                // 引擎停止时的错误原因
+	stopErr   *apperr.Error                        // 引擎停止时的错误原因
 	slots     map[ctxkey.Key]*componentSlotState   // 组件键到并发槽位状态的映射表
 	parents   map[string]*parentState              // 存活父级实例 ID 到父级状态的映射表
 	compDefs  map[ctxkey.Key]PluginInfo            // 已注册的组件元信息定义表
@@ -288,14 +289,14 @@ func (e *componentEngine) snapshotLiveTasks() []StuckInstance {
 			InstanceID:   it.instanceID,
 			Stage:        stage,
 			RetainedDeps: depsCopy,
-			Err:          context.DeadlineExceeded,
+			Err:          normalizeErr(apperr.FrameworkInternalError, "动态组件执行超时未退", context.DeadlineExceeded),
 		})
 	}
 	return stuckList
 }
 
 // closeParent 关闭指定父级：阻止新接纳，未派发项取消，向运行中在途任务发出取消
-func (e *componentEngine) closeParent(instanceID string, cause error) {
+func (e *componentEngine) closeParent(instanceID string, cause *apperr.Error) {
 	e.mu.Lock()
 	p, ok := e.parents[instanceID]
 	e.mu.Unlock()
@@ -304,7 +305,7 @@ func (e *componentEngine) closeParent(instanceID string, cause error) {
 	}
 
 	if cause == nil {
-		cause = ErrParentClosing
+		cause = normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing)
 	}
 
 	p.mu.Lock()
@@ -340,7 +341,7 @@ func (e *componentEngine) closeParent(instanceID string, cause error) {
 }
 
 // waitParent 仅观察真实子树归零，ctx 截止不伪归零
-func (e *componentEngine) waitParent(ctx context.Context, parentID string) error {
+func (e *componentEngine) waitParent(ctx context.Context, parentID string) *apperr.Error {
 	e.mu.RLock()
 	p, ok := e.parents[parentID]
 	e.mu.RUnlock()
@@ -356,14 +357,14 @@ func (e *componentEngine) waitParent(ctx context.Context, parentID string) error
 	case <-ch:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return normalizeErr(apperr.FrameworkInternalError, "等待父级子树归零被中断", ctx.Err())
 	}
 }
 
 // requestStopAll 全局关闸：关闭所有新接纳，标父closed，取消所有未派发项，但不cancel runningCancels（保证优雅停机Grace）
-func (e *componentEngine) requestStopAll(cause error) {
+func (e *componentEngine) requestStopAll(cause *apperr.Error) {
 	if cause == nil {
-		cause = ErrShuttingDown
+		cause = normalizeErr(apperr.FrameworkComponentInvalidState, "宿主应用正在关机", ErrShuttingDown)
 	}
 
 	var itemsToCancel []*componentQueueItem
@@ -393,7 +394,7 @@ func (e *componentEngine) requestStopAll(cause error) {
 	}
 }
 
-func (e *componentEngine) cancelUndispatchedItem(it *componentQueueItem, cause error) {
+func (e *componentEngine) cancelUndispatchedItem(it *componentQueueItem, cause *apperr.Error) {
 	it.mu.Lock()
 	if it.dispatched || it.cancelled {
 		it.mu.Unlock()
@@ -432,7 +433,7 @@ func (e *componentEngine) cancelUndispatchedItem(it *componentQueueItem, cause e
 func (e *componentEngine) onSlotReleased(compKey ctxkey.Key, slot *componentSlotState) {
 	var nextItem *componentQueueItem
 	var rejectedItems []*componentQueueItem
-	var rejectCauses []error
+	var rejectCauses []*apperr.Error
 
 	// 派发的合法性检查+dispatched标记用e.mu读锁覆盖，与全局/父级关闸写锁线性化，避免持slot.mu再取p.mu倒置死锁
 	e.mu.RLock()
@@ -451,12 +452,12 @@ func (e *componentEngine) onSlotReleased(compKey ctxkey.Key, slot *componentSlot
 
 		// 检查全局停机或父级关闭状态
 		var shouldReject bool
-		var rejectCause error
+		var rejectCause *apperr.Error
 		if e.stopped {
 			shouldReject = true
 			rejectCause = e.stopErr
 			if rejectCause == nil {
-				rejectCause = ErrShuttingDown
+				rejectCause = normalizeErr(apperr.FrameworkComponentInvalidState, "宿主应用正在关机", ErrShuttingDown)
 			}
 		} else if p, ok := e.parents[head.parentID]; ok {
 			p.mu.Lock()
@@ -464,13 +465,13 @@ func (e *componentEngine) onSlotReleased(compKey ctxkey.Key, slot *componentSlot
 				shouldReject = true
 				rejectCause = p.closeCause
 				if rejectCause == nil {
-					rejectCause = ErrParentClosing
+					rejectCause = normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing)
 				}
 			}
 			p.mu.Unlock()
 		} else {
 			shouldReject = true
-			rejectCause = ErrInvalidActivationParent
+			rejectCause = newAppErr(ErrInvalidActivationParent, "激活链路缺少合法父级身份")
 		}
 
 		if shouldReject {
@@ -562,13 +563,13 @@ func (e *componentEngine) hasAncestorCycle(parentID string, targetKey ctxkey.Key
 //     特别地，若为 Component 嵌套激活且队列繁忙，返回 [ErrNestedQueueWouldBlock] 避免死锁。
 //
 // 成功接纳后返回可用于取消或等待结果的 [RunHandle]。
-func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts ...ActivateOption) (RunHandle, error) {
+func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts ...ActivateOption) (RunHandle, *apperr.Error) {
 	// 1. ctx 空安全与接纳前取消检查
 	if ctx == nil {
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "激活上下文不得为 nil")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, normalizeErr(apperr.FrameworkInternalError, "激活上下文已结束", err)
 	}
 
 	// 2. 状态检查：必须在 Running 状态下接受新任务
@@ -576,23 +577,23 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 		state := e.app.State()
 		if state != StateRunning {
 			if state == StateStopping || state == StateStopped || state == StateIncomplete {
-				return nil, ErrAppClosed
+				return nil, newAppErr(ErrAppClosed, "应用已关闭或正在关机，拒绝激活新组件")
 			}
-			return nil, ErrInvalidActivationParent
+			return nil, newAppErr(ErrInvalidActivationParent, "应用尚未进入运行状态，拒绝激活新组件")
 		}
 	}
 
 	// 3. 校验可信身份：提取 trustedAuthToken，严格校验 appID 匹配且在 parents 中存活且未 closed
 	tokenVal := ctx.Value(trustedAuthKey)
 	if tokenVal == nil {
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "激活上下文缺少可信父级身份凭据")
 	}
 	token, ok := tokenVal.(trustedAuthToken)
 	if !ok {
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "激活上下文身份凭据类型非法")
 	}
 	if e.app != nil && token.appID != e.app.appID {
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "激活上下文身份凭据与当前应用不匹配")
 	}
 
 	// 4. 解析可选配置 WithPayload
@@ -607,27 +608,27 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 	e.mu.Lock()
 	if e.stopped {
 		e.mu.Unlock()
-		return nil, ErrAppClosed
+		return nil, newAppErr(ErrAppClosed, "组件引擎已关闸，拒绝激活新组件")
 	}
 
 	parentSt, parentFound := e.parents[token.instanceID]
 	if !parentFound {
 		e.mu.Unlock()
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "父级实例不存在或已退出")
 	}
 
 	parentSt.mu.Lock()
 	if parentSt.closed {
 		parentSt.mu.Unlock()
 		e.mu.Unlock()
-		return nil, ErrInvalidActivationParent
+		return nil, newAppErr(ErrInvalidActivationParent, "父级实例已关闭")
 	}
 	parentSt.mu.Unlock()
 
 	// 祖先定义环检测：若链路中有任一祖先匹配当前组件定义，拒绝 ErrActivationCycle
 	if e.hasAncestorCycle(token.instanceID, compKey) {
 		e.mu.Unlock()
-		return nil, ErrActivationCycle
+		return nil, newAppErr(ErrActivationCycle, "激活链路检测到祖先依赖递归环")
 	}
 
 	// 检查组件定义是否存在
@@ -635,7 +636,7 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 	fac, facFound := e.compFacs[compKey]
 	if !defFound || !facFound {
 		e.mu.Unlock()
-		return nil, fmt.Errorf("%w: %s", ErrComponentNotFound, compKey)
+		return nil, newAppErr(ErrComponentNotFound, "组件 ["+string(compKey)+"] 未注册")
 	}
 
 	slot, slotFound := e.slots[compKey]
@@ -663,7 +664,7 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 		if slot.activeCount >= 1 {
 			slot.mu.Unlock()
 			e.mu.Unlock()
-			return nil, ErrComponentSkipped
+			return nil, newAppErr(ErrComponentSkipped, "组件 ["+string(compKey)+"] 已有实例在执行，按跳过策略拒绝本次激活")
 		}
 		slot.activeCount++
 		shouldDispatchNow = true
@@ -676,7 +677,7 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 		if slot.activeCount >= maxConcurrency {
 			slot.mu.Unlock()
 			e.mu.Unlock()
-			return nil, ErrConcurrencyLimitExceeded
+			return nil, newAppErr(ErrConcurrencyLimitExceeded, "组件 ["+string(compKey)+"] 并发激活数已达上限")
 		}
 		slot.activeCount++
 		shouldDispatchNow = true
@@ -698,7 +699,7 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 		if parentSt.isComponent && (slot.activeCount > 0 || len(slot.queuedItems) > 0) {
 			slot.mu.Unlock()
 			e.mu.Unlock()
-			return nil, ErrNestedQueueWouldBlock
+			return nil, newAppErr(ErrNestedQueueWouldBlock, "嵌套排队激活将导致父子级联死锁，拒绝本次激活")
 		}
 
 		if slot.activeCount == 0 && len(slot.queuedItems) == 0 {
@@ -714,7 +715,7 @@ func (e *componentEngine) Activate(ctx context.Context, compKey ctxkey.Key, opts
 			if len(slot.queuedItems) >= maxQueue {
 				slot.mu.Unlock()
 				e.mu.Unlock()
-				return nil, ErrQueueFull
+				return nil, newAppErr(ErrQueueFull, "组件 ["+string(compKey)+"] 等待队列已满")
 			}
 			shouldQueue = true
 		}

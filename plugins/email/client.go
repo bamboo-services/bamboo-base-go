@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
@@ -171,9 +172,13 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 // Start 在应用启动阶段完成配置校验、环境变量合并以及模板管理器初始化。
 // 本阶段不与 SMTP 服务器建立网络连接，连接在调用发送时按需延迟建立。
 // 若关键配置缺失或模板语法错误，返回相应错误。
-func (p *Plugin) Start(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 取消与超时类原因经 [foundation/v2/control] 归一，原生 context 根因保留；
+// 其余失败按所属域错误码 [EmailError] 兜底，配置哨兵与模板加载原生错误继续作为根因保留。
+func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 	if p == nil {
-		return ErrNotInitialized
+		return lifecycleErr("email: 邮件插件实例为 nil", ErrNotInitialized)
 	}
 
 	cfg := p.opts.cfg
@@ -189,7 +194,7 @@ func (p *Plugin) Start(ctx context.Context) error {
 		if v, ok := env.Lookup(env.EmailPort); ok {
 			p, err := v.Int()
 			if err != nil || p < 1 || p > 65535 {
-				return ErrInvalidPort
+				return lifecycleErr("email: 环境变量 EMAIL_PORT 非法", ErrInvalidPort)
 			}
 			port = p
 		} else {
@@ -230,16 +235,16 @@ func (p *Plugin) Start(ctx context.Context) error {
 
 	// 校验必填配置
 	if cfg.Host == "" {
-		return ErrMissingHost
+		return lifecycleErr("email: 缺少 SMTP 主机地址", ErrMissingHost)
 	}
 	if cfg.Username == "" {
-		return ErrMissingUser
+		return lifecycleErr("email: 缺少 SMTP 认证用户名", ErrMissingUser)
 	}
 	if cfg.Password == "" {
-		return ErrMissingPass
+		return lifecycleErr("email: 缺少 SMTP 认证密码", ErrMissingPass)
 	}
 	if cfg.FromAddr == "" {
-		return ErrMissingFrom
+		return lifecycleErr("email: 缺少发件人邮箱地址", ErrMissingFrom)
 	}
 
 	if cfg.Port <= 0 {
@@ -252,17 +257,17 @@ func (p *Plugin) Start(ctx context.Context) error {
 	// 初始化模板管理器
 	tmpl, err := newTemplateManager(cfg.TemplateDir)
 	if err != nil {
-		return fmt.Errorf("email: 初始化模板管理器失败: %w", err)
+		return lifecycleErr("email: 初始化模板管理器失败", err)
 	}
 
 	for _, dir := range p.opts.templateDirs {
 		if err := tmpl.AddDir(dir); err != nil {
-			return fmt.Errorf("email: 加载外部模板目录 %s 失败: %w", dir, err)
+			return lifecycleErr("email: 加载外部模板目录失败", fmt.Errorf("email: 加载外部模板目录 %s 失败: %w", dir, err))
 		}
 	}
 	for _, entry := range p.opts.templateFS {
 		if err := tmpl.AddFS(entry.fsys, entry.pattern); err != nil {
-			return fmt.Errorf("email: 加载内嵌模板失败: %w", err)
+			return lifecycleErr("email: 加载内嵌模板失败", fmt.Errorf("email: 加载内嵌模板失败: %w", err))
 		}
 	}
 
@@ -299,7 +304,9 @@ func (p *Plugin) Expose() map[ctxkey.Key]any {
 
 // Stop 关闭发信准入，并阻塞等待所有已接纳的在途发送任务执行完毕后再清理客户端句柄。
 // nil 接收者或多次重复调用 Stop 均安全幂等并等待同一关停动作完成。
-func (p *Plugin) Stop(ctx context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 	if p == nil {
 		return nil
 	}

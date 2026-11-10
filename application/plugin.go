@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -115,15 +116,18 @@ type Plugin interface {
 	//
 	// 入参 ctx 是启动期受限上下文（挂载基于 Requires 的白名单视图与独立超时）。
 	// 插件在此阶段可建立数据库连接、加载配置或监听端口。
-	// 必须遵守 ctx 的取消与超时；返回 non-nil 错误或发生 panic 将中止启动流程并触发回滚停机。
-	Start(ctx context.Context) error
+	// 必须遵守 ctx 的取消与超时；返回非 nil 统一错误或发生 panic 将中止启动流程并触发回滚停机。
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针，
+	// 取消与超时类原因应经 [foundation/v2/control] 归一并保留原生 context 根因。
+	Start(ctx context.Context) *apperr.Error
 
 	// Stop 执行组件的排空收尾与底层物理资源释放（如关闭连接池、注销监听器）。
 	//
 	// 入参 ctx 携带本轮关机协调的预算时限。
 	// 方法返回后不得遗留由插件自行管理的后台协程。
 	// Stop 必须具备幂等性与超时感知能力，且禁止在 Stop 内部发生 panic。
-	Stop(ctx context.Context) error
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+	Stop(ctx context.Context) *apperr.Error
 }
 
 // RunnablePlugin 是具备长期执行体的插件接口，由 [ModeWorker] 与 [ModeComponent] 共用。
@@ -138,7 +142,8 @@ type RunnablePlugin interface {
 	// 对于 Worker，Run 应当保持阻塞运行（如事件循环或监听处理），直至 ctx 被取消或发生不可恢复错误；
 	// 若 Worker 在运行期间提前非预期返回，看门狗将判定为崩溃并触发应用级关机。
 	// 对于 Component，Run 代表一次单次任务执行，执行完成后正常退出。
-	Run(ctx context.Context) error
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+	Run(ctx context.Context) *apperr.Error
 }
 
 // Quiescer 是供 Worker 插件按需可选实现的静默下线扩展接口。
@@ -151,7 +156,8 @@ type Quiescer interface {
 	// 插件在此阶段应立即拒绝新的外部接入请求（例如向网关返回健康检查失败或返回 HTTP 503），
 	// 并等待当前已接纳的在途请求处理完毕。入参 ctx 携带固定自然排空窗口 [Config.GraceTimeout]。
 	// 达到超时或排空完成后返回。
-	Quiesce(ctx context.Context) error
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
+	Quiesce(ctx context.Context) *apperr.Error
 }
 
 // Outcome 表示动态组件运行实例的最终归宿分类。
@@ -174,18 +180,18 @@ const (
 //
 // 该结构体由 [RunHandle.Wait] 返回，详细记录执行各阶段的耗时与具体错误。
 type RunResult struct {
-	InstanceID      string     // 该次运行实例的唯一标识。
-	PluginKey       ctxkey.Key // 该次运行对应的插件注册键 [ctxkey.Key]。
-	Outcome         Outcome    // 最终归宿判定，取值为 [OutcomeSuccess]、[OutcomeFailed] 或 [OutcomeCancelled]。
-	Dispatched      bool       // 该实例是否已经取得执行槽并进入构造监督流程（不代表 Start 或 Run 一定执行成功）。
-	CancelRequested bool       // 内核是否向该实例发出了取消请求（包含未派发前取消与在途取消）。
-	CancelErr       error      // 未执行 Run 时的取消原因；正常执行 Run 时不以此字段冒充 RunErr。
-	FactoryErr      error      // 记录调用工厂函数时的 panic 或无效实例错误；发生此错误时不调用 Stop。
-	StartErr        error      // 记录执行 [Plugin.Start] 钩子时返回的错误或捕获的 panic。
-	ExposeErr       error      // 记录执行 Expose 校验或发布时的错误。
-	QuiesceErr      error      // 记录执行 [Quiescer.Quiesce] 时的错误或 panic。
-	RunErr          error      // 记录执行 [RunnablePlugin.Run] 时返回的原始错误或 panic。
-	StopErr         error      // 记录执行 [Plugin.Stop] 清理钩子时返回的错误或 panic。
+	InstanceID      string        // 该次运行实例的唯一标识。
+	PluginKey       ctxkey.Key    // 该次运行对应的插件注册键 [ctxkey.Key]。
+	Outcome         Outcome       // 最终归宿判定，取值为 [OutcomeSuccess]、[OutcomeFailed] 或 [OutcomeCancelled]。
+	Dispatched      bool          // 该实例是否已经取得执行槽并进入构造监督流程（不代表 Start 或 Run 一定执行成功）。
+	CancelRequested bool          // 内核是否向该实例发出了取消请求（包含未派发前取消与在途取消）。
+	CancelErr       *apperr.Error // 未执行 Run 时的取消原因；正常执行 Run 时不以此字段冒充 RunErr。
+	FactoryErr      *apperr.Error // 记录调用工厂函数时的 panic 或无效实例错误；发生此错误时不调用 Stop。
+	StartErr        *apperr.Error // 记录执行 [Plugin.Start] 钩子时返回的错误或捕获的 panic。
+	ExposeErr       *apperr.Error // 记录执行 Expose 校验或发布时的错误。
+	QuiesceErr      *apperr.Error // 记录执行 [Quiescer.Quiesce] 时的错误或 panic。
+	RunErr          *apperr.Error // 记录执行 [RunnablePlugin.Run] 时返回的原始错误或 panic。
+	StopErr         *apperr.Error // 记录执行 [Plugin.Stop] 清理钩子时返回的错误或 panic。
 }
 
 // RunHandle 是内核返回给激活调用方的动态组件运行监督句柄。
@@ -197,14 +203,16 @@ type RunHandle interface {
 
 	// Wait 阻塞等待组件实例执行完毕，并返回完整的运行账单 [RunResult] 与错误。
 	//
-	// 入参 ctx 控制等待本身的超时或取消，若 ctx 超时或取消，返回零值 [RunResult] 与 ctx.Err()；
+	// 入参 ctx 控制等待本身的超时或取消，若 ctx 超时或取消，返回零值 [RunResult]
+	// 与经 [foundation/v2/control] 归一的控制类统一错误（原生 ctx 根因保留）；
 	// 若实例本身执行失败或取消，Wait 将返回真实的 [RunResult] 以及由账单计算得到的综合错误。
 	//
 	// 契约保证：Wait 携真实终态返回时，该实例占用的并发槽位与依赖资源均已释放，
 	// 调用方可立即重新激活同键组件（不会因此收到 [ErrComponentSkipped]、
 	// [ErrConcurrencyLimitExceeded] 或 [ErrQueueFull]）；
 	// Stop panic 场景不发布终态、不关闭句柄，Wait 将持续等待直至调用方 ctx 超时或取消。
-	Wait(ctx context.Context) (RunResult, error)
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 错误指针。
+	Wait(ctx context.Context) (RunResult, *apperr.Error)
 }
 
 // ActivateOption 描述激活动态组件时的可选参数配置函数。
@@ -247,9 +255,11 @@ type Activator interface {
 	//   - 若在激活链路上检测到祖先依赖递归环，返回 [ErrActivationCycle]。
 	//
 	// 成功接纳后，返回用于跟踪执行的 [RunHandle]。
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 错误指针，
+	// 且失败时不得返回句柄。
 	Activate(
 		ctx context.Context,
 		compKey ctxkey.Key,
 		opts ...ActivateOption,
-	) (RunHandle, error)
+	) (RunHandle, *apperr.Error)
 }

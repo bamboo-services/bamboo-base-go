@@ -121,7 +121,7 @@ func TestWebGin_ContainerBridgeAndRequestKey(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	appErrCh := make(chan error, 1)
+	appErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		appErrCh <- app.Run()
 	}()
@@ -258,7 +258,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	appRunErr := make(chan error, 1)
+	appRunErr := make(chan *apperr.Error, 1)
 	go func() {
 		appRunErr <- app.Run()
 	}()
@@ -416,7 +416,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 
 	// 尝试向服务器发起新请求，此时 Quiesce 关闭后必须拒绝新请求（或者连接被拒）
 	stopStarted := make(chan struct{})
-	stopDone := make(chan error, 1)
+	stopDone := make(chan *apperr.Error, 1)
 
 	go func() {
 		close(stopStarted)
@@ -460,7 +460,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 	// 此时 Stop 应该成功返回
 	select {
 	case err := <-stopDone:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err != nil {
 			t.Fatalf("Stop failed with unexpected error: %v", err)
 		}
 	case <-time.After(2 * time.Second):
@@ -468,7 +468,7 @@ func TestWebGin_FullNetworkLifecycle(t *testing.T) {
 	}
 
 	// 验证重复调用 Stop 共享同一次结果
-	if err := activePlugin.Stop(context.Background()); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := activePlugin.Stop(context.Background()); err != nil {
 		t.Fatalf("repeated Stop failed: %v", err)
 	}
 
@@ -527,7 +527,7 @@ func TestWebGin_ForceContextCancellation(t *testing.T) {
 		t.Fatal("timed out waiting for lifetimeCtx")
 	}
 
-	runErr := make(chan error, 1)
+	runErr := make(chan *apperr.Error, 1)
 	go func() {
 		runErr <- p.Run(lifetimeCtx)
 	}()
@@ -604,13 +604,13 @@ type testWorkerLifetime struct {
 	done    chan struct{}
 }
 
-func (w *testWorkerLifetime) Start(_ context.Context) error { return nil }
-func (w *testWorkerLifetime) Run(lifetimeCtx context.Context) error {
+func (w *testWorkerLifetime) Start(_ context.Context) *apperr.Error { return nil }
+func (w *testWorkerLifetime) Run(lifetimeCtx context.Context) *apperr.Error {
 	w.started <- lifetimeCtx
 	<-w.done
 	return nil
 }
-func (w *testWorkerLifetime) Stop(_ context.Context) error {
+func (w *testWorkerLifetime) Stop(_ context.Context) *apperr.Error {
 	close(w.done)
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -14,12 +15,12 @@ type dummyTypedNilPlugin struct {
 	stopCount  int32
 }
 
-func (d *dummyTypedNilPlugin) Start(ctx context.Context) error {
+func (d *dummyTypedNilPlugin) Start(ctx context.Context) *apperr.Error {
 	atomic.AddInt32(&d.startCount, 1)
 	return nil
 }
 
-func (d *dummyTypedNilPlugin) Stop(ctx context.Context) error {
+func (d *dummyTypedNilPlugin) Stop(ctx context.Context) *apperr.Error {
 	atomic.AddInt32(&d.stopCount, 1)
 	return nil
 }
@@ -28,8 +29,8 @@ type typedNilExposePlugin struct {
 	exposeVal any
 }
 
-func (t *typedNilExposePlugin) Start(ctx context.Context) error { return nil }
-func (t *typedNilExposePlugin) Stop(ctx context.Context) error  { return nil }
+func (t *typedNilExposePlugin) Start(ctx context.Context) *apperr.Error { return nil }
+func (t *typedNilExposePlugin) Stop(ctx context.Context) *apperr.Error  { return nil }
 func (t *typedNilExposePlugin) Expose() map[ctxkey.Key]any {
 	return map[ctxkey.Key]any{
 		"resKey": t.exposeVal,

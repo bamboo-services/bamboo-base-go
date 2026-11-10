@@ -4,12 +4,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"log/slog"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
 	"github.com/bamboo-services/bamboo-base-go/application/v2/builtin"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
@@ -34,12 +34,12 @@ type ConfigTool struct {
 }
 
 // Start 验证或初始化工具内部资源。
-func (t *ConfigTool) Start(_ context.Context) error {
+func (t *ConfigTool) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
 // Stop 释放工具持有的资源。
-func (t *ConfigTool) Stop(_ context.Context) error {
+func (t *ConfigTool) Stop(_ context.Context) *apperr.Error {
 	return nil
 }
 
@@ -75,32 +75,32 @@ type PrinterWorker struct {
 }
 
 // Start 在受限启动上下文中提取 Requires 声明的资源键。
-func (w *PrinterWorker) Start(ctx context.Context) error {
+func (w *PrinterWorker) Start(ctx context.Context) *apperr.Error {
 	msg, err := application.Get[string](ctx, ConfigGreetingKey)
 	if err != nil {
-		return fmt.Errorf("读取配置资源失败: %w", err)
+		return err
 	}
 	w.message = msg
 
 	logger, err := application.Get[*logging.Logger](ctx, builtin.LoggerKey)
 	if err != nil {
-		return fmt.Errorf("读取内置日志器失败: %w", err)
+		return err
 	}
 	w.logger = logger
 
 	node, err := application.Get[*snowflake.Node](ctx, ctxkey.SnowflakeNodeKey)
 	if err != nil {
-		return fmt.Errorf("读取内置雪花发号节点失败: %w", err)
+		return err
 	}
 	w.node = node
 	return nil
 }
 
 // Run 执行常驻工作并在 Context 取消时正常退出，避免因早退触发看门狗停机。
-func (w *PrinterWorker) Run(ctx context.Context) error {
+func (w *PrinterWorker) Run(ctx context.Context) *apperr.Error {
 	id, genErr := w.node.Generate()
 	if genErr != nil {
-		return fmt.Errorf("生成雪花 ID 失败: %w", genErr)
+		return genErr
 	}
 
 	w.logger.WithName("WORKER").Info(
@@ -111,11 +111,12 @@ func (w *PrinterWorker) Run(ctx context.Context) error {
 	)
 
 	<-ctx.Done()
-	return ctx.Err()
+	// 正常随取消退出不构成失败，返回真正的 nil 指针。
+	return nil
 }
 
 // Stop 完成工作者的清理工作。
-func (w *PrinterWorker) Stop(_ context.Context) error {
+func (w *PrinterWorker) Stop(_ context.Context) *apperr.Error {
 	return nil
 }
 

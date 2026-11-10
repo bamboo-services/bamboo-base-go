@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 )
 
 // TestShutdown_ConfigErr_BoundedChannelRepro 验证 New 配置非法时，直接 Shutdown 或 Run 失败后 Shutdown 的协调闭环。
@@ -21,7 +23,7 @@ func TestShutdown_ConfigErr_BoundedChannelRepro(t *testing.T) {
 	}
 
 	// 1. New 直接 Shutdown，必须及时返回且闭环协调器
-	errDone := make(chan error, 1)
+	errDone := make(chan *apperr.Error, 1)
 	go func() {
 		errDone <- app.Shutdown()
 	}()
@@ -36,7 +38,7 @@ func TestShutdown_ConfigErr_BoundedChannelRepro(t *testing.T) {
 	}
 
 	// 重复 Shutdown 必须复用相同结果且不挂起
-	repeatDone := make(chan error, 1)
+	repeatDone := make(chan *apperr.Error, 1)
 	go func() {
 		repeatDone <- app.Shutdown()
 	}()
@@ -53,7 +55,7 @@ func TestShutdown_ConfigErr_BoundedChannelRepro(t *testing.T) {
 	// 并发 Shutdown 必须返回相同错误且不挂起
 	const concurrentCount = 5
 	var wg sync.WaitGroup
-	errs := make([]error, concurrentCount)
+	errs := make([]*apperr.Error, concurrentCount)
 	for i := 0; i < concurrentCount; i++ {
 		wg.Add(1)
 		idx := i
@@ -92,7 +94,7 @@ func TestShutdown_ConfigErr_AfterRunRepro(t *testing.T) {
 		t.Fatalf("expected Run to return cfgErr, got %v", runErr)
 	}
 
-	shutDone := make(chan error, 1)
+	shutDone := make(chan *apperr.Error, 1)
 	go func() {
 		shutDone <- app.Shutdown()
 	}()

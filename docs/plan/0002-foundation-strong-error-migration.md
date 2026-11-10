@@ -7,7 +7,7 @@
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3–P7未执行，生命周期切换与真实原生RPC信封接入仍未实施。**不自动创建工作卡、提交推送或发布，不以P2代替整计划完成。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，改动未提交。P4–P7实现未执行。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -252,14 +252,63 @@ P1已提交为 `7c4f7fed106ad36d6127e5f19d212b7bbc12897c`（`feat: 实现 V2 强
 | `gofmt -l application foundation plugins` / `git diff --check`                 | 空输出 / 通过                          |
 | `python3 /tmp/opencode/v2-p2/verify.py`（39文件边界+91项归属计数+P1/P2码完整） | 通过                                   |
 
-外部Redis/SMTP/数据库集成仍默认跳过；P3生命周期切换、P4–P7与发布验收未执行。本记录不将P2升级为已验收完成，待用户审阅；未提交推送。
+外部Redis/SMTP/数据库集成仍默认跳过；P3生命周期切换、P4–P7与发布验收未执行。本记录不将P2升级为已验收完成；P2改动已于2026-11-10按用户授权提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`，未推送。
 
 ### P3：原子切换application生命周期契约与全部实现者
 
 - 动作：同步改自有Plugin/RunHandle/Activator等接口、内核辅助返回、错误账本/通道、builtin、全部上层插件模块的实现方法、所有测试替身及示例消费者。不能仅改接口后单独交付。
 - 交付：直接返回原生error不再编译的契约断言；RunResult字段、错误聚合及StopIncomplete/HookPanic诊断保留测试；启动、回滚、自然排空和清理语义等价证据。
 - 准出：`make test`、`make race`、`make vet`、`make check-examples`，以及 `bash .github/scripts/consumer/check-v2-consumers.sh` 全部通过。已确认的控制语义若未在实现和测试中保留，或任何实现者仍使用旧方法集，本阶段不能准出。
-- 状态：未执行；允许与P4/P5/P6在同一兼容性切换补丁中落地，阶段只是验证顺序，不要求发布不可编译的中间提交。
+- 状态：2026-11-10实现及Leader准出完成，待用户审阅；内核与全部实现者一次原子切换，无新码。P4–P7未执行。
+
+#### P3开工准备包（2026-11-10，尚未实施）
+
+用户于2026-11-10授权提交P2并要求制定下一步工作任务；本节为准备文档，不构成P3开工或派工授权。P2已提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送），是P3的起点。
+
+**范围（一次原子切换，不留接口已改而实现者未跟的中间态）：**
+
+- 内核契约：自有 `Plugin.Start/Stop`、`RunnablePlugin.Run`、`Quiescer.Quiesce`、`Activator.Activate`、`RunHandle.Wait`、`App.Run/Shutdown` 及内部辅助改返回 `*apperr.Error`；`RunResult` 七阶段错误字段、`StuckInstance.Err`、`runErrs` 等账本同步强类型。
+- 实现者：`application/builtin`、web-gin、grpc、database、cache、email、cron、async 的生命周期方法、全部测试替身、示例与独立消费测试同一补丁切换。
+
+**拟议分工（获准开工时沿用 `minimax-m3.1-flash`，effort届时确认）：**
+
+| 工作包              | 改动范围                                                 | 必须交付                                                                                                                                     | 依赖与边界                             |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| P3.1 内核契约与账本 | `application` 接口、App、supervisor、shutdown、context   | 契约与账本原子改型；computeWaitError 聚合改强类型Join/From；HookPanic/StopIncomplete诊断对象保留errors.As；context哨兵经control.Classify归因 | 最先完成并冻结契约；先写编译负例夹具   |
+| P3.2 builtin实现者  | `application/builtin`                                    | logger等内置组件Start/Stop适配新契约，根因与真实收尾保留                                                                                     | 依赖P3.1契约                           |
+| P3.3 协议插件实现者 | `plugins/web-gin`、`plugins/grpc` 生命周期方法           | Start/Stop/Run适配；不改本阶段归属的HTTP/RPC归一链                                                                                           | 依赖P3.1契约；与P3.4并行               |
+| P3.4 领域插件实现者 | `plugins/{database,cache,email,cron,async}` 生命周期方法 | 各自Start/Stop/Run适配；外部服务集成仍默认跳过                                                                                               | 依赖P3.1契约；与P3.3并行               |
+| P3.L Leader集成     | 编译/词表/门禁/准出记录                                  | 全库编译、示例与独立消费、全量门禁与范围守卫                                                                                                 | 新码按E04集中裁决，预期复用50020–50023 |
+
+**行为红线：**RunResult各阶段字段语义与聚合规则不变；StopIncomplete成员Err经结构化聚合逐个可达（spec R06）；Quiesce排空与等待语义不变；nil核心显式真nil；异步断言用通道屏障不用sleep；不借切换改变关机预算、panic隔离或平滑关机顺序。
+
+**准出命令（沿用P2口径）：**`make test/race/vet/lint-go/lint-docs`、`make error-codes-check`、`make test-scripts`、`make check-examples`、`bash .github/scripts/consumer/check-v2-consumers.sh`、`go list -deps ./foundation/...` 反向依赖检查、受影响文件 `gofmt -l`、`git diff --check` 及新写P3范围verify脚本。
+
+#### P3准出记录（2026-11-10，待用户审阅）
+
+用户于2026-11-10批准P3开工。P3.1（minimax-m3.1-flash/max）先冻结内核契约，P3.3/P3.4（medium）并行适配，builtin 由 P3.1 一并完成（application 模块编译闭环），Leader 统一修复 examples/test 消费者并跑全量门禁。以P2提交 `fad7597c62496ea5c0e7f280227bb6a2de977782` 为基线，全部改动落在授权边界内（`/tmp/opencode/v2-p3/verify.py` 校验通过）。
+
+**各工作包结果：**
+
+- P3.1 内核契约与账本：`Plugin.Start/Stop`、`RunnablePlugin.Run`、`Quiescer.Quiesce`、`RunHandle.Wait`、`Activator.Activate`、`App.Run/Shutdown/Register*` 及 `RunResult` 七阶段错误字段、`StuckInstance.Err`、`runErrs`、`watchdogErrChan` 等全部 `*apperr.Error`（14生产文件+3新测试）。HookPanic 以根因保留可 As；StopIncompleteError 新增 `Unwrap() []error` 成员逐个可达；40+哨兵保留 `errors.Is`，`sentinelCodes` 仅登记分类码不新增码；context哨兵经 control.Classify 归因（取消49900/超时50401）；聚合外层沿用首个成员码保住P2外层50023断言。红→绿证据与 application test/race/vet/gofmt/golangci 全过。
+- P3.3 协议插件：web-gin/grpc 生命周期方法改型；归一顺序与内核 normalizeErr 一致（已有统一错误→控制归因→所属码兜底）；重复启动用 InvalidState、未启动即Run用 ServiceUnavailable+新增哨兵 ErrNotStarted（Leader裁定保留导出）；http.ErrServerClosed/grpc.ErrServerStopped 正常退出真nil。
+- P3.4 领域插件：database/cache/email/cron/async 生命周期方法改型；database 50014/cache 50016/email 50017 保留原生根因；cron/async 暂用 FrameworkInternalError(50000) 单点兜底（专属码 CRON_SCHEDULER_ERROR/ASYNC_POOL_ERROR 列为P5准备项，届时按E04裁决）；Redis拨号超时按冻结归因顺序落50401并保留redis根因；修复 `chan error` 收 typed-nil 的假失败（通道改 `chan *apperr.Error`）。
+- P3.L Leader集成：examples/v2 三示例与 test/consumer 两夹具适配新签名（Start/Run/Stop/Quiesce 改型、错误透传或 apperr.From 包装、`var runErr error` 改 `*apperr.Error` 消除 typed-nil 假失败）；P2 Worker链断言原样通过。
+
+**准出结果（基线fad7597 + dirty，日志 `/tmp/opencode/v2-p3/gate-*.log`）：**
+
+| 检查                                                                          | 结果                 |
+| ----------------------------------------------------------------------------- | -------------------- |
+| `make test` / `make race` / `make vet`（14模块）                              | 通过                 |
+| `make lint-go` / `make lint-docs`                                             | 通过                 |
+| `make error-codes-check`（91项，P3零新增）                                    | 通过                 |
+| `make test-scripts`（含CI守卫race）                                           | 通过                 |
+| `make check-examples` / `check-v2-consumers.sh`（14模块）                     | 通过                 |
+| `check-v2-examples.sh --fixture http-db-cache / sqlite-async`                 | 通过                 |
+| `go list -deps ./foundation/...` 无反向依赖 / `gofmt -l` / `git diff --check` | 通过 / 空输出 / 通过 |
+| `python3 /tmp/opencode/v2-p3/verify.py`（边界+词表91项逐字不变）              | 通过                 |
+
+外部Redis/SMTP/数据库集成仍默认跳过；P4–P7与发布验收未执行；改动未提交。本记录不将P3升级为已验收完成，待用户审阅。
 
 ### P4：迁移数据库及五适配器的完整错误边界
 
@@ -271,6 +320,8 @@ P1已提交为 `7c4f7fed106ad36d6127e5f19d212b7bbc12897c`（`feat: 实现 V2 强
 ### P5：迁移缓存、邮件、Cron和Async自有操作
 
 - 动作：同时改cache自有Codec与四种泛型接口/双后端，保留键缺失非失败语义；改邮件发送、模板、附件及生命周期；改Cron与Async的状态/准入/取消/等待，保留原因和并发终态契约。
+
+- P5准备注记（2026-11-10）：P3.4 将 cron/async 生命周期失败暂以 FrameworkInternalError(50000) 单点兜底（`lifecycle_error.go` 末行）；P5 迁移其自有操作时应按 E04 向用户提案专属码（候选 CRON_SCHEDULER_ERROR / ASYNC_POOL_ERROR，500组），获批后替换兜底码并登记词表，不提前占号。
 - 交付：编解码失败的模块码、发送与模板失败的模块码、pool准入/状态/超时类型测试；外部拨号和net.Conn适配的成功nil/关闭测试。标准context分支不误映射到Internal。
 - 准出：`go test -race ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/... -count=1`。Redis/SMTP真实集成另记环境与实际执行结果；所有异步断言用通道屏障，不用sleep代替同步。
 - 状态：未执行。

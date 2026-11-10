@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -267,8 +268,11 @@ func TestPlugin_FromEnvDriverNotLoadedError(t *testing.T) {
 		t.Fatal("expected error for unregistered driver")
 	}
 	expected := "数据库驱动 [unregistered_driver] 未加载，请传入 WithAdapter(unregistered_driver.FromEnv()) 或匿名导入 plugins/database/adapter/unregistered_driver/v2"
-	if err.Error() != expected {
-		t.Fatalf("error message mismatch: got %q, want %q", err.Error(), expected)
+	if !strings.Contains(err.Error(), expected) {
+		t.Fatalf("error message mismatch: got %q, want contains %q", err.Error(), expected)
+	}
+	if err.Code.Code != database.DatabaseError.Code {
+		t.Fatalf("错误码不匹配: got %d, want %d", err.Code.Code, database.DatabaseError.Code)
 	}
 }
 

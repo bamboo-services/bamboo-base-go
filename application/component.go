@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -26,7 +27,7 @@ type componentInstance struct {
 	stopDone     chan struct{}  // Stop 完成（含 panic）后的通知通道
 	stopped      atomic.Bool    // 标记 Stop 是否已执行
 	stopPanicked atomic.Bool    // 标记 Stop 阶段是否发生 panic
-	stopErr      error          // Stop 执行返回的错误
+	stopErr      *apperr.Error  // Stop 执行返回的错误
 	retainedDeps []ctxkey.Key   // 该实例当前占用的依赖资源键集合
 }
 
@@ -87,7 +88,7 @@ func (e *componentEngine) executePipeline(
 
 	// 1. 调用工厂函数实例化（不在引擎锁内）
 	var rawInst RunnablePlugin
-	var facErr error
+	var facErr *HookPanicError
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -107,13 +108,13 @@ func (e *componentEngine) executePipeline(
 
 	if facErr != nil {
 		res.Outcome = OutcomeFailed
-		res.FactoryErr = facErr
+		res.FactoryErr = newHookPanicErr(facErr)
 		terminate(res, nil, false)
 		return
 	}
 	if rawInst == nil || isTypedNil(rawInst) {
 		res.Outcome = OutcomeFailed
-		res.FactoryErr = fmt.Errorf("%w: plugin %s", ErrNilPlugin, compKey)
+		res.FactoryErr = newAppErr(ErrNilPlugin, "组件 ["+string(compKey)+"] 的工厂返回了空实例")
 		terminate(res, nil, false)
 		return
 	}
@@ -123,14 +124,14 @@ func (e *componentEngine) executePipeline(
 
 	// Start claim 与 e.stopped / 父关闸在 e.mu + parent 锁边界检查
 	var preStartCancelled bool
-	var preStartCancelErr error
+	var preStartCancelErr *apperr.Error
 
 	e.mu.Lock()
 	if e.stopped {
 		preStartCancelled = true
 		preStartCancelErr = e.stopErr
 		if preStartCancelErr == nil {
-			preStartCancelErr = ErrShuttingDown
+			preStartCancelErr = normalizeErr(apperr.FrameworkComponentInvalidState, "宿主应用正在关机", ErrShuttingDown)
 		}
 	} else if p, ok := e.parents[parentID]; ok {
 		p.mu.Lock()
@@ -138,7 +139,7 @@ func (e *componentEngine) executePipeline(
 			preStartCancelled = true
 			preStartCancelErr = p.closeCause
 			if preStartCancelErr == nil {
-				preStartCancelErr = ErrParentClosing
+				preStartCancelErr = normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing)
 			}
 		}
 		p.mu.Unlock()
@@ -205,17 +206,17 @@ func (e *componentEngine) executePipeline(
 
 	e.setTaskStage(item, "start")
 
-	var startErr error
+	var startErr *apperr.Error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				startErr = &HookPanicError{
+				startErr = newHookPanicErr(&HookPanicError{
 					PluginKey:  compKey,
 					InstanceID: instID,
 					Stage:      "start",
 					Value:      r,
 					Stack:      debug.Stack(),
-				}
+				})
 			}
 		}()
 		startErr = rawInst.Start(startCtxWithVal)
@@ -226,7 +227,7 @@ func (e *componentEngine) executePipeline(
 
 	// 若迟到 nil 但 ctx 已 deadline 则 res.StartErr = deadline
 	if startErr == nil && startCtxExpiredErr != nil {
-		startErr = startCtxExpiredErr
+		startErr = normalizeErr(apperr.FrameworkInternalError, "启动上下文已超时", startCtxExpiredErr)
 	}
 
 	if startErr != nil {
@@ -255,14 +256,14 @@ func (e *componentEngine) executePipeline(
 	item.mu.Unlock()
 
 	var cancelBeforeRun bool
-	var cancelBeforeRunCause error
+	var cancelBeforeRunCause *apperr.Error
 
 	e.mu.Lock()
 	if e.stopped {
 		cancelBeforeRun = true
 		cancelBeforeRunCause = e.stopErr
 		if cancelBeforeRunCause == nil {
-			cancelBeforeRunCause = ErrShuttingDown
+			cancelBeforeRunCause = normalizeErr(apperr.FrameworkComponentInvalidState, "宿主应用正在关机", ErrShuttingDown)
 		}
 	} else if parentSt, ok := e.parents[parentID]; ok {
 		parentSt.mu.Lock()
@@ -270,7 +271,7 @@ func (e *componentEngine) executePipeline(
 			cancelBeforeRun = true
 			cancelBeforeRunCause = parentSt.closeCause
 			if cancelBeforeRunCause == nil {
-				cancelBeforeRunCause = ErrParentClosing
+				cancelBeforeRunCause = normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing)
 			}
 		} else {
 			parentSt.runningCancels[instID] = runCancel
@@ -326,17 +327,17 @@ func (e *componentEngine) executePipeline(
 
 	// 4. 调用 Run(lifetimeCtx)
 	e.setTaskStage(item, "run")
-	var runErr error
+	var runErr *apperr.Error
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				runErr = &HookPanicError{
+				runErr = newHookPanicErr(&HookPanicError{
 					PluginKey:  compKey,
 					InstanceID: instID,
 					Stage:      "run",
 					Value:      r,
 					Stack:      debug.Stack(),
-				}
+				})
 			}
 		}()
 		runErr = rawInst.Run(lifetimeCtx)
@@ -354,7 +355,7 @@ func (e *componentEngine) executePipeline(
 	e.mu.Unlock()
 
 	// 5. 先等待当前 Component 的子树全部归零，再执行 Stop
-	e.closeParent(instID, ErrParentClosing)
+	e.closeParent(instID, normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing))
 	_ = e.waitParent(context.Background(), instID)
 
 	// 6. 执行 Stop 真实收尾
@@ -393,14 +394,14 @@ func (e *componentEngine) executePipeline(
 	terminate(res, compInst, true)
 }
 
-func isContextCanceledError(err error) bool {
+func isContextCanceledError(err *apperr.Error) bool {
 	if err == nil {
 		return false
 	}
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func (e *componentEngine) safeCallComponentStop(ci *componentInstance, def PluginInfo) (retErr error) {
+func (e *componentEngine) safeCallComponentStop(ci *componentInstance, def PluginInfo) (retErr *apperr.Error) {
 	defer func() {
 		close(ci.stopDone)
 	}()
@@ -415,8 +416,8 @@ func (e *componentEngine) safeCallComponentStop(ci *componentInstance, def Plugi
 				Value:      r,
 				Stack:      debug.Stack(),
 			}
-			ci.stopErr = panicErr
-			retErr = panicErr
+			ci.stopErr = newHookPanicErr(panicErr)
+			retErr = ci.stopErr
 		}
 	}()
 
@@ -454,7 +455,7 @@ func (e *componentEngine) finishTask(item *componentQueueItem, res RunResult, ci
 	item.handle.publishResult(res)
 }
 
-func (e *componentEngine) handleStopPanic(ci *componentInstance, def PluginInfo, stopErr error) {
+func (e *componentEngine) handleStopPanic(ci *componentInstance, def PluginInfo, stopErr *apperr.Error) {
 	// 1. 保留依赖占用，不调用 e.releaseDeps(ci.retainedDeps)
 	// 2. 将容器对应条目（若有）标记为不可用
 	if e.app != nil && e.app.container != nil {

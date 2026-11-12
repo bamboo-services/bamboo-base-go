@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -100,11 +101,17 @@ func (p *Plugin) Start(ctx context.Context) (retErr *apperr.Error) {
 		adapter = adp
 	}
 
-	dialector, err := adapter.Open()
-	if err != nil {
-		return lifecycleErr("database: 构造方言 Dialector 失败", err)
+	if isNilDatabaseValue(adapter) {
+		return apperr.New(dialect.AdapterInvalid, "数据库适配器实例无效", dialect.ErrNilAdapter)
+	}
+	dialector, adapterErr := adapter.Open()
+	if adapterErr != nil {
+		return lifecycleErr("database: 构造方言 Dialector 失败", adapterErr)
 	}
 
+	if isNilDatabaseValue(dialector) {
+		return apperr.New(dialect.AdapterInvalid, "数据库适配器返回了无效 Dialector", errors.New("database: adapter returned nil dialector"))
+	}
 	var gormCfg *gorm.Config
 	if p.cfg.gormConfig != nil {
 		clone := *p.cfg.gormConfig
@@ -120,21 +127,23 @@ func (p *Plugin) Start(ctx context.Context) (retErr *apperr.Error) {
 		gormCfg.Logger = gormlogger.Discard
 	}
 
-	db, err := gorm.Open(dialector, gormCfg)
-	if err != nil {
-		return lifecycleErr("database: gorm.Open 失败", err)
+	db, gormErr := gorm.Open(dialector, gormCfg)
+	if gormErr != nil {
+		return lifecycleErr("database: gorm.Open 失败", gormErr)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return lifecycleErr("database: 获取底层 sql.DB 失败", err)
+	sqlDB, sqlErr := db.DB()
+	if sqlErr != nil {
+		return lifecycleErr("database: 获取底层 sql.DB 失败", sqlErr)
 	}
 	p.sqlDB = sqlDB
 	p.db = db
 
 	defer func() {
 		if retErr != nil {
-			_ = p.closeSQLDB()
+			if cleanupErr := p.closeSQLDB(); cleanupErr != nil {
+				retErr = apperr.Join(&retErr.Code, "数据库启动及清理失败", retErr, cleanupErr)
+			}
 		}
 	}()
 
@@ -181,6 +190,20 @@ func (p *Plugin) closeSQLDB() *apperr.Error {
 		}
 	}
 	return nil
+}
+
+// isNilDatabaseValue 检查原生句柄或适配器接口中的 nil 与 typed-nil。
+func isNilDatabaseValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // Expose 交付数据库插件向容器导出的共享对象映射表。

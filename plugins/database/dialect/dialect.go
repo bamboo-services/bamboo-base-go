@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"gorm.io/gorm"
 )
 
@@ -36,7 +37,7 @@ type Adapter interface {
 	// Name 返回适配器对应的驱动名称，例如 "mysql" 或 "postgres"。
 	Name() string
 	// Open 构造并返回 [gorm.Dialector] 实例或在配置非法时返回错误。
-	Open() (gorm.Dialector, error)
+	Open() (gorm.Dialector, *apperr.Error)
 }
 
 // Factory 代表用于构造 [Adapter] 实例的工厂函数类型。
@@ -69,13 +70,13 @@ func isTypedNil(a Adapter) bool {
 	}
 }
 
-func validateDriver(driver Driver) error {
+func validateDriver(driver Driver) *apperr.Error {
 	trimmed := strings.TrimSpace(string(driver))
 	if trimmed == "" {
-		return errors.New("dialect: driver cannot be empty")
+		return apperr.New(DriverInvalid, "数据库驱动名称不能为空", errors.New("dialect: driver cannot be empty"))
 	}
 	if strings.EqualFold(trimmed, "none") {
-		return errors.New("dialect: driver cannot be none")
+		return apperr.New(DriverInvalid, "数据库驱动不能为 none", errors.New("dialect: driver cannot be none"))
 	}
 	return nil
 }
@@ -86,31 +87,31 @@ func (r *registry) register(driver Driver, factory Factory) {
 		panic(err)
 	}
 	if factory == nil {
-		panic(errors.New("dialect: factory cannot be nil"))
+		panic(apperr.New(AdapterInvalid, "数据库驱动工厂不能为 nil", errors.New("dialect: factory cannot be nil")))
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, exists := r.factories[driver]; exists {
-		panic(fmt.Errorf("dialect: driver %q already registered", driver))
+		panic(apperr.New(DriverInvalid, "数据库驱动重复注册", fmt.Errorf("dialect: driver %q already registered", driver)))
 	}
 	r.factories[driver] = factory
 }
 
 // lookup 从当前注册表查找并实例化驱动适配器，工厂调用不在锁内进行。
-func (r *registry) lookup(driver Driver) (Adapter, error) {
+func (r *registry) lookup(driver Driver) (Adapter, *apperr.Error) {
 	r.mu.RLock()
 	factory, exists := r.factories[driver]
 	r.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("%w: %q", ErrDriverNotLoaded, driver)
+		return nil, apperr.New(DriverNotLoaded, "数据库驱动未注册或未加载", fmt.Errorf("%w: %q", ErrDriverNotLoaded, driver))
 	}
 
 	adapter := factory()
 	if isTypedNil(adapter) {
-		return nil, ErrNilAdapter
+		return nil, apperr.New(AdapterInvalid, "驱动工厂返回了无效适配器", ErrNilAdapter)
 	}
 	return adapter, nil
 }
@@ -131,6 +132,6 @@ func Register(driver Driver, factory Factory) {
 // 若请求的驱动未注册，返回包含 [ErrDriverNotLoaded] 的错误；
 // 若工厂函数返回 nil 或底层为 nil 的接口值，返回 [ErrNilAdapter]。
 // 工厂构造调用在全局读写锁外执行，避免外部工厂内部逻辑造成锁重入或死锁。
-func Lookup(driver Driver) (Adapter, error) {
+func Lookup(driver Driver) (Adapter, *apperr.Error) {
 	return defaultRegistry.lookup(driver)
 }

@@ -31,6 +31,10 @@ type BaseEntityWithSoftDelete struct {
 // 当 ID 为零值时，钩子尝试从 tx.Statement.Context 中读取 [*snowflake.Node]；
 // 若上下文中缺少节点或节点为 nil，钩子立即终止并返回错误，阻止无主键或零值主键写入；
 // 若 ID 已为非零值，则安全保留原 ID，不尝试获取雪花节点。
+//
+// 失败时返回强类型错误（[*apperr.Error]），其错误码取决于失败根因：
+// 模型自身契约缺失使用 [ModelInvalid]，容器与组件提取失败保留应用层原始错误码，
+// 雪花发号失败保留发号器自身错误码。成功时返回真正的 nil 错误。
 func (e *BaseEntityWithSoftDelete) BeforeCreate(tx *gorm.DB) error {
 	if e.ID.IsZero() {
 		id, err := generateEntityID(tx)

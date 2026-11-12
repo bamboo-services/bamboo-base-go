@@ -7,7 +7,7 @@
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，改动未提交。P4–P7实现未执行。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，已提交为 `c8abf577`（未推送）。2026-11-12用户批准P4实际实施：已按已确认语义追加50033–50037（词表91→96项），公共契约、五适配器与模型迁移及Leader准出已完成，待用户审阅；P5–P7及发布未启动。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -308,14 +308,161 @@ P1已提交为 `7c4f7fed106ad36d6127e5f19d212b7bbc12897c`（`feat: 实现 V2 强
 | `go list -deps ./foundation/...` 无反向依赖 / `gofmt -l` / `git diff --check` | 通过 / 空输出 / 通过 |
 | `python3 /tmp/opencode/v2-p3/verify.py`（边界+词表91项逐字不变）              | 通过                 |
 
-外部Redis/SMTP/数据库集成仍默认跳过；P4–P7与发布验收未执行；改动未提交。本记录不将P3升级为已验收完成，待用户审阅。
+外部Redis/SMTP/数据库集成仍默认跳过；P4–P7与发布验收未执行。本记录不将P3升级为已验收完成；P3已按用户授权提交为 `c8abf5775f189fc5b144eae210d94488fe35cd0f`，候选树核对一致，未推送。
 
 ### P4：迁移数据库及五适配器的完整错误边界
 
 - 动作：同时修改dialect.Adapter、5个Open/DSN校验/延迟错误字段及database调用方；自有模型辅助强类型。GORM hooks仍为固定签名，显式nil适配，保留雪花和GORM原因。
 - 交付：5驱动空DSN和格式拒绝测试、成功钩子确实执行且无假失败的SQLite回归、原生gorm句柄边界说明；事务适配如获授权单列门面，不误称已有。
 - 准出：`go test ./plugins/database/... ./plugins/database/adapter/mysql/... ./plugins/database/adapter/postgres/... ./plugins/database/adapter/sqlite/... ./plugins/database/adapter/sqlserver/... ./plugins/database/adapter/oracle/... -count=1`；复跑独立消费者。
-- 状态：未执行；真实Oracle/SQL Server等集成条件不足时记录阻塞，不能标记真实服务验收通过。
+- 状态：2026-11-12实现及Leader准出完成，待用户审阅；六模块强类型边界、五新码与回归已交付，真实外部引擎验收仍未执行。
+
+#### P4施工清单（2026-11-12，仅准备，尚未实施）
+
+> 以下保留获准前的准备快照；后续用户于2026-11-12明确批准实际实施，五项编号已集中登记为50033–50037，旧91项未重排。准备态的“未获授权”不再约束本次P4；P5–P7、提交推送与发布仍须另行授权。
+
+本轮只核对源码并编写清单，不修改Go、依赖、CI或错误码词表，不派发实施任务，不提交推送。实施基线为P3提交 `c8abf5775f189fc5b144eae210d94488fe35cd0f`；P3提交后树一致且工作区曾干净。总计划保持in-progress，P4仍未开工；2026-11-12用户已确认五项错误归属与评审边界，仅授权写回文档；编号登记和Go实施仍待另行授权。
+
+##### P4当前缺口与接口改动
+
+| 位置与现状依据                                                                                                                                                     | P4拟议改动                                                                                                                                                                                           | 保留的契约                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [dialect/dialect.go](../../plugins/database/dialect/dialect.go)：`Adapter.Open() (gorm.Dialector, error)`；`Lookup`、`registry.lookup`、`validateDriver` 返回error | 分别改为 `Open() (gorm.Dialector, *apperr.Error)`、`Lookup(driver Driver) (Adapter, *apperr.Error)`、`lookup(driver Driver) (Adapter, *apperr.Error)`、`validateDriver(driver Driver) *apperr.Error` | `Name() string`、`Factory func() Adapter`、`Register(driver Driver, factory Factory)` 不增加失败返回；Register非法声明仍panic，库自产的panic错误按新码构造；工厂在锁外调用、未知驱动不伪造适配器                                           |
+| 五个 `adapter/<driver>/<driver>.go`：均有 `adapter.err error` 和原生error版Open                                                                                    | 延迟错误字段改 `*apperr.Error`，五个Open同步实现新接口；MySQL/Postgres/SQLServer/Oracle的 `validateDSN(raw string)` 改统一指针                                                                       | `New(dsn string) dialect.Adapter`、`FromEnv() dialect.Adapter`、init注册不改签名；New/FromEnv/Open不拨号，配置失败仍延迟至Open；SQLite没有validateDSN，不为对齐形式虚造校验器                                                              |
+| [plugin.go](../../plugins/database/plugin.go)：Start/Stop已在P3强类型化；Open之后复用err接收 `gorm.Open` / `db.DB` 的原生error                                     | 切换Lookup/Open调用，分开 `adapterErr` / `gormErr` / `sqlErr`，避免把原生error赋给已推断为统一指针的变量；同步fakeAdapter及函数值断言                                                                | Start/Ping与Stop的控制归因、关闭顺序、共享句柄与P3账本不重写；第三方失败仍保留原生原因，必要清理失败不能文本化或无声吞掉                                                                                                                   |
+| [models/base_entity.go](../../plugins/database/models/base_entity.go)：`generateEntityID(tx *gorm.DB) (snowflake.SnowflakeID, error)`，含裸哨兵和fmt包装           | generateEntityID改 `(snowflake.SnowflakeID, *apperr.Error)`；自有BeforeCreate/BeforeUpdate内部核心如抽出也返回统一指针                                                                               | BaseEntity与[BaseEntityWithSoftDelete](../../plugins/database/models/base_entity_soft_delete.go)共四个GORM hook仍为 `func(tx *gorm.DB) error`；非nil核心再装入error，成功显式返回nil；非零ID保留、不强制取雪花节点、时间戳及软删除语义不变 |
+| [context.go](../../plugins/database/context.go)、[gormlog/gormlog.go](../../plugins/database/gormlog/gormlog.go)                                                   | Get/MustGet只做回归；GORM logger、driver测试替身仅核对固定方法集，不批量改型                                                                                                                         | Get已返回 `(*gorm.DB, *apperr.Error)`；原生gorm `.Error` / Transaction、`gorm.Dialector.Initialize(*gorm.DB) error`、gorm logger Trace原生error输入均属第三方边界；本次不新增事务门面                                                      |
+
+同补丁更新六个模块（database核心及五个adapter）的接口实现、测试替身、函数值、GoDoc/示例和独立消费者。Go没有返回协变；正例证明五个adapter满足新接口，负例证明旧 `Open() (gorm.Dialector, error)` 不再满足接口，并排除环境/下载失败冒充预期编译失败。构造函数没有失败返回，不为统一类型新增返回值；测试故障注入与标准库方法不作为生产API整批迁移。
+
+##### P4错误归属与评审结论
+
+根包已拥有8项 `DATABASE_` 码，而根包依赖dialect。dialect不能反向导入database根包取 `DatabaseError`；models若导入根包也可能经根包内部测试形成测试导入环。已确认在既有database模块的低层子包内拥有各自语义，不新增module、不把领域错误搬进foundation，也不复制或重导出现有50014。
+
+**2026-11-12用户已确认以下5项的归属、符号、Output、500分组及评审边界；尚未登记或占号。确认仅授权写回文档，不包含编号登记、Go实施或派工。**
+
+| 已确认归属 / Go符号 / Output                                                                    | 负责的失败                                                           | 已确认分组与边界                                                                                                                    |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins/database/dialect` / `DriverInvalid` / `DATABASE_DIALECT_DRIVER_INVALID`                | Register的空白/none驱动名、重复注册等SDK自产的非法驱动声明           | 500；保留panic控制流，不改为静默忽略或返回成功                                                                                      |
+| `plugins/database/dialect` / `DriverNotLoaded` / `DATABASE_DIALECT_DRIVER_NOT_LOADED`           | Lookup未注册驱动                                                     | 500；保留 `ErrDriverNotLoaded` 根因，不把驱动缺失当业务404                                                                          |
+| `plugins/database/dialect` / `AdapterInvalid` / `DATABASE_DIALECT_ADAPTER_INVALID`              | nil注册工厂、工厂返回nil/typed-nil、适配器实例/返回值违反契约        | 500；保留 `ErrNilAdapter`；显式WithAdapter的typed-nil在调用Open前防护；第三方nil Dialector不传给gorm.Open                           |
+| `plugins/database/dialect` / `AdapterConfigInvalid` / `DATABASE_DIALECT_ADAPTER_CONFIG_INVALID` | 五适配器启动/部署用DSN、host/port/service/path缺失或现有格式校验失败 | 500；五驱动共用该配置语义，安全描述注明驱动但不复制DSN；确有valueerr原因时保留为内层，不因含400值错误直接把服务自身配置当客户端失败 |
+| `plugins/database/models` / `ModelInvalid` / `DATABASE_MODEL_INVALID`                           | 自有模型钩子的tx/Statement/Context或雪花节点实例契约缺失             | 500；保留模型哨兵；已有application.Get、snowflake.Generate统一错误仍保留原码与完整链，不强制全部换成ModelInvalid                    |
+
+安全Message沿用清单，依次为“数据库驱动声明非法”“数据库驱动未加载”“数据库适配器无效”“数据库适配器配置非法”“数据库模型契约无效”。已确认采用dialect的 `DATABASE_DIALECT_` 与models的 `DATABASE_MODEL_` 归属前缀，按更长前缀优先匹配；根包原有 `DATABASE_` 的8项定义不变。前缀及声明仍未写入受控词表、检查器或Go源码。
+
+这5项的语义与边界已确认，具体编号尚未分配。另获登记与实施授权后，必须重读active/retired词表并按spec0002 E01–E05取组内全局最大号追加。本轮不设置具体编号，不修改91项active表。按准备时读取的50000–50032计算，SDK的00–49共50槽，剩17槽；5项未来登记后余12槽。这是容量核算，不是预留号或Go实施授权。
+
+原有 `DatabaseError` 50014继续负责GORM打开、连接池、Ping、关闭等未知数据库运行失败；`TransactionFailed`及404/409约束码不自动套用到所有驱动错误。context取消/内部超时仍复用CONTROL_的499/504，并保留原生哨兵；模型发号错误保留已注册SNOWFLAKE_/VALUE_语义。管理API校验用户提交配置若属于请求输入，按R11另用输入码；不修改这里New/FromEnv启动配置的责任。
+
+已有错误/根因用From或New保链，不用字符串替代；需要明确把服务配置重包成500时用New而不是会沿用原码的From。现有SQLServer URL解析等已脱敏的错误，不重新把含密码的原始URL解析错误挂入Err；同时断言 `ErrorMessage`、JSON以及现有 `Error()` 的密码不泄漏约束。第三方运行错误保留原生根因，但不把其文本复制进对外安全文案或Data。
+
+**本轮确认的实施边界（2026-11-12）：**
+
+- 五项对应五类失败责任，不是五个数据库驱动分别取一个码。DriverInvalid仅负责非法驱动声明，DriverNotLoaded负责Lookup未加载；二者都不代表数据库网络连接失败。Register既有panic方式不改，Lookup保留原哨兵根因。
+- AdapterInvalid表示工厂/实例/返回值不满足对象契约，AdapterConfigInvalid表示已有校验拒绝的配置内容；不得把两类合成通用适配器失败，也不为迁移收紧五驱动的DSN接受集合。SQLite没有通用字符串格式拒绝；Open仍不建立物理连接。
+- 启动/部署用DSN和内部调用契约归服务端500；管理API接收用户提交配置的请求输入错误按R11另判。只有责任确属服务自身配置时才明确重包为500，不按字符串内容猜责任。
+- ModelInvalid只处理模型自身缺少必要tx/Statement/Context或节点实例的失败分支。application.Get已有的容器/组件错误及snowflake.Generate已有的范围/时钟错误保留原码和完整原因；若同时带模型哨兵，保留该哨兵和原统一错误，不能统一洗成ModelInvalid。
+- 非零ID路径仍不获取或强制要求雪花节点；BeforeUpdate不因迁移额外增加tx/context校验。两模型共四个GORM hook保留原生error签名，内部核心非nil时再转接，成功显式返回字面量nil。
+- 沿用既有Is/As与脱敏约束。登记前再次复核剩余容量，禁止提前占具体号；现有91项词表、根包8项DATABASE_以及所有Go文件保持原样。确认本节不自动批准P4接口切换、Go实施、派工或发布。
+
+本轮已选择低层归属方案，未选择抽取公共码子包并迁移既有定义的备选，以避免额外归属/API迁移；禁止用根包变量别名或FrameworkInternalError掩盖取码依赖问题。**P4.0的语义评审已确认，但登记及实施仍未获授权：保持准备态，不分号、不切换接口、不派Agent。**
+
+##### P4五适配器行为矩阵
+
+| 适配器                                                              | 按现有代码覆盖的拒绝与成功分支                                                     | 不借本次迁移改变的行为                                                                                                   |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [MySQL](../../plugins/database/adapter/mysql/mysql.go)              | 空DSN；缺@、缺/、非tcp地址、空tcp地址；FromEnv空host/port；合法串与默认/显式DSN    | 保持当前基本结构检查与拼装格式，不追加新的端口范围或驱动级完整语法校验                                                   |
+| [PostgreSQL](../../plugins/database/adapter/postgres/postgres.go)   | 空DSN；URL无host、非法纯文本；FromEnv空port；postgres/postgresql URL与含等号串     | 现有key=value检查较宽松，不借迁移严格解析全部语法；转义、缺省值与优先级保持                                              |
+| [SQLite](../../plugins/database/adapter/sqlite/sqlite.go)           | New空/空白DSN；FromEnv空白DATABASE_PATH；无配置默认 `:memory:`；DSN优先            | 没有任意字符串“格式非法”通用拒绝分支；路径不存在不是Open失败，Open不触碰文件；真实建连/文件/SQL问题由Start或gorm执行验证 |
+| [SQL Server](../../plugins/database/adapter/sqlserver/sqlserver.go) | 空DSN；URL解析失败、非sqlserver scheme、无host；FromEnv空host/port；IPv6与凭据转义 | 保持URL编码、net.JoinHostPort行为与现有接受集合                                                                          |
+| [Oracle](../../plugins/database/adapter/oracle/oracle.go)           | 空DSN；URL无host、非法纯文本；FromEnv空host/port/service；URL/logfmt/Easy Connect  | 现有logfmt/Easy Connect检查较宽松；libDir只拼装不探测客户端；Open构造成功不证明Oracle客户端可用或连通                    |
+
+五驱动都验证失败时Dialector为nil、成功时错误指针真nil、延期错误可重复读取且Code/Output稳定；无网络单测不依赖真实服务。凭据测试同时覆盖显式DSN与环境变量，并用t.Setenv/清理恢复避免跨用例污染。真实SQLite回归需验证两个模型的Create/Update钩子确实执行、非零ID保留、失败不写入半成品，以及缺节点/无效gene/时钟回退的原因可达；不凭直接调用hook通过就宣称GORM已执行hook。
+
+##### P4拟议分工与交付顺序
+
+| 工作包                 | 唯一写入范围                                                      | 必须交付 / 准入                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| P4.0 Leader确认归属    | 计划、spec0002、词表守卫白名单（后两项仅实施获准后修改）          | 2026-11-12归属与语义已确认；另获登记/实施授权后检查91旧项保真与容量，集中分号；当前停在准备态，未登记或派工                                  |
+| P4.1 公共契约          | `plugins/database/dialect/**`及其编译夹具                         | 冻结Adapter.Open/Lookup/内部辅助强类型及哨兵/panic口径；旧签名负例先红，正例方法集可验证；契约冻结后才能并行。主干最终交付必须六模块原子通过 |
+| P4.2A MySQL/PostgreSQL | 对应两个adapter模块（含测试/GoDoc）                               | Open/validateDSN/err字段同步；现有校验矩阵、DSN脱敏、构造无网络、成功真nil与根因测试                                                         |
+| P4.2B SQLServer/Oracle | 对应两个adapter模块（含测试/GoDoc）                               | 同上；Oracle客户端/数据库实测缺失单列，不让环境缺失冒充语法拒绝通过                                                                          |
+| P4.3 SQLite/模型       | SQLite模块及 `plugins/database/models/**`                         | SQLite原有接受集合；generateEntityID强类型；四固定hook薄适配；持久SQLite真实GORM钩子回归与Is/As                                              |
+| P4.L Leader集成        | database根包、共享fakeAdapter、examples、test/consumer、文档/守卫 | 处理Open之后原生error变量分离；检查P3生命周期语义不漂移、循环依赖、编译正反例、词表及全部准出证据                                            |
+
+P4.1冻结后，P4.2A/P4.2B/P4.3写入范围互不重叠，可并行；database根包与公共词表/CI仅Leader写。模型码和dialect码由各归属维护者在Leader登记之后定义，不能多个实现者分别分号。模型回归若与root测试重叠，由Leader协调归属，不同时改同一文件。此处只是拟议角色，不创建卡、不派Agent；模型/effort在用户实际授权实施时再确认。
+
+##### P4实施验收门禁（本轮均未运行）
+
+从仓库根执行，固定 `GOTOOLCHAIN=go1.25.11`；六模块完整范围必须显式列出，`./plugins/database/...` 不跨越五个独立adapter模块。P4.1中间态允许暂时无法编译，但不作为可提交/可发布成果。
+
+```bash
+export GOTOOLCHAIN=go1.25.11
+go test ./plugins/database/... ./plugins/database/adapter/mysql/... ./plugins/database/adapter/postgres/... ./plugins/database/adapter/sqlite/... ./plugins/database/adapter/sqlserver/... ./plugins/database/adapter/oracle/... -count=1
+go test -race ./plugins/database/... ./plugins/database/adapter/mysql/... ./plugins/database/adapter/postgres/... ./plugins/database/adapter/sqlite/... ./plugins/database/adapter/sqlserver/... ./plugins/database/adapter/oracle/... -count=1
+go vet ./plugins/database/... ./plugins/database/adapter/mysql/... ./plugins/database/adapter/postgres/... ./plugins/database/adapter/sqlite/... ./plugins/database/adapter/sqlserver/... ./plugins/database/adapter/oracle/...
+make error-codes-check
+make test-scripts
+make test
+make race
+make vet
+make lint-go
+make lint-docs
+make check-examples
+go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1
+bash .github/scripts/consumer/check-v2-consumers.sh
+bash .github/scripts/consumer/check-v2-examples.sh --fixture http-db-cache --race
+bash .github/scripts/consumer/check-v2-examples.sh --fixture sqlite-async --race
+GOFLAGS=-mod=readonly go list -deps ./foundation/...
+gofmt -l plugins/database examples/v2 test/consumer
+git diff --check
+```
+
+另外检查依赖输出：foundation不得出现application/plugins，dialect/models不得反向依赖database根包；错误码新归属须通过AST白名单及HTTP/RPC Code/Output/状态回归。静态编译夹具必须覆盖旧方法集、Open函数值、延迟字段及四个hook固定签名；完整全库类型扫描仍属P7，不能把P4夹具称为全仓守卫。
+
+先通过六模块与SQLite行为门禁，再通过全量门禁和两个独立消费者fixture；记录命令、SHA、dirty状态和跳过项。MySQL/PostgreSQL真实集成按显式环境开关另跑；Oracle/SQLServer无专属环境时标未运行/受阻，不算已验收连通。若新增依赖或go.mod变化确有必要，先解释并检查独立消费候选模块图，不自动升级驱动或新增SDK模块。
+
+**本轮准备验收：**只运行 `make lint-docs`、`make error-codes-check`、`python3 /tmp/opencode/v2-p4-prep/verify.py`、`git diff --check`。verify核对仅plan0002与planREADME两文档变化、P3基线、91项active机器区逐字未变、现有Go/依赖/CI文件未改、文档相对链接与新标题锚有效；它是本轮临时准备检查，不替代P4持久回归。真实测试结果在执行后回报，不把上面的未来命令标为通过。
+
+##### P4停工与回滚条件
+
+发现nil假失败、接口实现者缺漏、原有DSN接受集合变化、敏感凭据外泄、Is/As原因丢失或子包导入环时，停在该工作包修复，不把失败留给P5。不实现事务封装、不重写第三方gorm行为、不提前开展P5–P7。需要回退时以 `c8abf577` 为已提交锚点，连同新接口、五实现者、根调用方、测试与获批码表调整整批回退；未经用户授权不reset、不改历史、不移动标签或推送。P4开工/新增码确认不等于整计划或看板卡验收完成。
+
+#### P4准出记录（2026-11-12，待用户审阅）
+
+用户于2026-11-12批准实际实施。Leader先冻结dialect契约及集中登记，再将MySQL/PostgreSQL、SQLServer/Oracle、SQLite/模型分为互不重叠的工作包，最后复读关键diff并集成根调用方。基线为 `c8abf5775f189fc5b144eae210d94488fe35cd0f`，以下检查均基于该HEAD加本次未提交改动（dirty=true）；没有提交、推送、PR或发布，P5–P7未启动。
+
+本次交付：
+
+- `Adapter.Open`、Lookup/内部lookup与validateDriver改为统一指针；五适配器延期错误字段/Open/已有validateDSN同步，New/FromEnv/Factory/Register不增加失败返回，非法注册仍panic。新码50033–50037在dialect/models归属中定义，机器词表91→96，旧91项六列逐项保真；根包8项DATABASE_不变。
+- 五驱动原DSN接受集合、默认值、转义与优先级不收紧；New/FromEnv/Open不建连，SQLite不新增通用格式拒绝。nil适配器、typed-nil及nil/typed-nil Dialector在调用gorm.Open前拒绝；配置错误延期交付且重复Open稳定。
+- 根包分离adapterErr/gormErr/sqlErr，保既有Code及Is/As；Ping失败后的Close错误不再吞掉，聚合保首失败码和两条根因。原有驱动未加载测试从通用50014改断言50034，并补Output/ErrDriverNotLoaded链断言。
+- generateEntityID返回统一指针；tx/Statement/Context缺失使用ModelInvalid，已有application/Get及snowflake错误保原码和全部原因。四个GORM hook仍返回error，成功显式nil；非零ID和BeforeUpdate原行为不变。
+- 持久编译正反例覆盖旧Adapter方法集及普通error拒绝、函数值/延期字段与四hook固定签名；五新增码经HTTP500/gRPC Internal及信封三元组/脱敏回归。协议测试使用与词表一致的输入夹具，不新增插件间运行依赖。
+- 真实SQLite文件库覆盖两个模型Create/Update钩子、SkipHooks对照、非零ID保留、缺节点失败不落库；补充GeneProvider非法gene经GORM仍保VALUE_OUT_OF_RANGE、根因与零ID且无半成品记录。GORM自动更新时间会覆盖落库时间，Update通过gorm:update前的观察回调验证，不以自动字段更新冒充钩子执行。
+
+SQLite新回归直接使用application/v2，已在该子模块补同版本v2.0.0的直接require（此前仅传递依赖），不新增SDK模块、不升级第三方库，其余go.mod/go.sum不变；独立消费候选图验证通过。
+
+实际准出命令与结果（`GOTOOLCHAIN=go1.25.11`）：
+
+| 命令                                                                                                                                                                                                                                         | 结果与边界                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 本节施工清单所列六模块 `go test ... -count=1`、同范围 `go test -race ... -count=1` 与 `go vet ...`                                                                                                                                           | 通过；根包及dialect/gormlog/models三个子包、五独立adapter均显式覆盖；真实外部引擎按原开关跳过                     |
+| `make test`、`make race`、`make vet`                                                                                                                                                                                                         | 最终复跑通过，14模块；包含现有snowflake时钟回退测试                                                               |
+| `make lint-go`、`make lint-docs`                                                                                                                                                                                                             | 最终通过；新增两测试曾触发ST1023/QF1011，已把精确Open方法断言移至包级而非关闭lint                                 |
+| `make error-codes-check`、`make test-scripts`                                                                                                                                                                                                | 通过；新子域最长前缀、点导入/别名反例及词表-源码双向核对                                                          |
+| `make check-examples`、`bash .github/scripts/consumer/check-v2-consumers.sh`                                                                                                                                                                 | 通过；独立候选无本地replace，覆盖仓内受控消费范围，不等于发布验收                                                 |
+| `bash .github/scripts/consumer/check-v2-examples.sh --fixture http-db-cache --race`                                                                                                                                                          | 通过，独立fixture竞态验证                                                                                         |
+| `bash .github/scripts/consumer/check-v2-examples.sh --fixture sqlite-async --race`                                                                                                                                                           | 通过，独立fixture竞态验证                                                                                         |
+| `go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1`                                                                                                                                                      | 通过，包含五新增码协议映射                                                                                        |
+| `GOFLAGS=-mod=readonly go list -deps ./foundation/...` 与 `GOFLAGS=-mod=readonly go list -deps ./plugins/database/dialect ./plugins/database/models`                                                                                         | 通过并检查输出：foundation无application/plugins，dialect/models无database根包反向依赖                             |
+| `gofmt -l plugins/database plugins/web-gin/httpresult/p4_error_mapping_test.go plugins/grpc/grpcresult/p4_error_mapping_test.go .github/scripts/ci/check-error-codes.go .github/scripts/ci/check-error-codes_p4_test.go`、`git diff --check` | 输出空，无格式或空白问题                                                                                          |
+| `python3 /tmp/opencode/v2-p4/verify.py`                                                                                                                                                                                                      | 通过：96项、旧91项六列保真、P4路径范围及三份文档相对链接/锚、仅SQLite既有内部模块直接依赖变化；不是P7全仓类型守卫 |
+
+日志位于本机会话 `/tmp/opencode/v2-p4/gate-*.log`，机器检查汇总为 `gates.json` / `scope.json`。这些临时文件不是仓库内持久门禁；回归源码与编译夹具已持久落库。文档结果在更新本记录后重跑，不将先前失败冒称一次通过。
+
+未执行/保留边界：MySQL/PostgreSQL真实连接仍按既有显式环境开关跳过；无专属Oracle/SQLServer环境与Oracle客户端运行期验收，Open构造成功不等于连通。模型链路未注入真实时钟回退（无公开注入点，不使用unsafe或改foundation私有状态）；发号器现有时钟回退用例已在本次全量test/race中执行，模型Generate失败分支直接透传并经非法gene回归覆盖。ErrNilSnowflakeNode防御分支因容器禁止暴露nil节点无法经公开API触发，保留不变量测试；不伪造为已跑通。以上不是整计划或看板卡完成，P4待用户审阅。
 
 ### P5：迁移缓存、邮件、Cron和Async自有操作
 

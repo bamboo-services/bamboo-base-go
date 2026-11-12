@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
 	"gorm.io/gorm"
@@ -42,6 +43,10 @@ type BaseEntity struct {
 // 当 ID 为零值时，钩子尝试从 tx.Statement.Context 中读取 [*snowflake.Node]；
 // 若上下文中缺少节点或节点为 nil，钩子立即终止并返回错误，阻止无主键或零值主键写入；
 // 若 ID 已为非零值，则安全保留原 ID，不尝试获取雪花节点。
+//
+// 失败时返回强类型错误（[*apperr.Error]），其错误码取决于失败根因：
+// 模型自身契约缺失使用 [ModelInvalid]，容器与组件提取失败保留应用层原始错误码，
+// 雪花发号失败保留发号器自身错误码。成功时返回真正的 nil 错误。
 func (e *BaseEntity) BeforeCreate(tx *gorm.DB) error {
 	if e.ID.IsZero() {
 		id, err := generateEntityID(tx)
@@ -62,21 +67,30 @@ func (e *BaseEntity) BeforeUpdate(tx *gorm.DB) error {
 	return nil
 }
 
-func generateEntityID(tx *gorm.DB) (snowflake.SnowflakeID, error) {
+// generateEntityID 从上下文中的雪花发号节点生成实体主键。
+//
+// 返回值为强类型错误 [*apperr.Error]，成功时是真正的 nil 指针：
+//   - tx 或 Statement 缺失、上下文缺失、节点实例缺失属于模型自身契约失败，
+//     统一使用 [ModelInvalid]，同时保留 [ErrNilStatement]、[ErrNilContext]、
+//     [ErrNilSnowflakeNode] 哨兵供 errors.Is 判定；
+//   - 容器或组件提取失败时保留应用层原始错误码，并同时携带
+//     [ErrSnowflakeNodeNotFound] 哨兵，两条根因均可通过 errors.Is 命中；
+//   - 雪花发号失败时保留发号器自身错误码，不做二次归类。
+func generateEntityID(tx *gorm.DB) (snowflake.SnowflakeID, *apperr.Error) {
 	if tx == nil || tx.Statement == nil {
-		return 0, ErrNilStatement
+		return 0, apperr.New(ModelInvalid, "模型钩子缺少 GORM Statement 上下文", ErrNilStatement)
 	}
 	ctx := tx.Statement.Context
 	if ctx == nil {
-		return 0, ErrNilContext
+		return 0, apperr.New(ModelInvalid, "模型钩子缺少 GORM Statement 上下文", ErrNilContext)
 	}
 
 	node, appErr := application.Get[*snowflake.Node](ctx, ctxkey.SnowflakeNodeKey)
 	if appErr != nil {
-		return 0, fmt.Errorf("%w: %w", ErrSnowflakeNodeNotFound, appErr)
+		return 0, apperr.From(&appErr.Code, "模型钩子无法获取雪花发号节点", fmt.Errorf("%w: %w", ErrSnowflakeNodeNotFound, appErr))
 	}
 	if node == nil || isTypedNil(node) {
-		return 0, ErrNilSnowflakeNode
+		return 0, apperr.New(ModelInvalid, "上下文中的雪花发号节点为空", ErrNilSnowflakeNode)
 	}
 
 	gene := snowflake.GeneDefault
@@ -86,9 +100,9 @@ func generateEntityID(tx *gorm.DB) (snowflake.SnowflakeID, error) {
 		}
 	}
 
-	id, err := node.Generate(gene)
-	if err != nil {
-		return 0, err
+	id, genErr := node.Generate(gene)
+	if genErr != nil {
+		return 0, genErr
 	}
 	return id, nil
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +20,7 @@ func (d *dummyAdapter) Name() string {
 	return d.name
 }
 
-func (d *dummyAdapter) Open() (gorm.Dialector, error) {
+func (d *dummyAdapter) Open() (gorm.Dialector, *apperr.Error) {
 	return nil, nil
 }
 

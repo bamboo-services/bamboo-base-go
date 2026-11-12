@@ -18,6 +18,13 @@
 //     DATABASE_SERVICE_NAME (默认 "ORCLPDB1")，以及可选的客户端驱动库路径
 //     DATABASE_LIB_DIR（指定时追加 libDir="..."）组装为标准 godror logfmt 连接串。
 //
+// # 错误语义
+//
+// [dialect.Adapter.Open] 返回强类型错误 [github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr.Error]：
+// 配置非法映射为 [dialect.AdapterConfigInvalid]（50036），
+// 适配器实例为空映射为 [dialect.AdapterInvalid]（50035）。
+// 错误文本、补充描述与根因均已完成凭据脱敏，不会泄露 DSN 明文或数据库密码。
+//
 // # 自动注册与匿名导入
 //
 // 本包在 init 函数中自动向全局方言注册表注册 [dialect.DriverOracle] 与 [FromEnv] 工厂。

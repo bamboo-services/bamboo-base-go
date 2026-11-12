@@ -172,20 +172,20 @@ func TestSQLite_RealReadWrite_TempFile(t *testing.T) {
 	dbFile := filepath.Join(tmpDir, "sqlite_test.db")
 
 	adp := sqlite.New(dbFile)
-	dialector, err := adp.Open()
-	if err != nil {
-		t.Fatalf("Open 失败: %v", err)
+	dialector, openErr := adp.Open()
+	if openErr != nil {
+		t.Fatalf("Open 失败: %v", openErr)
 	}
 
 	// 用真实的 gorm.Open 验证此 Dialector
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open 失败: %v", err)
+	db, gormErr := gorm.Open(dialector, &gorm.Config{})
+	if gormErr != nil {
+		t.Fatalf("gorm.Open 失败: %v", gormErr)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("获取底层 sql.DB 失败: %v", err)
+	sqlDB, sqlErr := db.DB()
+	if sqlErr != nil {
+		t.Fatalf("获取底层 sql.DB 失败: %v", sqlErr)
 	}
 	defer func() { _ = sqlDB.Close() }()
 

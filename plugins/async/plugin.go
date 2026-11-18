@@ -41,8 +41,12 @@ var (
 type Pool interface {
 	// Submit 提交一个异步任务，从 parentCtx 剥离请求级超时，保留容器与追踪信息。
 	// 当应用处于运行状态且并发槽位充足时返回 [Task] 句柄；若提交失败返回相应错误。
+	//
+	// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+	// 池满归一为 [PoolFull]（42903 / ASYNC_POOL_FULL），其余失败归一为 [PoolError]
+	// （50041 / ASYNC_POOL_ERROR），对应哨兵继续作为根因保留，供 errors.Is 精确判定。
 	// 本方法并发安全，可被多个 goroutine 同时调用。
-	Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error)
+	Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, *apperr.Error)
 
 	// Running 返回当前池中正在执行的活跃任务数量。
 	Running() int
@@ -162,6 +166,7 @@ type Plugin struct {
 	stopOnce sync.Once
 	stopDone chan struct{}
 	stopErr  *apperr.Error
+	closedCh chan struct{} // 准入门禁关闭信号，供停机流程与观测方确定性等待
 }
 
 // New 构造 Async Tool 插件定义与工厂，主键为 [PluginKey]，Provides 包含 [PoolKey]。
@@ -186,6 +191,7 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 		p := &Plugin{
 			cfg:      cfg,
 			stopDone: make(chan struct{}),
+			closedCh: make(chan struct{}),
 		}
 		p.zeroCond = sync.NewCond(&p.zeroMu)
 		if cfg.logger != nil {
@@ -264,7 +270,10 @@ func (p *Plugin) doStop(_ context.Context) *apperr.Error {
 	p.admitMu.Lock()
 	p.closed = true
 	p.admitMu.Unlock()
-
+	// 广播准入门禁关闭信号：调用方无需轮询即可确定性感知停机已开始
+	if p.closedCh != nil {
+		close(p.closedCh)
+	}
 	// 2. 等待在途活跃任务计数真实归零（Cond.Wait 释放并重新获得锁）
 	// 注意：不以调用方上下文的超时虚构关闭成功，必须等待真实归零
 	p.zeroMu.Lock()
@@ -315,31 +324,36 @@ func (p *Plugin) Free() int {
 }
 
 // Submit 提交异步任务，执行运行态准入检查、任务计数登记、Detach 上下文、接入 Force 取消，并在协程池中执行。
-// 若任务函数 fn 为 nil，返回 [ErrNilTaskFunc]；若应用处于关闭状态返回 [ErrPoolClosed]；
-// 若池满返回 [ErrPoolFull]；若上下文跨容器或未就绪返回 [ErrInvalidContext]。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+//   - 任务函数为 nil、池已关闭、上下文不满足准入条件、池未就绪等内部故障，
+//     归一为 [PoolError]（50041 / ASYNC_POOL_ERROR）；
+//   - 协程池容量已满，归一为 [PoolFull]（42903 / ASYNC_POOL_FULL）；
+//   - 对应哨兵（[ErrNilTaskFunc]、[ErrPoolClosed]、[ErrInvalidContext]、[ErrNotInitialized]、
+//     [ErrPoolFull]）与底层 ants 原生错误继续作为根因保留，供 errors.Is 精确判定。
+//
 // 本方法并发安全。
-func (p *Plugin) Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error) {
+func (p *Plugin) Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, *apperr.Error) {
 	if fn == nil {
-		return nil, ErrNilTaskFunc
+		return nil, apperr.New(PoolError, "异步任务执行函数不能为空", ErrNilTaskFunc)
 	}
 
 	// 1. 准入锁内校验 App 状态与所属容器契约
 	p.admitMu.RLock()
 	if p.closed {
 		p.admitMu.RUnlock()
-		return nil, ErrPoolClosed
+		return nil, apperr.New(PoolError, "异步任务池已关闭或正在停机", ErrPoolClosed)
 	}
 
 	st, ok := application.StateFrom(parentCtx)
 	if !ok || st != application.StateRunning {
 		p.admitMu.RUnlock()
-		return nil, ErrInvalidContext
+		return nil, apperr.New(PoolError, "异步任务提交上下文不满足运行态准入条件", ErrInvalidContext)
 	}
-
 	callerPool, err := application.Get[Pool](parentCtx, PoolKey)
 	if err != nil || callerPool != p {
 		p.admitMu.RUnlock()
-		return nil, ErrInvalidContext
+		return nil, apperr.New(PoolError, "异步任务提交上下文与当前协程池不匹配", ErrInvalidContext)
 	}
 
 	// 登记活跃任务数
@@ -378,7 +392,7 @@ func (p *Plugin) Submit(parentCtx context.Context, fn func(ctx context.Context),
 		}
 		cancel()
 		p.releaseTask()
-		return nil, ErrNotInitialized
+		return nil, apperr.New(PoolError, "异步任务池尚未完成初始化", ErrNotInitialized)
 	}
 
 	submitErr := pool.Submit(func() {
@@ -401,12 +415,12 @@ func (p *Plugin) Submit(parentCtx context.Context, fn func(ctx context.Context),
 		p.releaseTask()
 
 		if errors.Is(submitErr, ants.ErrPoolOverload) {
-			return nil, ErrPoolFull
+			return nil, apperr.New(PoolFull, "异步任务池并发容量已满，非阻塞提交被拒绝", ErrPoolFull, submitErr)
 		}
 		if errors.Is(submitErr, ants.ErrPoolClosed) {
-			return nil, ErrPoolClosed
+			return nil, apperr.New(PoolError, "异步任务池已关闭，无法提交任务", ErrPoolClosed, submitErr)
 		}
-		return nil, submitErr
+		return nil, apperr.New(PoolError, "异步任务提交到底层协程池失败", submitErr)
 	}
 
 	return task, nil
@@ -421,18 +435,36 @@ func (p *Plugin) releaseTask() {
 }
 
 // Submit 从 parentCtx 的应用共享容器中获取 [Pool] 实例并提交异步任务。
-// 若 parentCtx 未挂载容器或池已停用，返回对应错误（包括 [ErrPoolClosed]、[ErrNotInitialized] 等）。
-// 提交成功后返回关联的 [Task] 句柄。本函数并发安全。
-func Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, error) {
-	pool, err := application.Get[Pool](parentCtx, PoolKey)
-	if err != nil {
-		if errors.Is(err, application.ErrComponentStopped) || errors.Is(err, application.ErrComponentUnavailable) {
-			return nil, errors.Join(ErrPoolClosed, err)
-		}
-		return nil, err
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+//   - 容器提取失败且目标组件已停止或不可用时，保留应用层原错误码
+//     （50005 / 50006），并同时可经 errors.Is 判定 [ErrPoolClosed] 与原错误；
+//   - 其它容器提取失败直接返回应用层原错误（如 50001），不得改判为池错误；
+//   - 池句柄缺失时返回 [PoolError]（50041 / ASYNC_POOL_ERROR），以 [ErrNotInitialized] 为根因。
+//
+// 本函数并发安全。
+func Submit(parentCtx context.Context, fn func(ctx context.Context), opts ...TaskOption) (*Task, *apperr.Error) {
+	pool, appErr := application.Get[Pool](parentCtx, PoolKey)
+	if appErr != nil {
+		return nil, poolUnavailableError(appErr)
 	}
 	if pool == nil {
-		return nil, ErrNotInitialized
+		return nil, apperr.New(PoolError, "异步任务池尚未完成初始化", ErrNotInitialized)
 	}
 	return pool.Submit(parentCtx, fn, opts...)
+}
+
+// poolUnavailableError 将容器提取失败归一为提交阶段的池可用性错误。
+//
+// 目标组件已停止或不可用时，保留应用层原错误码（50005 / 50006），
+// 并把 [ErrPoolClosed] 与原错误一并作为根因保留：调用方既可判定池已关闭，
+// 也可经 errors.Is 提取原始应用层错误。其它失败保持应用层原错误码不变。
+func poolUnavailableError(appErr *apperr.Error) *apperr.Error {
+	if appErr == nil {
+		return nil
+	}
+	if errors.Is(appErr, application.ErrComponentStopped) || errors.Is(appErr, application.ErrComponentUnavailable) {
+		return apperr.From(&appErr.Code, appErr.ErrorMessage, errors.Join(ErrPoolClosed, appErr))
+	}
+	return appErr
 }

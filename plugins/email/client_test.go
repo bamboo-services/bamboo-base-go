@@ -718,10 +718,10 @@ func TestClient_ContextCancelDuringSend(t *testing.T) {
 	msg.TextBody = "body"
 
 	start := time.Now()
-	err = client.Send(ctx, msg)
+	sendErr := client.Send(ctx, msg)
 	elapsed := time.Since(start)
 
-	if err == nil {
+	if sendErr == nil {
 		t.Fatal("expected Send to fail on canceled context, got nil")
 	}
 	if elapsed > 2*time.Second {

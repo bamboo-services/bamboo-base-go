@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	driver "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -25,6 +26,14 @@ func NewListCache[K any, V any](rdb *goredis.Client, codec driver.Codec, enc dri
 	return &ListCache[K, V]{rdb: rdb, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 Redis 客户端时 panic。
+func (c *ListCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.rdb == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // refreshTTL 在写操作后按需续期。
 func (c *ListCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
 	if ttl > 0 {
@@ -33,7 +42,7 @@ func (c *ListCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Durati
 }
 
 // encodeValues 把多个值序列化为 Redis 命令可接受的 []any 参数。
-func (c *ListCache[K, V]) encodeValues(values []V) ([]any, error) {
+func (c *ListCache[K, V]) encodeValues(values []V) ([]any, *apperr.Error) {
 	args := make([]any, 0, len(values))
 	for _, v := range values {
 		data, err := c.codec.Marshal(v)
@@ -53,7 +62,10 @@ func (c *ListCache[K, V]) encodeValues(values []V) ([]any, error) {
 //   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
 //   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
 //   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
-func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...driver.SetOption) error {
+func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -63,7 +75,7 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts .
 	if cfg.NX || cfg.XX {
 		exists, err := c.rdb.Exists(ctx, k).Result()
 		if err != nil {
-			return err
+			return opErr(err)
 		}
 		if cfg.NX && exists > 0 {
 			return nil
@@ -81,7 +93,7 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts .
 		return err
 	}
 	if err := c.rdb.LPush(ctx, k, args...).Err(); err != nil {
-		return err
+		return opErr(err)
 	}
 	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
 	if !cfg.NoSlide && !cfg.KeepTTL {
@@ -96,7 +108,10 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts .
 //   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
 //   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
 //   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
-func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...driver.SetOption) error {
+func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -106,7 +121,7 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ..
 	if cfg.NX || cfg.XX {
 		exists, err := c.rdb.Exists(ctx, k).Result()
 		if err != nil {
-			return err
+			return opErr(err)
 		}
 		if cfg.NX && exists > 0 {
 			return nil
@@ -120,7 +135,7 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ..
 		return err
 	}
 	if err := c.rdb.RPush(ctx, k, args...).Err(); err != nil {
-		return err
+		return opErr(err)
 	}
 	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
 	if !cfg.NoSlide && !cfg.KeepTTL {
@@ -130,10 +145,13 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ..
 }
 
 // Range 按索引范围获取列表元素，支持负数索引。
-func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, error) {
+func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	raw, err := c.rdb.LRange(ctx, driver.EncodeKey(c.enc, key), start, end).Result()
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	result := make([]V, 0, len(raw))
 	for _, data := range raw {
@@ -147,13 +165,16 @@ func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int
 }
 
 // Index 获取指定索引位置的元素，支持负数索引。越界时返回 nil, nil。
-func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, error) {
+func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	data, err := c.rdb.LIndex(ctx, driver.EncodeKey(c.enc, key), index).Result()
 	if errors.Is(err, goredis.Nil) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	var v V
 	if err := c.codec.Unmarshal([]byte(data), &v); err != nil {
@@ -163,18 +184,28 @@ func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, er
 }
 
 // Len 获取列表的长度。
-func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
-	return c.rdb.LLen(ctx, driver.EncodeKey(c.enc, key)).Result()
+func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return 0, err
+	}
+	length, err := c.rdb.LLen(ctx, driver.EncodeKey(c.enc, key)).Result()
+	if err != nil {
+		return 0, opErr(err)
+	}
+	return length, nil
 }
 
 // Pop 从列表头部弹出一个元素并返回。列表为空时返回 nil, nil。
-func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
+func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	data, err := c.rdb.LPop(ctx, driver.EncodeKey(c.enc, key)).Result()
 	if errors.Is(err, goredis.Nil) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	var v V
 	if err := c.codec.Unmarshal([]byte(data), &v); err != nil {
@@ -184,13 +215,16 @@ func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
 }
 
 // PopLast 从列表尾部弹出一个元素并返回。列表为空时返回 nil, nil。
-func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
+func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	data, err := c.rdb.RPop(ctx, driver.EncodeKey(c.enc, key)).Result()
 	if errors.Is(err, goredis.Nil) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	var v V
 	if err := c.codec.Unmarshal([]byte(data), &v); err != nil {
@@ -203,15 +237,21 @@ func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
 //
 // count > 0 从头部开始；count < 0 从尾部开始；count = 0 移除全部。
 // 直接映射到 Redis LREM 命令。
-func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) error {
+func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return c.rdb.LRem(ctx, driver.EncodeKey(c.enc, key), count, data).Err()
+	return opErr(c.rdb.LRem(ctx, driver.EncodeKey(c.enc, key), count, data).Err())
 }
 
 // Delete 删除整个列表。
-func (c *ListCache[K, V]) Delete(ctx context.Context, key K) error {
-	return c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err()
+func (c *ListCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
+	return opErr(c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err())
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
@@ -26,8 +27,16 @@ func NewSetCache[K any, V any](store *Store, codec driver.Codec, enc driver.KeyE
 	return &SetCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 [Store] 时 panic。
+func (c *SetCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.store == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // encodeMember 把成员序列化为 string key。
-func (c *SetCache[K, V]) encodeMember(member V) (string, error) {
+func (c *SetCache[K, V]) encodeMember(member V) (string, *apperr.Error) {
 	data, err := c.codec.Marshal(member)
 	if err != nil {
 		return "", err
@@ -45,7 +54,10 @@ func (c *SetCache[K, V]) encodeMember(member V) (string, error) {
 //   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
 //
 // 无任何条件选项时走 [Store.Update] 保持原有行为。
-func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...driver.SetOption) error {
+func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(members) == 0 {
 		return nil
 	}
@@ -97,7 +109,10 @@ func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...dr
 }
 
 // Members 获取集合中的所有成员。
-func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
+func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -119,7 +134,10 @@ func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
 }
 
 // IsMember 检查指定成员是否存在于集合中。
-func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, error) {
+func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -138,7 +156,10 @@ func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, e
 }
 
 // Count 获取集合中的成员数量。
-func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, error) {
+func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return 0, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -154,7 +175,10 @@ func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, error) {
 // Remove 从集合中移除指定的成员。
 //
 // 通过 [Store.Update] 保证原子性。移除后若集合为空则整个 key 被删除。
-func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error {
+func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(members) == 0 {
 		return nil
 	}
@@ -184,7 +208,10 @@ func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error 
 }
 
 // Delete 删除整个集合。
-func (c *SetCache[K, V]) Delete(ctx context.Context, key K) error {
+func (c *SetCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	c.store.Delete(driver.EncodeKey(c.enc, key))
 	return nil
 }

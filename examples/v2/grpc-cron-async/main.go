@@ -39,10 +39,10 @@ func (c *cronTargetComponent) Run(ctx context.Context) *apperr.Error {
 		fmt.Printf("[async] executed job under lifetime context: %s\n", time.Now().Format(time.RFC3339))
 	})
 	if err != nil {
-		return apperr.From(apperr.FrameworkInternalError, "提交异步任务失败", err)
+		return apperr.From(&err.Code, "提交异步任务失败", err)
 	}
 	if waitErr := task.Wait(); waitErr != nil {
-		return apperr.From(apperr.FrameworkInternalError, "等待异步任务失败", waitErr)
+		return apperr.From(&waitErr.Code, "等待异步任务失败", waitErr)
 	}
 	return nil
 }

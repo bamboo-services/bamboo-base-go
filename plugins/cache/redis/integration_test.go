@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	driver "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -34,16 +35,16 @@ type failingCodec struct {
 	failUnmarshal bool
 }
 
-func (f *failingCodec) Marshal(v any) ([]byte, error) {
+func (f *failingCodec) Marshal(v any) ([]byte, *apperr.Error) {
 	if f.failMarshal {
-		return nil, errors.New("forced marshal error")
+		return nil, apperr.New(driver.CodecFailed, "强制序列化失败", errors.New("forced marshal error"))
 	}
 	return driver.JSONCodec{}.Marshal(v)
 }
 
-func (f *failingCodec) Unmarshal(data []byte, v any) error {
+func (f *failingCodec) Unmarshal(data []byte, v any) *apperr.Error {
 	if f.failUnmarshal {
-		return errors.New("forced unmarshal error")
+		return apperr.New(driver.CodecFailed, "强制反序列化失败", errors.New("forced unmarshal error"))
 	}
 	return driver.JSONCodec{}.Unmarshal(data, v)
 }

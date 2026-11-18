@@ -114,13 +114,13 @@ func TestHTTPDBCacheLifecycle_EndToEnd(t *testing.T) {
 				keyCache := cache.KeyCacheOf[string, string](mgr)
 				cacheVal := fmt.Sprintf("val-%s-%d", dto.Name, count)
 				if err := keyCache.Set(reqCtx, "last_item", &cacheVal); err != nil {
-					httpresult.AbortError(c, apperr.New(cache.CacheError, "failed to set cache", err))
+					httpresult.AbortError(c, apperr.From(&err.Code, "failed to set cache", err))
 					return
 				}
 
 				valPtr, found, err := keyCache.Get(reqCtx, "last_item")
 				if err != nil {
-					httpresult.AbortError(c, apperr.New(cache.CacheError, "failed to get cache", err))
+					httpresult.AbortError(c, apperr.From(&err.Code, "failed to get cache", err))
 					return
 				}
 				var cachedStr string

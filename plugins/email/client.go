@@ -192,11 +192,15 @@ func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 		host := getString(env.EmailHost)
 		var port int
 		if v, ok := env.Lookup(env.EmailPort); ok {
-			p, err := v.Int()
-			if err != nil || p < 1 || p > 65535 {
-				return lifecycleErr("email: 环境变量 EMAIL_PORT 非法", ErrInvalidPort)
+			parsed, parseErr := v.Int()
+			if parseErr != nil {
+				// 服务启动配置非法：按所属 500 码归一，同时保留端口范围哨兵与内层值错误原因。
+				return apperr.New(EmailError, "email: 环境变量 EMAIL_PORT 非法", ErrInvalidPort, parseErr)
 			}
-			port = p
+			if parsed < 1 || parsed > 65535 {
+				return apperr.New(EmailError, "email: 环境变量 EMAIL_PORT 非法", ErrInvalidPort)
+			}
+			port = parsed
 		} else {
 			port = 587
 		}
@@ -255,19 +259,19 @@ func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 	}
 
 	// 初始化模板管理器
-	tmpl, err := newTemplateManager(cfg.TemplateDir)
-	if err != nil {
-		return lifecycleErr("email: 初始化模板管理器失败", err)
+	tmpl, tmplErr := newTemplateManager(cfg.TemplateDir)
+	if tmplErr != nil {
+		return opErr("email: 初始化模板管理器失败", tmplErr)
 	}
 
 	for _, dir := range p.opts.templateDirs {
-		if err := tmpl.AddDir(dir); err != nil {
-			return lifecycleErr("email: 加载外部模板目录失败", fmt.Errorf("email: 加载外部模板目录 %s 失败: %w", dir, err))
+		if dirErr := tmpl.AddDir(dir); dirErr != nil {
+			return opErr(apperr.ErrMessage(fmt.Sprintf("email: 加载外部模板目录 %s 失败", dir)), dirErr)
 		}
 	}
 	for _, entry := range p.opts.templateFS {
-		if err := tmpl.AddFS(entry.fsys, entry.pattern); err != nil {
-			return lifecycleErr("email: 加载内嵌模板失败", fmt.Errorf("email: 加载内嵌模板失败: %w", err))
+		if fsErr := tmpl.AddFS(entry.fsys, entry.pattern); fsErr != nil {
+			return opErr("email: 加载内嵌模板失败", fsErr)
 		}
 	}
 
@@ -343,12 +347,19 @@ func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 }
 
 // acquire 尝试登记一次发送任务。如果已停止则拒绝准入。
-func (p *Plugin) acquire() error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 停机拒绝按所属域错误码 [EmailError] 归一并保留哨兵 [ErrStopped]。
+func (p *Plugin) acquire() *apperr.Error {
+	if p == nil {
+		return opErr("email: 邮件插件实例未初始化", ErrNotInitialized)
+	}
+
 	p.inflightMu.Lock()
 	defer p.inflightMu.Unlock()
 
 	if p.stopped {
-		return ErrStopped
+		return opErr("email: 邮件客户端已停止", ErrStopped)
 	}
 	p.inflight++
 	return nil
@@ -377,7 +388,15 @@ func (p *Plugin) InflightCount() int {
 }
 
 // buildMailClient 构建 go-mail.Client 实例（纯配置构建，不发网络包）。
-func (p *Plugin) buildMailClient(extraOpts ...mail.Option) (*mail.Client, error) {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 构建失败按所属域错误码 [EmailError] 归一并保留底层原因，
+// 安全描述与错误文本均不包含 SMTP 密码。
+func (p *Plugin) buildMailClient(extraOpts ...mail.Option) (*mail.Client, *apperr.Error) {
+	if p == nil {
+		return nil, opErr("email: 邮件插件实例未初始化", ErrNotInitialized)
+	}
+
 	p.clientMu.RLock()
 	cfg := p.opts.cfg
 	p.clientMu.RUnlock()
@@ -405,21 +424,28 @@ func (p *Plugin) buildMailClient(extraOpts ...mail.Option) (*mail.Client, error)
 
 	client, err := mail.NewClient(cfg.Host, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("email: 创建邮件底层客户端失败: %w", err)
+		return nil, opErr("email: 创建邮件底层客户端失败", err)
 	}
 	return client, nil
 }
 
 // watchedConn 包装真实 net.Conn，绑定发送生命周期并由 context.AfterFunc 强制中断。
+//
+// 关闭失败原因在内部以 [*apperr.Error] 保存，对外仍保持 net.Conn / io.Closer
+// 要求的原生 error 签名，通过 nil 安全薄适配返回。
 type watchedConn struct {
 	net.Conn
 	mu        sync.Mutex
 	stopWatch func() bool
 	closed    bool
 	closeOnce sync.Once
-	closeErr  error
+	closeErr  *apperr.Error
 }
 
+// Close 关闭底层连接并返回关闭失败原因。
+//
+// 成功关闭时返回真正的 nil；关闭失败时返回归一后的 [*apperr.Error]，
+// 其底层原因可通过 errors.Is / errors.As 继续判定。
 func (c *watchedConn) Close() error {
 	c.closeOnce.Do(func() {
 		c.mu.Lock()
@@ -429,27 +455,36 @@ func (c *watchedConn) Close() error {
 			c.stopWatch = nil
 		}
 		c.mu.Unlock()
-		c.closeErr = c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			c.closeErr = opErr("email: 关闭 SMTP 连接失败", err)
+		}
 	})
+	if c.closeErr == nil {
+		return nil
+	}
 	return c.closeErr
 }
 
 // Send 根据给定的 [Message] 构建并发送邮件。
 // 发送过程严格受 ctx 的超时与取消管辖；若插件已处于停止状态，立即返回 [ErrStopped]。
 // 发送在调用方协程内同步完成，不启动不可控的脱靶后台协程。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 取消与超时经 [foundation/v2/control] 归一为 49900 / 50401，原生 context 哨兵保留；
+// 其余失败按所属域错误码 [EmailError] 兜底，底层原因与配置哨兵继续保留。
 // 本方法并发安全。
-func (c *Client) Send(ctx context.Context, msg *Message) error {
+func (c *Client) Send(ctx context.Context, msg *Message) *apperr.Error {
 	if c == nil || c.plugin == nil {
-		return ErrNotInitialized
+		return opErr("email: 邮件客户端未初始化", ErrNotInitialized)
 	}
 	if msg == nil {
-		return errors.New("email: message cannot be nil")
+		return opErr("email: 邮件消息不能为空", errors.New("email: message cannot be nil"))
 	}
 	if len(msg.To) == 0 {
-		return ErrRecipientEmpty
+		return opErr("email: 收件人地址不能为空", ErrRecipientEmpty)
 	}
 	if msg.Subject == "" {
-		return ErrSubjectEmpty
+		return opErr("email: 邮件主题不能为空", ErrSubjectEmpty)
 	}
 
 	// 检查 Context 是否已取消
@@ -457,7 +492,7 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return opErrWithContext("email: 发送邮件失败", err, ctx)
 	}
 
 	// 准入登记
@@ -468,7 +503,7 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 
 	// 再次检查 Context
 	if err := ctx.Err(); err != nil {
-		return err
+		return opErrWithContext("email: 发送邮件失败", err, ctx)
 	}
 
 	c.plugin.clientMu.RLock()
@@ -485,14 +520,15 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 	var activeConn net.Conn
 	var connMu sync.Mutex
 
-	dialCtxFunc := func(dialCtx context.Context, network, address string) (net.Conn, error) {
+	// dialConn 是拨号强类型核心，失败统一归一为 [*apperr.Error]。
+	dialConn := func(dialCtx context.Context, network, address string) (net.Conn, *apperr.Error) {
 		if err := sendCtx.Err(); err != nil {
-			return nil, err
+			return nil, opErrWithContext("email: 建立 SMTP 连接失败", err, sendCtx)
 		}
 		var d net.Dialer
 		rawConn, err := d.DialContext(dialCtx, network, address)
 		if err != nil {
-			return nil, err
+			return nil, opErr("email: 建立 SMTP 连接失败", err)
 		}
 
 		wc := &watchedConn{Conn: rawConn}
@@ -509,13 +545,23 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 		wc.mu.Unlock()
 		if err := sendCtx.Err(); err != nil {
 			_ = wc.Close()
-			return nil, err
+			return nil, opErrWithContext("email: 建立 SMTP 连接失败", err, sendCtx)
 		}
 
 		connMu.Lock()
 		activeConn = wc
 		connMu.Unlock()
 		return wc, nil
+	}
+
+	// dialCtxFunc 保留 mail.WithDialContextFunc 要求的原生函数签名，
+	// 内部使用强类型核心，成功返回字面 nil，失败返回非 nil。
+	dialCtxFunc := func(dialCtx context.Context, network, address string) (net.Conn, error) {
+		conn, dialErr := dialConn(dialCtx, network, address)
+		if dialErr != nil {
+			return nil, dialErr
+		}
+		return conn, nil
 	}
 
 	mailClient, err := c.plugin.buildMailClient(mail.WithDialContextFunc(dialCtxFunc))
@@ -543,35 +589,35 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 	if fromAddr == "" {
 		if cfg.FromName != "" {
 			if err := goMsg.FromFormat(cfg.FromName, cfg.FromAddr); err != nil {
-				return fmt.Errorf("email: 设置发件人失败: %w", err)
+				return opErr("email: 设置发件人失败", err)
 			}
 		} else {
 			if err := goMsg.From(cfg.FromAddr); err != nil {
-				return fmt.Errorf("email: 设置发件人失败: %w", err)
+				return opErr("email: 设置发件人失败", err)
 			}
 		}
 	} else {
 		if err := goMsg.From(fromAddr); err != nil {
-			return fmt.Errorf("email: 设置发件人失败: %w", err)
+			return opErr("email: 设置发件人失败", err)
 		}
 	}
 
 	if err := goMsg.To(msg.To...); err != nil {
-		return fmt.Errorf("email: 设置收件人失败: %w", err)
+		return opErr("email: 设置收件人失败", err)
 	}
 	if len(msg.Cc) > 0 {
 		if err := goMsg.Cc(msg.Cc...); err != nil {
-			return fmt.Errorf("email: 设置抄送失败: %w", err)
+			return opErr("email: 设置抄送失败", err)
 		}
 	}
 	if len(msg.Bcc) > 0 {
 		if err := goMsg.Bcc(msg.Bcc...); err != nil {
-			return fmt.Errorf("email: 设置密送失败: %w", err)
+			return opErr("email: 设置密送失败", err)
 		}
 	}
 	if msg.ReplyTo != "" {
 		if err := goMsg.ReplyTo(msg.ReplyTo); err != nil {
-			return fmt.Errorf("email: 设置回复地址失败: %w", err)
+			return opErr("email: 设置回复地址失败", err)
 		}
 	}
 
@@ -589,7 +635,7 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 	for _, att := range msg.Attachments {
 		if att.Data != nil {
 			if err := goMsg.AttachReader(att.Filename, att.Data); err != nil {
-				return fmt.Errorf("email: 添加附件失败: %w", err)
+				return opErr("email: 添加附件失败", err)
 			}
 		}
 	}
@@ -599,7 +645,7 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 		if log != nil {
 			log.SugarError(sendCtx, "发送邮件失败", "error", err)
 		}
-		return fmt.Errorf("email: 发送邮件失败: %w", err)
+		return opErrWithContext("email: 发送邮件失败", err, sendCtx, ctx)
 	}
 
 	if log != nil {
@@ -609,23 +655,37 @@ func (c *Client) Send(ctx context.Context, msg *Message) error {
 }
 
 // SendHTML 发送包含 HTML 正文的邮件，行为契约与 [Client.Send] 一致。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针。
 // 本方法并发安全。
-func (c *Client) SendHTML(ctx context.Context, msg *Message) error {
+func (c *Client) SendHTML(ctx context.Context, msg *Message) *apperr.Error {
 	return c.Send(ctx, msg)
 }
 
 // SendTemplate 使用内置或外部模板渲染正文并发送邮件。
 // 要求 msg.Template 必须非空（对应模板名称，无需包含 .html 后缀），渲染结果写入 msg.HTMLBody 并调用 [Client.Send]。
-// 若模板不存在或渲染失败，返回相应错误。本方法并发安全。
-func (c *Client) SendTemplate(ctx context.Context, msg *Message) error {
+// 若模板不存在或渲染失败，返回相应错误。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 取消与超时经 [foundation/v2/control] 归一为 49900 / 50401，原生 context 哨兵保留；
+// 其余失败按所属域错误码 [EmailError] 兜底，底层原因与配置哨兵继续保留。
+// 本方法并发安全。
+func (c *Client) SendTemplate(ctx context.Context, msg *Message) *apperr.Error {
 	if c == nil || c.plugin == nil {
-		return ErrNotInitialized
+		return opErr("email: 邮件客户端未初始化", ErrNotInitialized)
 	}
 	if msg == nil {
-		return errors.New("email: message cannot be nil")
+		return opErr("email: 邮件消息不能为空", errors.New("email: message cannot be nil"))
 	}
 	if msg.Template == "" {
-		return ErrTemplateEmpty
+		return opErr("email: 模板名称不能为空", ErrTemplateEmpty)
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return opErrWithContext("email: 发送邮件失败", err, ctx)
 	}
 
 	c.plugin.clientMu.RLock()
@@ -633,12 +693,12 @@ func (c *Client) SendTemplate(ctx context.Context, msg *Message) error {
 	c.plugin.clientMu.RUnlock()
 
 	if tmpl == nil {
-		return fmt.Errorf("email: 模板管理器未就绪")
+		return opErr("email: 模板管理器未就绪", ErrNotInitialized)
 	}
 
 	html, err := tmpl.Render(msg.Template, msg.TemplateData)
 	if err != nil {
-		return fmt.Errorf("email: 渲染邮件模板失败: %w", err)
+		return opErr("email: 渲染邮件模板失败", err)
 	}
 
 	msg.HTMLBody = html
@@ -646,31 +706,41 @@ func (c *Client) SendTemplate(ctx context.Context, msg *Message) error {
 }
 
 // AddTemplateDir 动态挂载外部模板目录。
-// 外部目录中的同名模板将覆盖原有的同名模板。本方法并发安全。
-func (c *Client) AddTemplateDir(dir string) error {
+// 外部目录中的同名模板将覆盖原有的同名模板。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 失败按所属域错误码 [EmailError] 兜底，底层原因与配置哨兵继续保留。
+// 本方法并发安全。
+func (c *Client) AddTemplateDir(dir string) *apperr.Error {
 	if c == nil || c.plugin == nil {
-		return ErrNotInitialized
+		return opErr("email: 邮件客户端未初始化", ErrNotInitialized)
 	}
+
 	c.plugin.clientMu.RLock()
 	tmpl := c.plugin.tmpl
 	c.plugin.clientMu.RUnlock()
 	if tmpl == nil {
-		return fmt.Errorf("email: 模板管理器未就绪")
+		return opErr("email: 模板管理器未就绪", ErrNotInitialized)
 	}
 	return tmpl.AddDir(dir)
 }
 
 // AddTemplateFS 动态挂载内嵌文件系统的 HTML 模板集合。
-// 内嵌集合中的同名模板将覆盖原有的同名模板。本方法并发安全。
-func (c *Client) AddTemplateFS(fsys fs.FS, pattern string) error {
+// 内嵌集合中的同名模板将覆盖原有的同名模板。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 失败按所属域错误码 [EmailError] 兜底，底层原因与配置哨兵继续保留。
+// 本方法并发安全。
+func (c *Client) AddTemplateFS(fsys fs.FS, pattern string) *apperr.Error {
 	if c == nil || c.plugin == nil {
-		return ErrNotInitialized
+		return opErr("email: 邮件客户端未初始化", ErrNotInitialized)
 	}
+
 	c.plugin.clientMu.RLock()
 	tmpl := c.plugin.tmpl
 	c.plugin.clientMu.RUnlock()
 	if tmpl == nil {
-		return fmt.Errorf("email: 模板管理器未就绪")
+		return opErr("email: 模板管理器未就绪", ErrNotInitialized)
 	}
 	return tmpl.AddFS(fsys, pattern)
 }

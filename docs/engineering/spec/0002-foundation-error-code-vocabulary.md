@@ -85,10 +85,13 @@ errors.Is/errors.As 根因、JSON不含底层Err、HTTP信封/RPC Details脱敏�
 | `plugins/database/dialect`   | `DATABASE_DIALECT_` | 4              |
 | `plugins/database/models`    | `DATABASE_MODEL_`   | 1              |
 | `plugins/cache`              | `CACHE_`            | 1              |
+| `plugins/cache/driver`       | `CACHE_DRIVER_`     | 2              |
 | `plugins/email`              | `EMAIL_`            | 1              |
 | `foundation/snowflake`       | `SNOWFLAKE_`        | 2              |
 | `foundation/logging`         | `LOGGING_`          | 4              |
 | `foundation/toolkit`         | `TOOLKIT_`          | 1              |
+| `plugins/cron`               | `CRON_`             | 1              |
+| `plugins/async`              | `ASYNC_`            | 2              |
 
 ### P1登记记录（2026-11-09）
 
@@ -138,6 +141,14 @@ OK不制造失败信封；非标准/非法RPC状态不在这16项承诺内，需
 新增 `plugins/database/dialect` / `DATABASE_DIALECT_` 四项与 `plugins/database/models` / `DATABASE_MODEL_` 一项，按更长前缀优先归属；根包原8项 `DATABASE_` 保持不变。只增加子包归属，不新增module或反向导入database根包。完整三元组仅以下方机器词表为准。五适配器共用配置语义，不各自分号；构造/Open保持无网络，真实建连故障仍由根包DatabaseError或既有CONTROL_语义承接。
 
 目录登记与AST守卫已完成；实际六模块强类型迁移及准出结果见[迁移计划P4](../../plan/0002-foundation-strong-error-migration.md#p4迁移数据库及五适配器的完整错误边界)。模型既有application/Get与snowflake错误保原码；GORM固定钩子保留error签名与成功真nil。P5–P7及发布不因本次登记而完成。
+
+### P5登记记录（2026-11-15）
+
+用户确认主推错误码提案并批准P5实施后，按E04追加5项错误码，active由96项变为101项；旧96项的六列登记信息不变。500组共42项，SDK的00–49余8槽（50042–50049）；429组共4项，SDK余46槽。
+
+新增 `plugins/cache/driver` / `CACHE_DRIVER_` 两项、`plugins/cron` / `CRON_` 一项与 `plugins/async` / `ASYNC_` 两项；`plugins/email` 沿用已有 `EmailError`（50017），不新增码。`plugins/cache/driver` 采用最长前缀归属，使 `memory` 与 `redis` 后端及 `Codec` 可直接共享错误码而无需反向导入 `plugins/cache` 根包。`ASYNC_POOL_FULL` 归入429组以区分并发削峰拒绝与500内部故障，并节省500稀缺槽位。
+
+目录登记与AST守卫已完成；实际四插件强类型迁移及准出结果见[迁移计划P5](../../plan/0002-foundation-strong-error-migration.md#p5迁移缓存邮件cron和async自有操作)。P6–P7及发布不因本次登记而完成。
 
 ### 错误码受控词表
 
@@ -197,6 +208,7 @@ OK不制造失败信封；非标准/非法RPC状态不在这16项承诺内，需
 | 42900 | `HTTP_TOO_MANY_REQUESTS`                  | `plugins/web-gin/httpresult` | `TooManyRequests`                | 请求过多               | active |
 | 42901 | `GRPC_TOO_MANY_REQUESTS`                  | `plugins/grpc/grpcresult`    | `TooManyRequests`                | 请求过多               | active |
 | 42902 | `GRPC_RESOURCE_EXHAUSTED`                 | `plugins/grpc/grpcresult`    | `ResourceExhausted`              | 资源耗尽               | active |
+| 42903 | `ASYNC_POOL_FULL`                         | `plugins/async`              | `PoolFull`                       | 异步任务池已满         | active |
 | 49900 | `CONTROL_CANCELED`                        | `foundation/control`         | `Canceled`                       | 操作已取消             | active |
 | 50000 | `FRAMEWORK_INTERNAL_ERROR`                | `foundation/apperr`          | `FrameworkInternalError`         | 框架内部错误           | active |
 | 50001 | `FRAMEWORK_CONTAINER_NOT_MOUNTED`         | `foundation/apperr`          | `FrameworkContainerNotMounted`   | 应用容器未挂载         | active |
@@ -236,6 +248,10 @@ OK不制造失败信封；非标准/非法RPC状态不在这16项承诺内，需
 | 50035 | `DATABASE_DIALECT_ADAPTER_INVALID`        | `plugins/database/dialect`   | `AdapterInvalid`                 | 数据库适配器无效       | active |
 | 50036 | `DATABASE_DIALECT_ADAPTER_CONFIG_INVALID` | `plugins/database/dialect`   | `AdapterConfigInvalid`           | 数据库适配器配置非法   | active |
 | 50037 | `DATABASE_MODEL_INVALID`                  | `plugins/database/models`    | `ModelInvalid`                   | 数据库模型契约无效     | active |
+| 50038 | `CACHE_DRIVER_CODEC_FAILED`               | `plugins/cache/driver`       | `CodecFailed`                    | 缓存编解码失败         | active |
+| 50039 | `CACHE_DRIVER_OPERATION_FAILED`           | `plugins/cache/driver`       | `OperationFailed`                | 缓存操作失败           | active |
+| 50040 | `CRON_SCHEDULER_ERROR`                    | `plugins/cron`               | `SchedulerError`                 | 定时调度器错误         | active |
+| 50041 | `ASYNC_POOL_ERROR`                        | `plugins/async`              | `PoolError`                      | 异步任务池错误         | active |
 | 50100 | `GRPC_UNIMPLEMENTED`                      | `plugins/grpc/grpcresult`    | `Unimplemented`                  | 功能未实现             | active |
 | 50200 | `HTTP_GATEWAY_ERROR`                      | `plugins/web-gin/httpresult` | `GatewayError`                   | 网关错误               | active |
 | 50300 | `HTTP_SERVICE_UNAVAILABLE`                | `plugins/web-gin/httpresult` | `ServiceUnavailable`             | 服务不可用             | active |

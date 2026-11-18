@@ -7,7 +7,7 @@
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，已提交为 `c8abf577`（未推送）。2026-11-12用户批准P4实际实施：已按已确认语义追加50033–50037（词表91→96项），公共契约、五适配器与模型迁移及Leader准出已完成，待用户审阅；P5–P7及发布未启动。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，已提交为 `c8abf577`（未推送）。2026-11-12用户批准P4实际实施：已按已确认语义追加50033–50037（词表91→96项），公共契约、五适配器与模型迁移及Leader准出已完成，待用户审阅；P4已提交为 `e4930971`（未推送）。2026-11-15用户确认主推提案并批准P5实施：已集中登记42903与50038–50041（词表96→101项），cache/email/cron/async及仓内调用方迁移与Leader准出已完成，待用户审阅；P6–P7、提交推送及发布未启动。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -471,7 +471,117 @@ SQLite新回归直接使用application/v2，已在该子模块补同版本v2.0.0
 - P5准备注记（2026-11-10）：P3.4 将 cron/async 生命周期失败暂以 FrameworkInternalError(50000) 单点兜底（`lifecycle_error.go` 末行）；P5 迁移其自有操作时应按 E04 向用户提案专属码（候选 CRON_SCHEDULER_ERROR / ASYNC_POOL_ERROR，500组），获批后替换兜底码并登记词表，不提前占号。
 - 交付：编解码失败的模块码、发送与模板失败的模块码、pool准入/状态/超时类型测试；外部拨号和net.Conn适配的成功nil/关闭测试。标准context分支不误映射到Internal。
 - 准出：`go test -race ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/... -count=1`。Redis/SMTP真实集成另记环境与实际执行结果；所有异步断言用通道屏障，不用sleep代替同步。
-- 状态：未执行。
+- 状态：2026-11-15实现及Leader准出完成，待用户审阅；四插件强类型边界、五新码与消费者回归已交付，外部Redis/SMTP集成仍按开关跳过。
+
+#### P5施工清单（2026-11-15，仅准备，尚未实施）
+
+> 以下保留获准前的准备快照；用户已于2026-11-15确认主推提案并批准实际实施，五项编号已集中登记为 `42903` 与 `50038–50041`（词表96→101），准备态的“未占号/未实施”不再约束本次P5；P6–P7、提交推送与发布仍须另行授权。
+
+本轮只核对源码、调用方与号段容量并编写清单和错误码提案，不修改Go源码、`go.mod`/CI或受控词表（96项active表保持不变），不派发实施子任务，不提交推送。实施基线为P4提交 `e4930971ac9155bbf31429b36b66fcc062e58590`（未推送）；具体编号分配与Go实施均待用户确认错误码提案并另行授权。
+
+##### P5当前缺口与接口改动
+
+| 模块与现状依据                                                                                                                                                                                                                                                                                                                   | P5拟议改动                                                                                                                                                                                                                                                                   | 保留的契约与边界                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [cache/driver](../../plugins/cache/driver/interface.go)：`Codec` 2法与 `KeyCache`/`HashCache`/`SetCache`/`ListCache` 共28个泛型接口方法均返回 `error`                                                                                                                                                                            | 全部30个自有方法统一改为返回 `*apperr.Error`；`JSONCodec` 包装原生 `encoding/json` 失败为统一错误并保留根因                                                                                                                                                                  | `KeyEncoder`、`EncodeKey`、`SetOption`、`ApplySet`、`CacheType` 与 `*CacheOf` 工厂无失败返回不加错；`Get` 未命中仍 `(nil, false, nil)`、`Index/Pop/PopLast` 空或越界 `(nil, nil)`、`Delete/Remove` 不存在幂等 `nil`                                                 |
+| [cache/memory](../../plugins/cache/memory/key.go) 与 [cache/redis](../../plugins/cache/redis/key.go)：四类实现共56个导出方法及 `encodeMember`/`encodeValues`/`encodeMembers` 返回 `error`；`memory/list.go` 的 `Pop`/`PopLast` 在 `Store.Update` 闭包内吞掉反序列化错误                                                          | 同步切换为 `*apperr.Error`；`memory/list.go` `Pop`/`PopLast` 捕获闭包内解码失败并原样返回（不弹出元素，对齐Redis）；`redis/*` 区分 `goredis.Nil`（非失败）、`context` 控制错误（49900/50401）与Redis运行故障                                                                 | 不修改 `memory.Store` 无失败方法与 `Manager.Redis()/Memory()/Close()` 逃生口；保留条件写入 `NX/XX/KeepTTL/NoSlide` 语义；`redis/hash.go` `GetAll` 非string `F` 契约错误不静默返回空map；自定义测试 `failingCodec` 同步切换                                          |
+| [cache 根包](../../plugins/cache/plugin.go) 与 [config.go](../../plugins/cache/config.go)：`pluginImpl.initErr` 与 `Config.validationErr` 为 `error`；`applyFromEnv` 使用 `fmt.Errorf` 拼接 `raw.Int()` 错误                                                                                                                     | `initErr` 与 `validationErr` 改为 `*apperr.Error`，多条配置错误用 `apperr.Join`；按R11将服务启动配置故障归一为 `CacheError`（50016）并保留内层 `VALUE_*` 原因                                                                                                                | `Plugin.Start/Stop` 已在P3强类型化，`Get/MustGet` 已强类型，仅回归；不将 `NoSQLPass` 密码写入安全描述或JSON；不要求 `driver/memory/redis` 反向导入根包                                                                                                              |
+| [email](../../plugins/email/client.go)、[message.go](../../plugins/email/message.go) 与 [template.go](../../plugins/email/template.go)：`Client.Send/SendHTML/SendTemplate/AddTemplateDir/AddTemplateFS`、`Message.AttachFile`、`TemplateManager.Render/AddDir/AddFS`、`newTemplateManager/acquire/buildMailClient` 返回 `error` | 全部12个自有函数/方法改为返回 `*apperr.Error`；`Send/SendTemplate` 对 `context` 取消/超时经 `control.Classify` 归为49900/50401；`Start` 中 `EMAIL_PORT` 非法同时保留 `ErrInvalidPort` 与 `valueerr` 原因                                                                     | 固定外部边界（W07）：`watchedConn.Close() error`（`net.Conn`）与 `mail.WithDialContextFunc` 回调保留原生 `error` 签名，内部强类型核心+nil安全薄适配（成功显式 `nil`）；保留全部10个导出哨兵；严禁向 `ErrorMessage`/JSON 泄漏 `cfg.Password`；不新增 `email.Get` API |
+| [cron/lifecycle_error.go](../../plugins/cron/lifecycle_error.go) 与 [plugin.go](../../plugins/cron/plugin.go)：生命周期方法已为 `*apperr.Error`，非控制失败暂用 `50000` 兜底                                                                                                                                                     | 移除 `FrameworkInternalError`（50000）临时兜底，接入获批 `CRON_*` 专属码；核对 `ErrNoActivator`/`ErrInvalidJobTarget`/`ErrInvalidJobSchedule`/`errSchedulerNotReady` 与 `gocron` 原因链                                                                                      | 不改 `gocron` 内部调度语义，`Quiesce`/`Stop` 排空等待与幂等逻辑不变；`ctx.Err()` 仍走49900/50401                                                                                                                                                                    |
+| [async/plugin.go](../../plugins/async/plugin.go)、[task.go](../../plugins/async/task.go) 与 [lifecycle_error.go](../../plugins/async/lifecycle_error.go)：`Pool.Submit`、`Plugin.Submit`、`async.Submit`、`Task.Wait/WaitFor` 返回 `error`，生命周期暂用 `50000` 兜底                                                            | 5个自有入口统一改为 `*apperr.Error`；`Task.Wait/WaitFor` 的 `ctx.Err()` 经 `control.Classify(..., PhaseOperation)` 归为49900/50401；nil `*Task` 返回结构化错误而非panic；`async.Submit` 保留 `application.Get` 原码与 `ErrPoolClosed` 双cause；替换 `50000` 兜底为 `ASYNC_*` | 不改 `Task.Done/Ctx/Cancel/Panicked` 契约；保留 `ErrPoolClosed/ErrPoolFull/ErrNilTaskFunc/ErrNotInitialized/ErrInvalidPoolCapacity/ErrInvalidContext` 全部哨兵；异步断言全用通道屏障，不用sleep                                                                     |
+| 仓内示例与消费者：[grpc-cron-async](../../examples/v2/grpc-cron-async/main.go)、[v2-http-db-cache](../../test/consumer/v2-http-db-cache/lifecycle_test.go)、[v2-sqlite-async](../../test/consumer/v2-sqlite-async/lifecycle_test.go)                                                                                             | `grpc-cron-async` 移除 `50000` 临时包装改为直接透传或 `apperr.From(&err.Code, ...)`；`v2-http-db-cache` 缓存错误分岐改 `apperr.From` 避免掩盖底层码；核对 `v2-sqlite-async` 断言与竞争安全                                                                                   | 不新增SDK模块，不升级第三方驱动或修改 `.pb.go`；无仓外V2消费者                                                                                                                                                                                                      |
+
+##### P5错误码归属与容量提案（未占号，待用户裁决）
+
+按2026-11-15核对的受控词表（96项active）：`500xx` 已用 `50000–50037`（38项），SDK `00–49` **仅余12个槽位**（候选从 `50038` 起）；`429xx` 余47槽（候选从 `42903` 起）；`503xx` 余47槽（候选从 `50303` 起）；`400xx` 余33槽（候选从 `40017` 起）。
+
+依赖约束：`plugins/cache/memory` 与 `plugins/cache/redis` 均导入 `plugins/cache/driver`，而根包 `plugins/cache` 导入上述三子包；`driver`/`memory`/`redis` **不能反向导入 `plugins/cache` 读取 `CacheError`（50016）**，也不能复制或别名50016或借用50000。因此需仿照P4的 `plugins/database/dialect` 模式，为 `plugins/cache/driver` 设立子域前缀 `CACHE_DRIVER_`（由检查器按最长前缀匹配）。
+
+以下为P5提案（均未登记，实施前必须再按spec0002 E01–E05核对全局最大号）：
+
+| 方案档位                        | 拟定归属 / 前缀 / Go符号                                     | 拟定Output与安全Message                        | 拟定分组                                        | 负责失败与设计理由                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **主推（4项500 + 1项可选429）** | `plugins/cache/driver` / `CACHE_DRIVER_` / `CodecFailed`     | `CACHE_DRIVER_CODEC_FAILED` / 缓存编解码失败   | 500（候选 `50038`）                             | `Codec.Marshal/Unmarshal`、`JSONCodec`、结构体/列表/集合编解码故障；与传输/存储故障分离                                                                             |
+| 同上                            | `plugins/cache/driver` / `CACHE_DRIVER_` / `OperationFailed` | `CACHE_DRIVER_OPERATION_FAILED` / 缓存操作失败 | 500（候选 `50039`）                             | Redis命令异常、`GetAll` 非法泛型约束等数据面操作失败（`goredis.Nil` 不触发）                                                                                        |
+| 同上                            | `plugins/cron` / `CRON_` / `SchedulerError`                  | `CRON_SCHEDULER_ERROR` / 定时调度器错误        | 500（候选 `50040`）                             | 替换 `cron/lifecycle_error.go` 50000 兜底，承接调度器配置/启停/未就绪失败，保留4哨兵                                                                                |
+| 同上                            | `plugins/async` / `ASYNC_` / `PoolError`                     | `ASYNC_POOL_ERROR` / 异步任务池错误            | 500（候选 `50041`）                             | 替换 `async/lifecycle_error.go` 50000 兜底，承接池容量/关闭/未初始化/无效上下文失败                                                                                 |
+| **待拍板项（`ErrPoolFull`）**   | `plugins/async` / `ASYNC_` / `PoolFull`                      | `ASYNC_POOL_FULL` / 异步任务池已满             | **429（推荐，候选 `42903`）** 或 503（`50303`） | 非阻塞 `ants.ErrPoolOverload` 并发削峰拒绝：归429可直映HTTP 429/gRPC ResourceExhausted且不占500稀缺槽位；备选可归503或并入 `PoolError`（500）                       |
+| **复用不占号**                  | `plugins/email`（已有 `EMAIL_`）                             | 沿用 `EMAIL_ERROR`（50017）                    | 500（已有）                                     | 承接SMTP构建/发信、模板加载渲染与附件读取失败；`EMAIL_PORT` 等配置错保留 `valueerr` 原因；备选可另增 `EMAIL_TEMPLATE_ERROR`（500）或 `EMAIL_MESSAGE_INVALID`（400） |
+
+按主推方案落地后，500组SDK `00–49` 将占用42槽，仍余8个槽位（`50042–50049`）留给P6或后续收口；若把 `PoolFull` 归429/503，还可在协议层避免把受控并发限流误报成500内部故障。
+
+##### P5拟议分工与交付顺序
+
+| 工作包                | 唯一写入范围                                                                          | 必须交付 / 准入                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P5.0 Leader登记与守卫 | `spec/0002`、`.github/scripts/ci/check-error-codes.go` 及单测、各归属 `error_code.go` | 获批后集中分配正式编号；补齐 `plugins/cache/driver`、`plugins/cron`、`plugins/async` 白名单及 `CACHE_DRIVER_` 最长前缀正反例测试；先冻结码表再并行                   |
+| P5.1 Cache 全模块     | `plugins/cache/**`（含 `driver`、`memory`、`redis`、根包）                            | 30个接口方法与56个实现方法原子切换；修复 `memory/list.go` `Pop/PopLast` 吞错；`failingCodec`、未命中真nil、`goredis.Nil` 非失败、`control` 499/504、脱敏及编译正反例 |
+| P5.2 Email 模块       | `plugins/email/**`                                                                    | 12个自有出口切 `*apperr.Error`；`watchedConn.Close` 与 `dialCtxFunc` 固定签名薄适配及真nil/关闭回归；10哨兵、`EMAIL_PORT` 双cause、密码脱敏与 `control` 499/504      |
+| P5.3 Cron 与 Async    | `plugins/cron/**`、`plugins/async/**`                                                 | `cron` 替换50000兜底并补GoDoc/映射；`async` 5入口切 `*apperr.Error`、`Task.Wait/WaitFor` 499/504、`async.Submit` 保留应用层原码、通道屏障与编译夹具                  |
+| P5.L Leader集成与准出 | `examples/v2/grpc-cron-async/**`、`test/consumer/**`、协议映射测试、计划准出          | 移除示例50000临时包装、补P5新码HTTP/RPC协议回归、跑通全部单测/竞态/lint/独立消费者与 `check-v2-examples.sh` 两fixture，并记录外部Redis/SMTP未运行边界                |
+
+注：P5.1、P5.2、P5.3（或拆分cron/async）属于不同Go module且无跨插件依赖，可在P5.0冻结词表后并行；不创建卡或提前派工。
+
+##### P5实施验收门禁（本轮未运行）
+
+实施阶段从仓库根执行（固定 `GOTOOLCHAIN=go1.25.11`）：
+
+```bash
+export GOTOOLCHAIN=go1.25.11
+go test ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/... -count=1
+go test -race ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/... -count=1
+go vet ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/...
+make error-codes-check
+make test-scripts
+make test
+make race
+make vet
+make lint-go
+make lint-docs
+make check-examples
+go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1
+bash .github/scripts/consumer/check-v2-consumers.sh
+bash .github/scripts/consumer/check-v2-examples.sh --fixture http-db-cache --race
+bash .github/scripts/consumer/check-v2-examples.sh --fixture sqlite-async --race
+GOFLAGS=-mod=readonly go list -deps ./foundation/... ./plugins/cache/driver
+gofmt -l plugins/cache plugins/email plugins/cron plugins/async examples/v2 test/consumer
+git diff --check
+```
+
+依赖方向校验必须核实：`foundation` 不含 `application/plugins`；`plugins/cache/driver` 不含 `plugins/cache` 根包；四插件间无跨插件导入。Redis与Mailpit/SMTP真实集成用例仅按既有环境变量开关执行，未配置外部服务时如实记为默认跳过，严禁宣称通过外部集成验收；所有异步/并发回归禁用 `time.Sleep`，必须使用通道屏障同步。
+
+##### P5停工与回滚条件
+
+发现 `Codec` 或缓存泛型接口遗漏、`memory` `Pop/PopLast` 继续吞掉反序列化错误、`Task.Wait/WaitFor` 将 `context` 取消/超时误转为500、`watchedConn`/`dialCtxFunc` 成功返回非nil、邮件密码泄漏或 `driver` 反向导入根包时，立即停工修复，不留给P6。回退锚点为 `e4930971`；未经授权不执行 `git reset`、不修改历史或推送。
+
+#### P5准出记录（2026-11-15，待用户审阅）
+
+用户于2026-11-15确认主推错误码提案并批准P5实施。Leader先集中登记5项新码（`42903` 与 `50038–50041`）并更新词表守卫，再并行分派 `plugins/cache`、`plugins/email` 与 `plugins/cron`+`plugins/async` 三个互不重叠工作包，最后由Leader收尾 `email` 测试与类型检查、同步示例与消费者、编写协议映射回归并执行全量门禁。基线为 `e4930971ac9155bbf31429b36b66fcc062e58590`，以下检查均基于该HEAD加本次未提交改动（dirty=true）；没有提交、推送、PR或发布，P6–P7未启动。
+
+本次交付：
+
+- 词表96→101（旧96项六列逐项保真）：新增 `ASYNC_POOL_FULL`（42903）、`CACHE_DRIVER_CODEC_FAILED`（50038）、`CACHE_DRIVER_OPERATION_FAILED`（50039）、`CRON_SCHEDULER_ERROR`（50040）、`ASYNC_POOL_ERROR`（50041）；`email` 沿用 `EmailError`（50017）。500组SDK槽位（00–49）余8个（`50042–50049`）。
+- `plugins/cache`：`Codec` 2法及 `JSONCodec`、4类泛型缓存接口28法与 `memory`/`redis` 56实现方法及内部编解码辅助切换为 `*apperr.Error`；修复 `memory/list.go` `Pop`/`PopLast` 闭包吞错（解码失败保留列表并原样返回错）；`redis` 保留 `goredis.Nil` 非失败语义、取消/超时走49900/50401、`GetAll` 非string键类型返回 `OperationFailed`；根包 `initErr`/`validationErr` 与 `applyFromEnv` 按R11保留 `VALUE_*` 原因且不泄 `NoSQLPass`。
+- `plugins/email`：12个自有失败出口切换为 `*apperr.Error`；W07固定签名 `watchedConn.Close() error` 与 `mail.WithDialContextFunc` 保留原生签名+内部强类型与nil安全薄适配；保留10导出哨兵；`EMAIL_PORT` 解析失败保留 `ErrInvalidPort` 与 `valueerr`（40013）；`Send`/`SendTemplate` 取消/超时归49900/50401；严禁密码泄漏；同步 `client_test.go` 独立 `sendErr` 消除 `SA4023` typed-nil 比较隐患。
+- `plugins/cron` 与 `plugins/async`：移除 `lifecycle_error.go` 50000 临时兜底（分别替换 `SchedulerError` 50040 / `PoolError` 50041）；`Pool.Submit`/`Plugin.Submit`/`async.Submit` 与 `Task.Wait`/`Task.WaitFor` 切换为强类型指针；池满映射 `PoolFull`（42903）；`async.Submit` 组件停止/不可用保留50005/50006与 `ErrPoolClosed` 双cause；nil `*Task` 返回50019，等待期取消/超时走49900/50401。
+- 仓内调用方与协议回归：同步 `examples/v2/grpc-cron-async/main.go` 与 `test/consumer/v2-http-db-cache/lifecycle_test.go`（保留内层码）；修复 `test/consumer/v2-sqlite-async/lifecycle_test.go` `Submit` 复用外层 `err error` 造成的 typed-nil 接口真值假失败；新增HTTP/gRPC五码映射回归与 `TestP5PluginDomainOwnership` 守卫单测。
+
+实际准出命令与结果（`GOTOOLCHAIN=go1.25.11`）：
+
+| 命令                                                                                                                | 结果与边界                                                                             |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `go test -race ./plugins/cache/... ./plugins/email/... ./plugins/cron/... ./plugins/async/... -count=1` 与 `go vet` | 最终复跑通过；外部Redis与SMTP/Mailpit测试按原环境开关跳过                              |
+| `go test -race ./plugins/web-gin/httpresult/... ./plugins/grpc/grpcresult/... -count=1`                             | 最终复跑通过，包含五新增码（含42903 HTTP 429 / gRPC ResourceExhausted）                |
+| `make test`、`make race`、`make vet`、`make lint-go`                                                                | 最终复跑通过，14模块；`client_test.go` 曾触发 `SA4023`，修复后全部重跑通过             |
+| `make error-codes-check`、`make test-scripts`、`make lint-docs`                                                     | 文档写回后重跑通过；101项词表与源码双向一致                                            |
+| `make check-examples`、`bash .github/scripts/consumer/check-v2-consumers.sh`                                        | 最终复跑通过；独立候选无本地replace，覆盖仓内受控消费范围                              |
+| `bash .github/scripts/consumer/check-v2-examples.sh --fixture http-db-cache --race`                                 | 最终复跑通过，独立fixture竞态验证                                                      |
+| `bash .github/scripts/consumer/check-v2-examples.sh --fixture sqlite-async --race`                                  | 最终复跑通过（捕获并修复 `Submit` typed-nil 假失败后稳定全绿）                         |
+| `GOFLAGS=-mod=readonly go list -deps ./foundation/...` 与 `./plugins/cache/driver`                                  | 通过并检查输出：foundation无上层依赖，`cache/driver` 无 `cache` 根包反向依赖           |
+| `gofmt -l`（P5变更目录/文件）、`git diff --check`                                                                   | 输出空，无格式或空白问题                                                               |
+| `python3 /tmp/opencode/v2-p5/verify.py`                                                                             | 文档写回后通过：101项词表、旧96项保真、P5路径范围及相对链接/锚有效；不是P7全仓类型守卫 |
+
+日志位于本机会话 `/tmp/opencode/v2-p5/gate-*.log`，汇总为 `gates.json` / `scope.json`。未运行：外部真实 Redis 与真实 SMTP/Mailpit 服务集成（按原开关默认跳过），不能宣称真实外部连接验收。以上不是整计划或看板卡完成，P5待用户审阅。
 
 ### P6：迁移HTTP/gRPC并验证对外语义
 

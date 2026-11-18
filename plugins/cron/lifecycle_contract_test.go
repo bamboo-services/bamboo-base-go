@@ -37,8 +37,8 @@ func TestPlugin_LifecycleContract_StartWithoutActivatorFails(t *testing.T) {
 	if !errors.Is(startErr, cron.ErrNoActivator) {
 		t.Fatalf("期望 ErrNoActivator 作为根因保留，实际: %v", startErr)
 	}
-	if startErr.Code.Code != apperr.FrameworkInternalError.Code {
-		t.Fatalf("错误码不匹配: got %d, want %d", startErr.Code.Code, apperr.FrameworkInternalError.Code)
+	if startErr.Code.Code != cron.SchedulerError.Code {
+		t.Fatalf("错误码不匹配: got %d, want %d", startErr.Code.Code, cron.SchedulerError.Code)
 	}
 }
 

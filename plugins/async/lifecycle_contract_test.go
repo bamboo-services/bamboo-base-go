@@ -38,7 +38,7 @@ func TestPlugin_LifecycleContract_StartStopReturnsTrueNil(t *testing.T) {
 
 // TestPlugin_LifecycleContract_InvalidCapacityKeepsSentinel 断言容量非法时失败结果保留容量哨兵根因。
 //
-// 说明：Async 插件当前尚无专属错误码，生命周期内部失败以框架内部错误码（50000）兜底。
+// 说明：Async 插件已登记专属错误码，生命周期内部失败以 [PoolError]（50041 / ASYNC_POOL_ERROR）兜底。
 func TestPlugin_LifecycleContract_InvalidCapacityKeepsSentinel(t *testing.T) {
 	_, factory := New(WithCapacity(0))
 	p, ok := factory().(*Plugin)
@@ -56,8 +56,8 @@ func TestPlugin_LifecycleContract_InvalidCapacityKeepsSentinel(t *testing.T) {
 	if !errors.Is(startErr, ErrInvalidPoolCapacity) {
 		t.Fatalf("期望 ErrInvalidPoolCapacity 作为根因保留，实际: %v", startErr)
 	}
-	if startErr.Code.Code != apperr.FrameworkInternalError.Code {
-		t.Fatalf("错误码不匹配: got %d, want %d", startErr.Code.Code, apperr.FrameworkInternalError.Code)
+	if startErr.Code.Code != PoolError.Code {
+		t.Fatalf("错误码不匹配: got %d, want %d", startErr.Code.Code, PoolError.Code)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
@@ -23,6 +24,14 @@ func NewListCache[K any, V any](store *Store, codec driver.Codec, enc driver.Key
 		codec = driver.JSONCodec{}
 	}
 	return &ListCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
+}
+
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 [Store] 时 panic。
+func (c *ListCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.store == nil {
+		return notInitializedErr()
+	}
+	return nil
 }
 
 // normalizeIndex 把负数索引转换为正数索引（-1 表示最后一个元素）。
@@ -50,7 +59,10 @@ func normalizeIndex(idx int64, length int) (int, bool) {
 //   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
 //
 // 无任何条件选项时走 [Store.Update] 保持原有行为。
-func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...driver.SetOption) error {
+func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -106,7 +118,10 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts .
 //   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
 //
 // 无任何条件选项时走 [Store.Update] 保持原有行为。
-func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...driver.SetOption) error {
+func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(values) == 0 {
 		return nil
 	}
@@ -151,7 +166,10 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ..
 }
 
 // Range 按索引范围获取列表元素，支持负数索引（-1 表示最后一个元素）。
-func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, error) {
+func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int64) ([]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -179,7 +197,10 @@ func (c *ListCache[K, V]) Range(ctx context.Context, key K, start int64, end int
 }
 
 // Index 获取指定索引位置的元素，支持负数索引。越界时返回 nil, nil。
-func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, error) {
+func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -201,7 +222,10 @@ func (c *ListCache[K, V]) Index(ctx context.Context, key K, index int64) (*V, er
 }
 
 // Len 获取列表的长度。
-func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
+func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return 0, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -217,9 +241,16 @@ func (c *ListCache[K, V]) Len(ctx context.Context, key K) (int64, error) {
 // Pop 从列表头部弹出一个元素并返回。列表为空时返回 nil, nil。
 //
 // 通过 [Store.Update] 保证读-改-写原子性。
-func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
+//
+// 反序列化失败时保留列表原样（不弹出任何元素），并把编解码错误原样返回，
+// 不在闭包内吞掉失败。
+func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	var result *V
+	var unmarshalErr *apperr.Error
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
 		if len(l) == 0 {
@@ -229,11 +260,12 @@ func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
 		// 反序列化在锁外做以避免 codec 慢导致拖累分片；先暂存 raw
 		raw := make([]byte, len(data))
 		copy(raw, data)
-		// 闭包内只解码，不写外部状态（result 是闭包捕获的指针）
+		// 闭包内只解码，不写外部状态（result 与 unmarshalErr 是闭包捕获的指针）
 		var v V
 		if err := c.codec.Unmarshal(raw, &v); err != nil {
-			// 解码失败保留列表原样，不弹出
-			return l
+			// 解码失败：记录错误并保留列表原样，不弹出元素
+			unmarshalErr = err
+			return UpdateNoChange
 		}
 		result = &v
 		newList := l[1:]
@@ -242,15 +274,25 @@ func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, error) {
 		}
 		return newList
 	})
+	if unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
 	return result, nil
 }
 
 // PopLast 从列表尾部弹出一个元素并返回。列表为空时返回 nil, nil。
 //
 // 通过 [Store.Update] 保证读-改-写原子性。
-func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
+//
+// 反序列化失败时保留列表原样（不弹出任何元素），并把编解码错误原样返回，
+// 不在闭包内吞掉失败。
+func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	var result *V
+	var unmarshalErr *apperr.Error
 	c.store.Update(k, c.ttl, func(old any) any {
 		l, _ := old.([][]byte)
 		if len(l) == 0 {
@@ -261,7 +303,9 @@ func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
 		copy(raw, data)
 		var v V
 		if err := c.codec.Unmarshal(raw, &v); err != nil {
-			return l
+			// 解码失败：记录错误并保留列表原样，不弹出元素
+			unmarshalErr = err
+			return UpdateNoChange
 		}
 		result = &v
 		newList := l[:len(l)-1]
@@ -270,6 +314,9 @@ func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
 		}
 		return newList
 	})
+	if unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
 	return result, nil
 }
 
@@ -277,7 +324,10 @@ func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, error) {
 //
 // count > 0 从头部开始移除最多 count 个；count < 0 从尾部开始；count = 0 移除全部。
 // 通过 [Store.Update] 保证原子性。
-func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) error {
+func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value V) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	target, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -322,7 +372,10 @@ func (c *ListCache[K, V]) Remove(ctx context.Context, key K, count int64, value 
 }
 
 // Delete 删除整个列表。
-func (c *ListCache[K, V]) Delete(ctx context.Context, key K) error {
+func (c *ListCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	c.store.Delete(driver.EncodeKey(c.enc, key))
 	return nil
 }

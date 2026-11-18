@@ -21,7 +21,7 @@ const PluginKey ctxkey.Key = "plugin_cache"
 type pluginImpl struct {
 	cfg     Config
 	mode    Type
-	initErr error
+	initErr *apperr.Error
 
 	mu       sync.Mutex
 	started  bool
@@ -48,7 +48,7 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 		}
 	}
 
-	var initErr error
+	var initErr *apperr.Error
 	if cfg.validationErr != nil {
 		initErr = cfg.validationErr
 	}
@@ -66,9 +66,11 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 		provides = nil
 		if initErr == nil {
 			if mode == CacheTypeNone || mode == "" {
-				initErr = errors.New("cache plugin: no cache backend selected (CacheTypeNone)")
+				initErr = apperr.New(CacheError, "缓存插件未选择后端",
+					errors.New("cache plugin: no cache backend selected (CacheTypeNone)"))
 			} else {
-				initErr = fmt.Errorf("cache plugin: unknown cache backend type %q", mode)
+				initErr = apperr.New(CacheError, "缓存插件后端类型非法",
+					fmt.Errorf("cache plugin: unknown cache backend type %q", mode))
 			}
 		}
 	}

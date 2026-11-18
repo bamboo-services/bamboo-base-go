@@ -80,7 +80,7 @@ func TestSQLiteAsyncLifecycle_CaseA_AppForceUnblocksTask_OrderlyShutdown(t *test
 				return err
 			}
 
-			task, err := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
+			task, submitErr := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
 				close(taskStarted)
 				<-taskCtx.Done()
 				close(appForceReceived)
@@ -91,10 +91,13 @@ func TestSQLiteAsyncLifecycle_CaseA_AppForceUnblocksTask_OrderlyShutdown(t *test
 				}
 				close(sqlCompleted)
 			})
-			if err != nil {
-				return err
+			if submitErr != nil {
+				return submitErr
 			}
-			return task.Wait()
+			if waitErr := task.Wait(); waitErr != nil {
+				return waitErr
+			}
+			return nil
 		},
 	}
 
@@ -257,7 +260,7 @@ func TestSQLiteAsyncLifecycle_CaseB_TaskIgnoresCancel_RetainsDatabase_Incomplete
 				return err
 			}
 
-			tSub, err := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
+			tSub, submitErr := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
 				close(taskStarted)
 				<-releaseTask
 				safeCtx := context.Background()
@@ -266,8 +269,8 @@ func TestSQLiteAsyncLifecycle_CaseB_TaskIgnoresCancel_RetainsDatabase_Incomplete
 				}
 				taskDoneFlag.Store(true)
 			})
-			if err != nil {
-				return err
+			if submitErr != nil {
+				return submitErr
 			}
 			capturedTask = tSub
 			close(taskReady)

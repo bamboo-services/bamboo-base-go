@@ -67,4 +67,8 @@
 //   - 启动前校验：若未显式注入 [application.Activator]，[Plugin.Start] 立即返回 [ErrNoActivator]；
 //   - 规则校验：若 Cron 表达式语法非法或间隔小于等于 0，返回 [ErrInvalidJobSchedule]；
 //   - 目标校验：若目标组件 Key 非法，返回 [ErrInvalidJobTarget]。
+//   - 错误码归一：生命周期内部失败统一以专属错误码 [SchedulerError]
+//     （50040 / CRON_SCHEDULER_ERROR）返回，原始根因完整保留；
+//   - 控制类失败：关机上下文取消与超时经控制类错误码（49900 / 50401）归一，
+//     并保留原生 context 哨兵供 errors.Is 精确判定。
 package cron

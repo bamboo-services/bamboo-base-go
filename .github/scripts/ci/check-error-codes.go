@@ -32,7 +32,10 @@ var ownerPrefixes = map[string]string{
 	"plugins/database/dialect":   "DATABASE_DIALECT_",
 	"plugins/database/models":    "DATABASE_MODEL_",
 	"plugins/cache":              "CACHE_",
+	"plugins/cache/driver":       "CACHE_DRIVER_",
 	"plugins/email":              "EMAIL_",
+	"plugins/cron":               "CRON_",
+	"plugins/async":              "ASYNC_",
 }
 
 var outputPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$`)

@@ -2,8 +2,6 @@ package cache
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
@@ -21,7 +19,7 @@ type Config struct {
 	FromEnv bool            // 标识是否启用了从环境变量自动识别与填充配置。
 	Logger  *logging.Logger // 传入应用日志实例，用于打印缓存内部调试与生命周期日志。
 
-	validationErr error
+	validationErr *apperr.Error
 }
 
 // Option 定义作用于 [*Config] 的函数式配置选项。
@@ -159,6 +157,11 @@ func WithMemoryShardCount(n int) MemoryOption {
 	return func(m *MemoryOptions) { m.ShardCount = n }
 }
 
+// applyFromEnv 从环境变量装配缓存配置，并把配置项解析失败归一为 [CacheError]（50016）。
+//
+// 按 R11：服务启动阶段确认的配置错误使用插件配置错误码（500 组），
+// 底层 VALUE_* 原因作为根因保留；安全描述只包含环境变量名，不复制原始取值，
+// 也不把 NOSQLPass 等凭据带入错误文本。
 func (c *Config) applyFromEnv() {
 	driverStr := "none"
 	if raw, ok := env.Lookup(env.NoSQLDriver); ok && !raw.IsEmpty() {
@@ -188,7 +191,7 @@ func (c *Config) applyFromEnv() {
 		if raw, ok := env.Lookup(env.NoSQLDatabase); ok {
 			val, err := raw.Int()
 			if err != nil {
-				c.validationErr = errors.Join(c.validationErr, fmt.Errorf("invalid NOSQL_DATABASE: %w", err))
+				c.validationErr = joinConfigErr(c.validationErr, configErr(env.NoSQLDatabase, err))
 			} else {
 				c.Redis.DB = val
 			}
@@ -196,7 +199,7 @@ func (c *Config) applyFromEnv() {
 		if raw, ok := env.Lookup(env.NoSQLPoolSize); ok {
 			val, err := raw.Int()
 			if err != nil {
-				c.validationErr = errors.Join(c.validationErr, fmt.Errorf("invalid NOSQL_POOL_SIZE: %w", err))
+				c.validationErr = joinConfigErr(c.validationErr, configErr(env.NoSQLPoolSize, err))
 			} else if val > 0 {
 				c.Redis.PoolSize = val
 			}
@@ -208,16 +211,16 @@ func (c *Config) applyFromEnv() {
 			c.Memory.DefaultTTL = 30 * time.Minute
 		}
 		if raw, ok := env.Lookup(env.NoSQLMemoryDefaultTTL); ok {
-			if d, err := time.ParseDuration(raw.String()); err == nil {
-				c.Memory.DefaultTTL = d
+			if d, err := raw.Duration(); err != nil {
+				c.validationErr = joinConfigErr(c.validationErr, configErr(env.NoSQLMemoryDefaultTTL, err))
 			} else {
-				c.validationErr = errors.Join(c.validationErr, fmt.Errorf("invalid NOSQL_MEMORY_DEFAULT_TTL: %w", err))
+				c.Memory.DefaultTTL = d
 			}
 		}
 		if raw, ok := env.Lookup(env.NoSQLMemoryMaxEntries); ok {
 			val, err := raw.Int()
 			if err != nil {
-				c.validationErr = errors.Join(c.validationErr, fmt.Errorf("invalid NOSQL_MEMORY_MAX_ENTRIES: %w", err))
+				c.validationErr = joinConfigErr(c.validationErr, configErr(env.NoSQLMemoryMaxEntries, err))
 			} else if val > 0 {
 				c.Memory.MaxEntries = val
 			}
@@ -225,7 +228,7 @@ func (c *Config) applyFromEnv() {
 		if raw, ok := env.Lookup(env.NoSQLMemoryShardCount); ok {
 			val, err := raw.Int()
 			if err != nil {
-				c.validationErr = errors.Join(c.validationErr, fmt.Errorf("invalid NOSQL_MEMORY_SHARD_COUNT: %w", err))
+				c.validationErr = joinConfigErr(c.validationErr, configErr(env.NoSQLMemoryShardCount, err))
 			} else if val > 0 {
 				c.Memory.ShardCount = val
 			}
@@ -234,6 +237,25 @@ func (c *Config) applyFromEnv() {
 	default:
 		c.TypeVal = CacheTypeNone
 	}
+}
+
+// configErr 把缓存配置项解析失败归一为所属域错误码 [CacheError]（50016）。
+//
+// 底层 VALUE_* 原因（[*apperr.Error]）作为根因完整保留，可经 errors.As 提取；
+// 安全描述只包含环境变量名，不复制原始取值，避免把凭据带入对外文案。
+func configErr(key env.Key, cause error) *apperr.Error {
+	return apperr.New(CacheError, apperr.ErrMessage("缓存配置项 "+string(key)+" 取值非法"), cause)
+}
+
+// joinConfigErr 聚合多条缓存配置错误。
+//
+// 单条错误原样保留；多条错误统一归一为 [CacheError]（50016），
+// 并把每条配置错误按入参顺序保留为根因。
+func joinConfigErr(existing *apperr.Error, next *apperr.Error) *apperr.Error {
+	if existing == nil {
+		return next
+	}
+	return apperr.Join(CacheError, "缓存配置项取值非法", existing, next)
 }
 
 // Get 从请求或应用上下文中提取强类型的缓存管理器实例 [*Manager]。

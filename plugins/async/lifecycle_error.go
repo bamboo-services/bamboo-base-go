@@ -13,9 +13,8 @@ import (
 //     原生 context 哨兵继续作为根因保留，供 errors.Is 精确判定；
 //   - 其余普通原因按兜底错误码归一，原始原因链完整保留。
 //
-// 说明：Async 插件当前尚未在 spec/0002 词表中登记专属错误码，
-// 生命周期内部失败暂以 [apperr.FrameworkInternalError]（50000）兜底，
-// 缺口已上报由 Leader 裁决，后续补登专属码时只需替换本函数的兜底码。
+// 说明：Async 插件已登记专属错误码 [PoolError]（50041 / ASYNC_POOL_ERROR），
+// 生命周期内部失败统一以该错误码兜底，原始原因链完整保留。
 //
 // 返回值在存在真实原因时始终非 nil；成功路径必须直接返回真正的 nil 指针，
 // 禁止把 nil 指针装入 error 接口冒充失败。
@@ -29,5 +28,5 @@ func lifecycleErr(msg apperr.ErrMessage, cause error) *apperr.Error {
 	if classified := control.Classify(cause, control.PhaseOperation); classified != nil {
 		return apperr.New(&classified.Code, msg, cause)
 	}
-	return apperr.From(apperr.FrameworkInternalError, msg, cause)
+	return apperr.From(PoolError, msg, cause)
 }

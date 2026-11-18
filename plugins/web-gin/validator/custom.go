@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
 	ut "github.com/go-playground/universal-translator"
 	v10 "github.com/go-playground/validator/v10"
 )
@@ -183,7 +185,7 @@ func ValidateSnowflake(fl v10.FieldLevel) bool {
 }
 
 // registerBuiltinCustomRules 注册 8 个内置自定义规则与其对应中文翻译
-func (e *Engine) registerBuiltinCustomRules() error {
+func (e *Engine) registerBuiltinCustomRules() *apperr.Error {
 	rules := map[string]v10.Func{
 		"strict_url":          ValidateStrictURL,
 		"strict_uuid":         ValidateStrictUUID,
@@ -197,11 +199,19 @@ func (e *Engine) registerBuiltinCustomRules() error {
 
 	for tag, fn := range rules {
 		if err := e.validate.RegisterValidation(tag, fn); err != nil {
-			return fmt.Errorf("validator: 注册规则 %s 失败: %w", tag, err)
+			return apperr.New(httpresult.InternalError, "", fmt.Errorf("validator: 注册规则 %s 失败: %w", tag, err))
 		}
 	}
 
 	e.registerBuiltinTranslations()
+	return nil
+}
+
+// addBuiltinTranslation 是 W11 固定签名注册回调的薄适配，保证成功时返回字面量 nil。
+func addBuiltinTranslation(ut ut.Translator, tag, text string) error {
+	if err := ut.Add(tag, text, true); err != nil {
+		return apperr.New(httpresult.InternalError, "", err)
+	}
 	return nil
 }
 
@@ -210,7 +220,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// oneof 补充翻译
 	_ = e.validate.RegisterTranslation("oneof", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("oneof", "{0}必须是以下值之一: {1}", true)
+			return addBuiltinTranslation(ut, "oneof", "{0}必须是以下值之一: {1}")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("oneof", fe.Field(), fe.Param())
@@ -221,7 +231,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// strict_url
 	_ = e.validate.RegisterTranslation("strict_url", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("strict_url", "{0}必须是有效的 HTTP 或 HTTPS URL", true)
+			return addBuiltinTranslation(ut, "strict_url", "{0}必须是有效的 HTTP 或 HTTPS URL")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("strict_url", fe.Field())
@@ -232,7 +242,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// strict_uuid
 	_ = e.validate.RegisterTranslation("strict_uuid", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("strict_uuid", "{0}必须是标准的 UUID 格式", true)
+			return addBuiltinTranslation(ut, "strict_uuid", "{0}必须是标准的 UUID 格式")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("strict_uuid", fe.Field())
@@ -243,7 +253,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// alphanum_underscore
 	_ = e.validate.RegisterTranslation("alphanum_underscore", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("alphanum_underscore", "{0}只能包含字母、数字和下划线", true)
+			return addBuiltinTranslation(ut, "alphanum_underscore", "{0}只能包含字母、数字和下划线")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("alphanum_underscore", fe.Field())
@@ -254,7 +264,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// regexp
 	_ = e.validate.RegisterTranslation("regexp", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("regexp", "{0}格式不正确", true)
+			return addBuiltinTranslation(ut, "regexp", "{0}格式不正确")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("regexp", fe.Field())
@@ -265,7 +275,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// enum_int
 	_ = e.validate.RegisterTranslation("enum_int", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("enum_int", "{0}必须是以下值之一: {1}", true)
+			return addBuiltinTranslation(ut, "enum_int", "{0}必须是以下值之一: {1}")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("enum_int", fe.Field(), fe.Param())
@@ -276,7 +286,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// enum_string
 	_ = e.validate.RegisterTranslation("enum_string", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("enum_string", "{0}必须是以下值之一: {1}", true)
+			return addBuiltinTranslation(ut, "enum_string", "{0}必须是以下值之一: {1}")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("enum_string", fe.Field(), fe.Param())
@@ -287,7 +297,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// enum_float
 	_ = e.validate.RegisterTranslation("enum_float", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("enum_float", "{0}必须是以下值之一: {1}", true)
+			return addBuiltinTranslation(ut, "enum_float", "{0}必须是以下值之一: {1}")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("enum_float", fe.Field(), fe.Param())
@@ -298,7 +308,7 @@ func (e *Engine) registerBuiltinTranslations() {
 	// snowflake
 	_ = e.validate.RegisterTranslation("snowflake", e.trans,
 		func(ut ut.Translator) error {
-			return ut.Add("snowflake", "{0} 必须是有效的 Snowflake ID", true)
+			return addBuiltinTranslation(ut, "snowflake", "{0} 必须是有效的 Snowflake ID")
 		},
 		func(ut ut.Translator, fe v10.FieldError) string {
 			t, _ := ut.T("snowflake", fe.Field())

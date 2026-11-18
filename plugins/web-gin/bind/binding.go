@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
 	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
 	"github.com/gin-gonic/gin"
 )
@@ -36,9 +37,9 @@ func (b *Binding[T]) Data() *T {
 		return nil
 	}
 
-	bodyBytes, err := b.readBodyBytes()
-	if err != nil {
-		b.handleBindError(err)
+	bodyBytes, appErr := b.readBodyBytes()
+	if appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
@@ -52,8 +53,8 @@ func (b *Binding[T]) Data() *T {
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -70,9 +71,9 @@ func (b *Binding[T]) XML() *T {
 		return nil
 	}
 
-	bodyBytes, err := b.readBodyBytes()
-	if err != nil {
-		b.handleBindError(err)
+	bodyBytes, appErr := b.readBodyBytes()
+	if appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
@@ -81,8 +82,8 @@ func (b *Binding[T]) XML() *T {
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -101,13 +102,13 @@ func (b *Binding[T]) Query() *T {
 	}
 
 	values := b.Context.Request.URL.Query()
-	if err := mapValuesToStruct(values, b.GetData, false, "form"); err != nil {
-		b.handleBindError(err)
+	if appErr := mapValuesToStruct(values, b.GetData, false, "form"); appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -130,13 +131,13 @@ func (b *Binding[T]) URI() *T {
 		m[p.Key] = []string{p.Value}
 	}
 
-	if err := mapValuesToStruct(m, b.GetData, false, "uri"); err != nil {
-		b.handleBindError(err)
+	if appErr := mapValuesToStruct(m, b.GetData, false, "uri"); appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -154,13 +155,13 @@ func (b *Binding[T]) Header() *T {
 	}
 
 	headers := b.Context.Request.Header
-	if err := mapValuesToStruct(headers, b.GetData, true, "header"); err != nil {
-		b.handleBindError(err)
+	if appErr := mapValuesToStruct(headers, b.GetData, true, "header"); appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -187,13 +188,13 @@ func (b *Binding[T]) Form() *T {
 		values = b.Context.Request.Form
 	}
 
-	if err := mapValuesToStruct(values, b.GetData, false, "form"); err != nil {
-		b.handleBindError(err)
+	if appErr := mapValuesToStruct(values, b.GetData, false, "form"); appErr != nil {
+		b.handleBindError(appErr)
 		return nil
 	}
 
-	if err := b.binder.engine.Validate(b.GetData); err != nil {
-		b.binder.engine.HandleError(b.Context, err)
+	if appErr := b.binder.engine.Validate(b.GetData); appErr != nil {
+		b.binder.engine.HandleError(b.Context, appErr)
 		b.Context.Abort()
 		return nil
 	}
@@ -225,37 +226,49 @@ func (b *Binding[T]) handleBindError(err error) {
 		b.Context.Abort()
 		return
 	}
-	// 缺失 Binder 明确报错，绝不偷建全局引擎
-	appErr := apperr.New(ParameterError, apperr.ErrMessage("请求绑定失败: "+err.Error()), err)
-	httpresult.AbortError(b.Context, appErr)
+	// 缺失 Binder 明确报错，绝不偷建全局引擎或将未知原始文本拼入安全文案
+	var appErr *apperr.Error
+	if errors.As(err, &appErr) {
+		httpresult.AbortError(b.Context, appErr)
+		return
+	}
+	safeErr := apperr.New(ParameterError, "请求参数绑定失败", err)
+	httpresult.AbortError(b.Context, safeErr)
 }
 
-func (b *Binding[T]) readBodyBytes() ([]byte, error) {
+func (b *Binding[T]) readBodyBytes() ([]byte, *apperr.Error) {
 	if b.Context.Request == nil || b.Context.Request.Body == nil {
-		return nil, errors.New("request body is nil")
+		return nil, apperr.New(ParameterError, "", errors.New("request body is nil"))
 	}
 	body, err := io.ReadAll(b.Context.Request.Body)
 	if err != nil {
-		return nil, err
+		if ctrlErr := control.Classify(err, control.PhaseRequestRead); ctrlErr != nil {
+			return nil, ctrlErr
+		}
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, apperr.New(httpresult.PayloadTooLarge, "", err)
+		}
+		return nil, apperr.New(ParameterError, "", err)
 	}
 	b.Context.Request.Body = io.NopCloser(strings.NewReader(string(body)))
 	return body, nil
 }
 
 // mapValuesToStruct 使用反射将 map[string][]string 映射到结构体，支持嵌套、slice、指针与 time.Time。
-func mapValuesToStruct(values map[string][]string, target any, headerMode bool, tagNames ...string) error {
+func mapValuesToStruct(values map[string][]string, target any, headerMode bool, tagNames ...string) *apperr.Error {
 	val := reflect.ValueOf(target)
 	if val.Kind() != reflect.Pointer || val.IsNil() {
-		return errors.New("target must be a non-nil pointer")
+		return apperr.New(httpresult.InternalError, "", errors.Join(ErrNilTarget, errors.New("target must be a non-nil pointer")))
 	}
 	val = val.Elem()
 	if val.Kind() != reflect.Struct {
-		return errors.New("target element must be a struct")
+		return apperr.New(httpresult.InternalError, "", errors.New("target element must be a struct"))
 	}
 	return fillStructFields(values, val, headerMode, tagNames...)
 }
 
-func fillStructFields(values map[string][]string, structVal reflect.Value, headerMode bool, tagNames ...string) error {
+func fillStructFields(values map[string][]string, structVal reflect.Value, headerMode bool, tagNames ...string) *apperr.Error {
 	typ := structVal.Type()
 	for i := 0; i < typ.NumField(); i++ {
 		fieldTyp := typ.Field(i)
@@ -267,8 +280,8 @@ func fillStructFields(values map[string][]string, structVal reflect.Value, heade
 
 		// 处理内嵌未命名结构体
 		if fieldTyp.Anonymous && fieldVal.Kind() == reflect.Struct {
-			if err := fillStructFields(values, fieldVal, headerMode, tagNames...); err != nil {
-				return err
+			if appErr := fillStructFields(values, fieldVal, headerMode, tagNames...); appErr != nil {
+				return appErr
 			}
 			continue
 		}
@@ -290,11 +303,12 @@ func fillStructFields(values map[string][]string, structVal reflect.Value, heade
 			loc = time.UTC
 		}
 
-		if err := setFieldValue(fieldVal, rawVals, timeFormat, loc); err != nil {
-			return &json.UnmarshalTypeError{
+		if appErr := setFieldValue(fieldVal, rawVals, timeFormat, loc); appErr != nil {
+			typeErr := &json.UnmarshalTypeError{
 				Field: key,
 				Type:  fieldVal.Type(),
 			}
+			return apperr.New(ParameterError, "", errors.Join(typeErr, appErr))
 		}
 	}
 	return nil
@@ -332,7 +346,7 @@ func lookupValues(values map[string][]string, key string, headerMode bool) ([]st
 	return nil, false
 }
 
-func setFieldValue(fieldVal reflect.Value, rawVals []string, timeFormat string, loc *time.Location) error {
+func setFieldValue(fieldVal reflect.Value, rawVals []string, timeFormat string, loc *time.Location) *apperr.Error {
 	if fieldVal.Kind() == reflect.Pointer {
 		if fieldVal.IsNil() {
 			fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
@@ -343,9 +357,9 @@ func setFieldValue(fieldVal reflect.Value, rawVals []string, timeFormat string, 
 	// 特殊处理 time.Time
 	if fieldVal.Type() == reflect.TypeOf(time.Time{}) {
 		raw := strings.TrimSpace(rawVals[0])
-		t, err := parseTimeValue(raw, timeFormat, loc)
-		if err != nil {
-			return err
+		t, appErr := parseTimeValue(raw, timeFormat, loc)
+		if appErr != nil {
+			return appErr
 		}
 		fieldVal.Set(reflect.ValueOf(t))
 		return nil
@@ -363,8 +377,8 @@ func setFieldValue(fieldVal reflect.Value, rawVals []string, timeFormat string, 
 		slice := reflect.MakeSlice(fieldVal.Type(), len(rawVals), len(rawVals))
 		for i, r := range rawVals {
 			itemVal := reflect.New(elemType).Elem()
-			if err := setSingleScalar(itemVal, strings.TrimSpace(r), timeFormat, loc); err != nil {
-				return err
+			if appErr := setSingleScalar(itemVal, strings.TrimSpace(r), timeFormat, loc); appErr != nil {
+				return appErr
 			}
 			if isPtr {
 				slice.Index(i).Set(itemVal.Addr())
@@ -380,11 +394,11 @@ func setFieldValue(fieldVal reflect.Value, rawVals []string, timeFormat string, 
 	}
 }
 
-func setSingleScalar(v reflect.Value, raw string, timeFormat string, loc *time.Location) error {
+func setSingleScalar(v reflect.Value, raw string, timeFormat string, loc *time.Location) *apperr.Error {
 	if v.Type() == reflect.TypeOf(time.Time{}) {
-		t, err := parseTimeValue(raw, timeFormat, loc)
-		if err != nil {
-			return err
+		t, appErr := parseTimeValue(raw, timeFormat, loc)
+		if appErr != nil {
+			return appErr
 		}
 		v.Set(reflect.ValueOf(t))
 		return nil
@@ -396,36 +410,40 @@ func setSingleScalar(v reflect.Value, raw string, timeFormat string, loc *time.L
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return err
+			return apperr.New(ParameterError, "", err)
 		}
 		v.SetInt(val)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		val, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil {
-			return err
+			return apperr.New(ParameterError, "", err)
 		}
 		v.SetUint(val)
 	case reflect.Float32, reflect.Float64:
 		val, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
-			return err
+			return apperr.New(ParameterError, "", err)
 		}
 		v.SetFloat(val)
 	case reflect.Bool:
 		val, err := strconv.ParseBool(raw)
 		if err != nil {
-			return err
+			return apperr.New(ParameterError, "", err)
 		}
 		v.SetBool(val)
 	default:
-		return errors.New("unsupported scalar type: " + v.Kind().String())
+		return apperr.New(ParameterError, "", errors.New("unsupported scalar type: "+v.Kind().String()))
 	}
 	return nil
 }
 
-func parseTimeValue(raw string, format string, loc *time.Location) (time.Time, error) {
+func parseTimeValue(raw string, format string, loc *time.Location) (time.Time, *apperr.Error) {
 	if format != "" {
-		return time.ParseInLocation(format, raw, loc)
+		t, err := time.ParseInLocation(format, raw, loc)
+		if err != nil {
+			return time.Time{}, apperr.New(ParameterError, "", err)
+		}
+		return t, nil
 	}
 	formats := []string{
 		time.RFC3339,
@@ -438,5 +456,5 @@ func parseTimeValue(raw string, format string, loc *time.Location) (time.Time, e
 			return t, nil
 		}
 	}
-	return time.Time{}, errors.New("unable to parse time string: " + raw)
+	return time.Time{}, apperr.New(ParameterError, "", errors.New("unable to parse time string: "+raw))
 }

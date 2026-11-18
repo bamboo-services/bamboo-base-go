@@ -51,9 +51,27 @@ func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
 			})
 		}
 	} else {
-		detail := parseBindingErrorDetail(bindErr)
-		firstErrorMessage = detail.Message
-		errorDetails = append(errorDetails, detail)
+		var existing *apperr.Error
+		if errors.As(bindErr, &existing) {
+			if existing.Code.Code != BodyError.Code && existing.Code.Code != ValidationError.Code && existing.Code.Code != 40005 {
+				httpresult.Error(ctx, existing)
+				return
+			}
+			detail := parseBindingErrorDetail(bindErr)
+			firstErrorMessage = detail.Message
+			errorDetails = append(errorDetails, detail)
+			if existing.Code.Code == 40005 {
+				codeCopy := existing.Code
+				appErr := apperr.New(&codeCopy, apperr.ErrMessage(firstErrorMessage), bindErr)
+				appErr.Data = errorDetails
+				httpresult.Error(ctx, appErr)
+				return
+			}
+		} else {
+			detail := parseBindingErrorDetail(bindErr)
+			firstErrorMessage = detail.Message
+			errorDetails = append(errorDetails, detail)
+		}
 	}
 
 	if firstErrorMessage == "" {

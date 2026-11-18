@@ -95,7 +95,7 @@ type config struct {
 	name                string
 	requires            []ctxkey.Key
 	routes              []RouteRegistrar
-	validatorRegistrars []func(*validator.Engine) error
+	validatorRegistrars []func(*validator.Engine) *apperr.Error
 	logger              *logging.Logger
 	readTimeout         time.Duration
 	writeTimeout        time.Duration
@@ -164,8 +164,8 @@ func WithRoute(fn RouteRegistrar) Option {
 //
 // 回调函数在插件执行 [Plugin.Start] 并创建私有 [*validator.Engine] 实例后、
 // 初始化绑定器之前执行。业务可通过此函数注册领域特定的参数校验规则。
-// 若回调返回错误，[Plugin.Start] 流程将立即终止并返回该错误。传入 nil 时忽略。
-func WithValidatorRegistrar(fn func(*validator.Engine) error) Option {
+// 若回调返回非 nil 统一错误，[Plugin.Start] 流程将立即终止并返回该错误。传入 nil 时忽略。
+func WithValidatorRegistrar(fn func(*validator.Engine) *apperr.Error) Option {
 	return func(c *config) {
 		if fn != nil {
 			c.validatorRegistrars = append(c.validatorRegistrars, fn)
@@ -240,7 +240,7 @@ func (g *requestGate) closeGate() {
 	g.closed = true
 }
 
-func (g *requestGate) waitDrained(ctx context.Context) error {
+func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	g.mu.Lock()
 	g.closed = true
 	if g.inflight == 0 {
@@ -263,7 +263,7 @@ func (g *requestGate) waitDrained(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return control.Classify(ctx.Err(), control.PhaseOperation)
 	}
 }
 
@@ -323,7 +323,7 @@ func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlu
 	routesCopy := make([]RouteRegistrar, len(cfg.routes))
 	copy(routesCopy, cfg.routes)
 
-	validatorRegistrarsCopy := make([]func(*validator.Engine) error, len(cfg.validatorRegistrars))
+	validatorRegistrarsCopy := make([]func(*validator.Engine) *apperr.Error, len(cfg.validatorRegistrars))
 	copy(validatorRegistrarsCopy, cfg.validatorRegistrars)
 
 	cfg.requires = requiresCopy
@@ -425,22 +425,22 @@ func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 	engine := gin.New()
 	engine.ContextWithFallback = true
 
-	vEngine, err := validator.New()
-	if err != nil {
-		return normalizeLifecycleErr(httpresult.InternalError, "初始化 validator 引擎失败", err)
+	vEngine, appErr := validator.New()
+	if appErr != nil {
+		return normalizeLifecycleErr(httpresult.InternalError, "初始化 validator 引擎失败", appErr)
 	}
 
 	for _, vr := range p.cfg.validatorRegistrars {
 		if vr != nil {
-			if err := vr(vEngine); err != nil {
-				return normalizeLifecycleErr(httpresult.InternalError, "注册自定义验证器失败", err)
+			if vrErr := vr(vEngine); vrErr != nil {
+				return normalizeLifecycleErr(httpresult.InternalError, "注册自定义验证器失败", vrErr)
 			}
 		}
 	}
 
-	b, err := bind.New(vEngine)
-	if err != nil {
-		return normalizeLifecycleErr(httpresult.InternalError, "初始化 binder 失败", err)
+	b, appErr := bind.New(vEngine)
+	if appErr != nil {
+		return normalizeLifecycleErr(httpresult.InternalError, "初始化 binder 失败", appErr)
 	}
 
 	// 挂载核心请求处理管道与基础中间件
@@ -565,32 +565,36 @@ func (p *Plugin) doStop(ctx context.Context) *apperr.Error {
 	p.gate.closeGate()
 
 	// 2. 异步启动 http.Server.Shutdown
-	shutdownDone := make(chan error, 1)
+	shutdownDone := make(chan *apperr.Error, 1)
 	go func() {
-		// 使用独立的 Context 还是传入的 ctx？传入 ctx 作为 Shutdown 的等待上限
-		shutdownDone <- srv.Shutdown(ctx)
+		// 使用传入的 ctx 作为 Shutdown 的等待上限；正常关闭返回真正的 nil
+		if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			shutdownDone <- normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", err)
+			return
+		}
+		shutdownDone <- nil
 	}()
 
 	var stopReason *apperr.Error
 
 	// 3. 监控超时或取消通知
 	select {
-	case err := <-shutdownDone:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopReason = normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", err)
+	case shutErr := <-shutdownDone:
+		if shutErr != nil {
+			stopReason = shutErr
 		}
 	case <-ctx.Done():
 		stopReason = normalizeLifecycleErr(httpresult.InternalError, "停机等待被取消或超时", ctx.Err())
 		// 超时/取消推进传输关闭
 		_ = srv.Close()
-		if err := <-shutdownDone; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopReason = joinLifecycleErrs(stopReason, normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", err))
+		if shutErr := <-shutdownDone; shutErr != nil {
+			stopReason = joinLifecycleErrs(stopReason, shutErr)
 		}
 	case <-p.forceCtx.Done():
 		// App Force 信号通知关闭底层传输，不把正常 AppForce 信号当作 Stop 错误
 		_ = srv.Close()
-		if err := <-shutdownDone; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopReason = normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", err)
+		if shutErr := <-shutdownDone; shutErr != nil {
+			stopReason = shutErr
 		}
 	}
 
@@ -600,8 +604,7 @@ func (p *Plugin) doStop(ctx context.Context) *apperr.Error {
 	}
 
 	// 5. 核心：必须真正等待所有普通 Handler 退出（active 归零），绝不因 ctx deadline 提前释放或返回假 Done
-	drainErr := p.gate.waitDrained(context.Background())
-	if drainErr != nil && stopReason == nil {
+	if drainErr := p.gate.waitDrained(context.Background()); drainErr != nil && stopReason == nil {
 		stopReason = normalizeLifecycleErr(httpresult.InternalError, "排空在途请求失败", drainErr)
 	}
 

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,21 +18,21 @@ var (
 // GetAuthorization 从 [*gin.Context] 的请求中提取并解析 Bearer 认证令牌。
 //
 // 该函数严格读取 [HeaderAuthorization] 请求头：
-//   - 若请求上下文为 nil、未挂载 Request 或请求头为空，返回 [ErrMissingAuthorization]；
-//   - 若请求头格式合法（以 "Bearer " 前缀开头），剥离前缀并返回后续具体的令牌字符串；
-//   - 若请求头内容未以 "Bearer " 前缀开头，返回 [ErrInvalidAuthorizationFormat]。
-func GetAuthorization(ctx *gin.Context) (string, error) {
+//   - 若请求上下文为 nil、未挂载 Request 或请求头为空，返回错误码 [httpresult.Unauthorized]（40100）并保留 [ErrMissingAuthorization] 作根因；
+//   - 若请求头格式合法（以 "Bearer " 前缀开头），剥离前缀并返回后续具体的令牌字符串与 nil；
+//   - 若请求头内容未以 "Bearer " 前缀开头，返回错误码 [httpresult.Unauthorized]（40100）并保留 [ErrInvalidAuthorizationFormat] 作根因。
+func GetAuthorization(ctx *gin.Context) (string, *apperr.Error) {
 	if ctx == nil || ctx.Request == nil {
-		return "", ErrMissingAuthorization
+		return "", apperr.New(httpresult.Unauthorized, "", ErrMissingAuthorization)
 	}
 	getHeader := ctx.GetHeader(HeaderAuthorization.String())
 	if getHeader == "" {
-		return "", ErrMissingAuthorization
+		return "", apperr.New(httpresult.Unauthorized, "", ErrMissingAuthorization)
 	}
 	if strings.HasPrefix(getHeader, "Bearer ") {
 		return getHeader[7:], nil
 	}
-	return "", ErrInvalidAuthorizationFormat
+	return "", apperr.New(httpresult.Unauthorized, "", ErrInvalidAuthorizationFormat)
 }
 
 // GetToken 从 [*gin.Context] 的请求中获取指定类型的令牌字符串。

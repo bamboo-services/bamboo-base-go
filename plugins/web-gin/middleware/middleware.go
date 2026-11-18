@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/header"
 	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
@@ -60,7 +61,7 @@ func Recovery(logger *logging.LogNamedLogger) gin.HandlerFunc {
 //
 // 该中间件在下游处理函数执行完毕后检查响应写入状态：
 //   - 若下游已调用写入方法（[gin.ResponseWriter.Written] 为 true），则直接放行；
-//   - 若下游未写入且 [gin.Context.Errors] 存在错误，优先按最后一个错误映射输出；
+//   - 若下游未写入且 [gin.Context.Errors] 存在错误，优先按 [*apperr.Error] 或 [control.Classify] 映射输出；
 //   - 若下游未写入且无错误，且当前状态码非 301 或 302 重定向，
 //     自动输出 [httpresult.ResponseMissing] 提示开发者检查代码逻辑。
 func Response() gin.HandlerFunc {
@@ -73,6 +74,8 @@ func Response() gin.HandlerFunc {
 				var appErr *apperr.Error
 				if errors.As(lastErr, &appErr) {
 					httpresult.Error(c, appErr)
+				} else if ctrlErr := control.Classify(lastErr, control.PhaseOperation); ctrlErr != nil {
+					httpresult.Error(c, ctrlErr)
 				} else {
 					httpresult.Error(c, apperr.New(httpresult.InternalError, "系统内部异常", lastErr))
 				}

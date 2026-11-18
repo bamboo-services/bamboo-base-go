@@ -1,11 +1,13 @@
 package header_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/header"
+	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,18 +40,24 @@ func TestGetAuthorization(t *testing.T) {
 	// nil check
 	if _, err := header.GetAuthorization(nil); err == nil {
 		t.Fatalf("expected error on nil")
+	} else if err.Code.Code != httpresult.Unauthorized.Code || !errors.Is(err, header.ErrMissingAuthorization) {
+		t.Fatalf("unexpected nil error: %+v", err)
 	}
 
 	// Missing header
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 	if _, err := header.GetAuthorization(c); err == nil {
 		t.Fatalf("expected error on missing authorization header")
+	} else if err.Code.Code != httpresult.Unauthorized.Code || !errors.Is(err, header.ErrMissingAuthorization) {
+		t.Fatalf("unexpected missing header error: %+v", err)
 	}
 
 	// Malformed header
 	c.Request.Header.Set("Authorization", "Basic 123456")
 	if _, err := header.GetAuthorization(c); err == nil {
 		t.Fatalf("expected error on malformed format")
+	} else if err.Code.Code != httpresult.Unauthorized.Code || !errors.Is(err, header.ErrInvalidAuthorizationFormat) {
+		t.Fatalf("unexpected malformed header error: %+v", err)
 	}
 
 	// Valid Bearer

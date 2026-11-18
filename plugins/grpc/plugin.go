@@ -20,10 +20,8 @@ import (
 	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/middleware"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 )
 
 // DefaultGRPCPluginKey 是 gRPC 插件默认的 Worker 插件标识键。
@@ -271,7 +269,7 @@ func (g *requestGate) closeGate() {
 	}
 }
 
-func (g *requestGate) waitDrained(ctx context.Context) error {
+func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	g.mu.Lock()
 	if g.inflight == 0 {
 		g.mu.Unlock()
@@ -293,7 +291,7 @@ func (g *requestGate) waitDrained(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return control.Classify(ctx.Err(), control.PhaseOperation)
 	}
 }
 
@@ -638,39 +636,28 @@ func extractRequestUUID(ctx context.Context) string {
 	return uuid.NewString()
 }
 
-// normalizeRPCError 对 RPC 调用过程产生的 error 进行标准化安全归一：
-// 1. nil 原样返回 nil；
-// 2. errors.As(*apperr.Error) 转为 grpcresult.ToStatusError；
-// 3. context.Canceled / context.DeadlineExceeded 转换为对应标准 gRPC status 与固定 sentinel 文案（避免包装错泄漏 secret）；
-// 4. 显式带有 gRPC status 的调用错误保持既有状态与语义不变；
-// 5. 其余普通未知 error 用 namedLog 记录内部原错，并返回包含 ServerInternalError 的安全 50000 status 错误。
+// normalizeRPCError 按 spec/0003 R12 契约对 RPC 调用产生的 error 执行协议边界转换：
+// 1. nil / typed-nil / codes.OK 原样返回 nil；
+// 2. 链内含 *apperr.Error 转为 grpcresult.ToStatusError；
+// 3. context.Canceled / context.DeadlineExceeded 转为对应控制码与固定安全文案，并附带 BaseResponse；
+// 4. 合法非 OK 原生 gRPC status 保留原状态、显式文案与原 Details，缺 BaseResponse 时补齐单个兼容信封；
+// 5. 其余普通未知 error 记录内部日志并返回 GRPC_INTERNAL_ERROR（50011）安全 status 错误。
 func (p *Plugin) normalizeRPCError(ctx context.Context, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	var appErr *apperr.Error
-	if errors.As(err, &appErr) {
-		return grpcresult.ToStatusError(ctx, appErr)
-	}
-
-	if errors.Is(err, context.Canceled) {
-		return status.Error(codes.Canceled, "上下文已取消")
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "请求超时")
-	}
-
-	if _, ok := status.FromError(err); ok {
-		return err
-	}
-
-	if p.namedLog != nil {
-		p.namedLog.Error(ctx, fmt.Sprintf("gRPC 调用未预期内部错误: %v", err))
-	}
-
-	internalErr := apperr.New(grpcresult.InternalError, "系统内部异常", err)
-	return grpcresult.ToStatusError(ctx, internalErr)
+	return grpcresult.NormalizeToStatusError(
+		ctx,
+		err,
+		control.PhaseOperation,
+		func(unknown error) {
+			if p.namedLog != nil {
+				p.namedLog.Error(ctx, fmt.Sprintf("gRPC 调用未预期内部错误: %v", unknown))
+			}
+		},
+		func(reason string) {
+			if p.namedLog != nil {
+				p.namedLog.Warn(ctx, reason)
+			}
+		},
+	)
 }
 
 // unaryBridgeInterceptor 实现一元调用的入口桥接：准入关卡、生命周期挂载、时间/追踪注入、
@@ -736,7 +723,9 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		if err != nil {
-			return nil, p.normalizeRPCError(bridgedCtx, err)
+			if normErr := p.normalizeRPCError(bridgedCtx, err); normErr != nil {
+				return nil, normErr
+			}
 		}
 		if resp == nil {
 			return nil, grpcresult.ToStatusError(bridgedCtx, apperr.New(grpcresult.ResponseMissing, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」"))

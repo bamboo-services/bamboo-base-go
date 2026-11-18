@@ -165,7 +165,7 @@ func buildApp(
 		})
 	}
 
-	validatorRegistrar := func(vEng *validator.Engine) error {
+	validatorRegistrar := func(vEng *validator.Engine) *apperr.Error {
 		return vEng.RegisterValidation("same_rule", func(fl v10.FieldLevel) bool {
 			return fl.Field().String() == expectedRuleVal
 		})

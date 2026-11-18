@@ -2,7 +2,6 @@ package email
 
 import (
 	"context"
-	"errors"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
@@ -24,8 +23,7 @@ func opErr(msg apperr.ErrMessage, cause error) *apperr.Error {
 	if apperr.IsNil(cause) {
 		return nil
 	}
-	if sentinel := controlSentinel(cause); sentinel != nil {
-		classified := control.Classify(sentinel, control.PhaseOperation)
+	if classified := control.Classify(cause, control.PhaseOperation); classified != nil {
 		return apperr.New(&classified.Code, msg, cause)
 	}
 	return apperr.New(EmailError, msg, cause)
@@ -51,19 +49,4 @@ func opErrWithContext(msg apperr.ErrMessage, cause error, ctxs ...context.Contex
 		return apperr.New(&classified.Code, msg, cause, ctxErr)
 	}
 	return opErr(msg, cause)
-}
-
-// controlSentinel 判定原因链中是否存在取消或超时哨兵（含嵌套包装）。
-//
-// 命中取消时返回 [context.Canceled]，命中超时时返回 [context.DeadlineExceeded]，
-// 均未命中时返回 nil。
-func controlSentinel(cause error) error {
-	switch {
-	case errors.Is(cause, context.Canceled):
-		return context.Canceled
-	case errors.Is(cause, context.DeadlineExceeded):
-		return context.DeadlineExceeded
-	default:
-		return nil
-	}
 }

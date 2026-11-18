@@ -177,7 +177,8 @@ if [ $RUN_GO_TEST -eq 1 ]; then
 	fi
 
 	# Go 脚本测试需在根工作区外使用 GOWORK=off 独立执行
-	if GOWORK=off go test ${RACE_ARG} ./.github/scripts/proxy ./.github/scripts/release ./.github/scripts/ci; then
+	if GOWORK=off go test ${RACE_ARG} ./.github/scripts/proxy ./.github/scripts/release ./.github/scripts/ci &&
+		(cd "${REPO_ROOT}/.github/scripts/ci/error-contract" && GOWORK=off go test ${RACE_ARG} .); then
 		log_pass "Go 脚本单测全部通过"
 		PASSED_COUNT=$((PASSED_COUNT + 1))
 	else

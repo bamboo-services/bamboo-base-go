@@ -552,41 +552,47 @@ func (w *RotatingWriter) createTarGz(archivePath string, files []string) *apperr
 			w.beforeArchiveFileHook(file)
 		}
 		if err := w.addFileToTar(tarWriter, file); err != nil {
-			return errRotationFailed(apperr.ErrMessage(fmt.Sprintf("添加文件 %s 到归档失败", filepath.Base(file))), err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (w *RotatingWriter) addFileToTar(tarWriter *tar.Writer, filePath string) (err error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
+func (w *RotatingWriter) addFileToTar(tarWriter *tar.Writer, filePath string) (err *apperr.Error) {
+	wrapErr := func(rawErr error) *apperr.Error {
+		return errRotationFailed(apperr.ErrMessage(fmt.Sprintf("添加文件 %s 到归档失败", filepath.Base(filePath))), rawErr)
+	}
+
+	file, rawErr := os.Open(filePath)
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 	defer func() {
 		if cErr := file.Close(); cErr != nil && err == nil {
-			err = cErr
+			err = wrapErr(cErr)
 		}
 	}()
 
-	info, err := file.Stat()
-	if err != nil {
-		return err
+	info, rawErr := file.Stat()
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 
-	header, err := tar.FileInfoHeader(info, "")
-	if err != nil {
-		return err
+	header, rawErr := tar.FileInfoHeader(info, "")
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 	header.Name = filepath.Base(filePath)
 
-	if err := tarWriter.WriteHeader(header); err != nil {
-		return err
+	if rawErr := tarWriter.WriteHeader(header); rawErr != nil {
+		return wrapErr(rawErr)
 	}
 
-	_, err = io.Copy(tarWriter, file)
-	return err
+	if _, rawErr := io.Copy(tarWriter, file); rawErr != nil {
+		return wrapErr(rawErr)
+	}
+	return nil
 }
 
 // checkStartupState 执行启动检查：跨天重命名、超限切割与历史归档。

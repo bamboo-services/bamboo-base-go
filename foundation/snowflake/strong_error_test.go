@@ -3,6 +3,7 @@ package snowflake
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -313,5 +314,83 @@ func TestSnowflakeID_ParseFailure_UsesInvalidFormatCode(t *testing.T) {
 	}
 	if overflowID != 666 {
 		t.Errorf("溢出解析失败不得污染原值: got %d", overflowID)
+	}
+
+	// 纯 JSON 数字溢出：同样归一为 40014 OutOfRange，且保留 UnmarshalTypeError 与 strconv.ErrRange 根因。
+	for _, raw := range []string{"999999999999999999999999", "-9223372036854775809"} {
+		numOverflowID := SnowflakeID(555)
+		err = numOverflowID.UnmarshalJSON([]byte(raw))
+		if err == nil {
+			t.Fatalf("纯 JSON 数字溢出 %s 必须返回错误", raw)
+		}
+		var numOverflowErr *apperr.Error
+		if !errors.As(err, &numOverflowErr) || numOverflowErr.Code.Code != 40014 {
+			t.Fatalf("纯 JSON 数字溢出 %s 错误码期望 40014, 实际 %+v", raw, numOverflowErr)
+		}
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			t.Fatalf("纯 JSON 数字溢出 %s 必须保留 *json.UnmarshalTypeError 根因, 实际 %v", raw, err)
+		}
+		if !errors.Is(err, strconv.ErrRange) {
+			t.Fatalf("纯 JSON 数字溢出 %s 必须保留 strconv.ErrRange 根因, 实际 %v", raw, err)
+		}
+		if numOverflowID != 555 {
+			t.Errorf("纯 JSON 数字溢出 %s 不得污染原值: got %d", raw, numOverflowID)
+		}
+	}
+
+	// 非字符串/数字的合法 JSON 类型归一为 40015 InvalidType。
+	for _, raw := range []string{"true", "{}", "[]"} {
+		typeID := SnowflakeID(444)
+		err = typeID.UnmarshalJSON([]byte(raw))
+		if err == nil {
+			t.Fatalf("JSON 非法类型 %s 必须返回错误", raw)
+		}
+		var typeAppErr *apperr.Error
+		if !errors.As(err, &typeAppErr) || typeAppErr.Code.Code != 40015 {
+			t.Fatalf("JSON 非法类型 %s 错误码期望 40015, 实际 %+v", raw, typeAppErr)
+		}
+		if typeID != 444 {
+			t.Errorf("JSON 非法类型 %s 不得污染原值: got %d", raw, typeID)
+		}
+	}
+
+	// 非法 JSON 语法与浮点数归一为 40013 InvalidFormat。
+	for _, raw := range []string{"", "{broken", "123.45"} {
+		fmtID := SnowflakeID(333)
+		err = fmtID.UnmarshalJSON([]byte(raw))
+		if err == nil {
+			t.Fatalf("JSON 非法格式 %q 必须返回错误", raw)
+		}
+		var fmtAppErr *apperr.Error
+		if !errors.As(err, &fmtAppErr) || fmtAppErr.Code.Code != 40013 {
+			t.Fatalf("JSON 非法格式 %q 错误码期望 40013, 实际 %+v", raw, fmtAppErr)
+		}
+		if fmtID != 333 {
+			t.Errorf("JSON 非法格式 %q 不得污染原值: got %d", raw, fmtID)
+		}
+	}
+
+	// UnmarshalBinary 与 Scan 文本溢出同样归一为 40014 OutOfRange。
+	binOverflow := SnowflakeID(222)
+	err = binOverflow.UnmarshalBinary([]byte("999999999999999999999999"))
+	var binOverflowErr *apperr.Error
+	if !errors.As(err, &binOverflowErr) || binOverflowErr.Code.Code != 40014 {
+		t.Fatalf("UnmarshalBinary 溢出错误码期望 40014, 实际 %+v", binOverflowErr)
+	}
+	if binOverflow != 222 {
+		t.Errorf("UnmarshalBinary 溢出不得污染原值: got %d", binOverflow)
+	}
+
+	for _, input := range []any{"999999999999999999999999", []byte("-9223372036854775809")} {
+		scanOverflow := SnowflakeID(111)
+		err = scanOverflow.Scan(input)
+		var scanOverflowErr *apperr.Error
+		if !errors.As(err, &scanOverflowErr) || scanOverflowErr.Code.Code != 40014 {
+			t.Fatalf("Scan(%T) 溢出错误码期望 40014, 实际 %+v", input, scanOverflowErr)
+		}
+		if scanOverflow != 111 {
+			t.Errorf("Scan(%T) 溢出不得污染原值: got %d", input, scanOverflow)
+		}
 	}
 }

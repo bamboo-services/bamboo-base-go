@@ -93,6 +93,10 @@ func TestF2_ShutdownDuringStartClaim(t *testing.T) {
 		if !errors.Is(err, ErrStartupInterrupted) {
 			t.Fatalf("expected ErrStartupInterrupted from Run, got: %v", err)
 		}
+		if err.Code.Code != apperr.FrameworkComponentInvalidState.Code {
+			t.Fatalf("expected single startup interruption code %d (FrameworkComponentInvalidState), got %d (%v)",
+				apperr.FrameworkComponentInvalidState.Code, err.Code.Code, err)
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for Run to return")
 	}

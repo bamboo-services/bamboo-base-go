@@ -390,17 +390,8 @@ func (a *App) Run() *apperr.Error {
 	// 5. 启动流水线：按拓扑分层启动 Tool 和 Worker
 	startErr := a.startStaticLayers(cfg, defMap)
 	if startErr != nil {
-		// 启动失败，Shutdown 进行回滚
+		// 启动失败，Shutdown 进行回滚并保留原启动错误链（含 ErrStartupInterrupted 与同期清理错误）
 		shutdownErr := a.Shutdown()
-		a.stateMu.RLock()
-		st := a.state
-		a.stateMu.RUnlock()
-		if st == StateStopped || st == StateIncomplete {
-			// 如果是在 Starting 收到外部中断，返回 ErrStartupInterrupted 并保留同期错误
-			if errors.Is(startErr, ErrStartupInterrupted) {
-				return aggregateErrs(newAppErr(ErrStartupInterrupted, "启动阶段被外部中断"), shutdownErr)
-			}
-		}
 		return aggregateErrs(startErr, shutdownErr)
 	}
 
@@ -576,9 +567,11 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 
 					var retErr *apperr.Error
 					if isStopping {
-						retErr = aggregateErrs(
-							newAppErr(ErrStartupInterrupted, "启动阶段被外部中断"),
-							normalizeErr(apperr.FrameworkInternalError, "启动上下文已结束", startCtx.Err()),
+						retErr = apperr.New(
+							apperr.FrameworkComponentInvalidState,
+							"启动阶段被外部中断",
+							ErrStartupInterrupted,
+							startCtx.Err(),
 						)
 					} else {
 						retErr = normalizeErr(apperr.FrameworkInternalError, apperr.ErrMessage("插件 "+string(key)+" 启动超时"), startCtx.Err())
@@ -602,7 +595,13 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 				// Start 失败：Start 已真退（startDone 已 close），先为当前失败实例调用唯一一次 Stop，再退出以触发逆序回滚
 				stopErr := a.safeCallStop(rec, cfg)
 				if afterStopping && errors.Is(err, context.Canceled) {
-					return aggregateErrs(newAppErr(ErrStartupInterrupted, "启动阶段被外部中断"), err, stopErr)
+					interruptedErr := apperr.New(
+						apperr.FrameworkComponentInvalidState,
+						"启动阶段被外部中断",
+						ErrStartupInterrupted,
+						err,
+					)
+					return aggregateErrs(interruptedErr, stopErr)
 				}
 				return aggregateErrs(err, stopErr)
 			}
@@ -1088,7 +1087,16 @@ func (a *App) Shutdown() *apperr.Error {
 	if len(stuckList) > 0 {
 		a.state = StateIncomplete
 		incompleteErr := newStopIncompleteErr(stuckList)
-		shutdownErr = aggregateErrs(incompleteErr, shutdownErr)
+		if shutdownErr != nil {
+			shutdownErr = apperr.Join(
+				apperr.FrameworkShutdownIncomplete,
+				"关机未完整完成，存在未确认停止的实例",
+				incompleteErr,
+				shutdownErr,
+			)
+		} else {
+			shutdownErr = incompleteErr
+		}
 	} else {
 		a.state = StateStopped
 	}

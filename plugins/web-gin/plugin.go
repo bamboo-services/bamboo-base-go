@@ -77,6 +77,15 @@ func joinLifecycleErrs(errs ...*apperr.Error) *apperr.Error {
 	return apperr.Join(apperr.FrameworkMultipleFailures, "多个生命周期阶段失败", kept...)
 }
 
+// isSameStopContextErr 判断 srv.Shutdown(ctx) 返回的错误是否与本次停机上下文取消/超时同源，
+// 避免将同一次取消或超时事件重复聚合为 [apperr.FrameworkMultipleFailures]。
+func isSameStopContextErr(stopReason, shutErr *apperr.Error, ctxErr error) bool {
+	if stopReason == nil || shutErr == nil || ctxErr == nil {
+		return false
+	}
+	return stopReason.Code.Code == shutErr.Code.Code && errors.Is(shutErr, ctxErr)
+}
+
 // RouteRegistrar 定义路由注册回调函数签名。
 //
 // 回调在插件启动流程中执行，接收当前启动上下文与私有的 [*gin.Engine] 实例。
@@ -263,7 +272,10 @@ func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return control.Classify(ctx.Err(), control.PhaseOperation)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return normalizeLifecycleErr(httpresult.InternalError, "排空在途请求被中断", ctxErr)
+		}
+		return apperr.New(httpresult.InternalError, "排空在途请求被中断")
 	}
 }
 
@@ -582,12 +594,20 @@ func (p *Plugin) doStop(ctx context.Context) *apperr.Error {
 	case shutErr := <-shutdownDone:
 		if shutErr != nil {
 			stopReason = shutErr
+			if ctx.Err() != nil {
+				_ = srv.Close()
+			}
 		}
 	case <-ctx.Done():
-		stopReason = normalizeLifecycleErr(httpresult.InternalError, "停机等待被取消或超时", ctx.Err())
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
+			stopReason = normalizeLifecycleErr(httpresult.InternalError, "停机等待被取消或超时", ctxErr)
+		} else {
+			stopReason = apperr.New(httpresult.InternalError, "停机等待被取消或超时")
+		}
 		// 超时/取消推进传输关闭
 		_ = srv.Close()
-		if shutErr := <-shutdownDone; shutErr != nil {
+		if shutErr := <-shutdownDone; shutErr != nil && !isSameStopContextErr(stopReason, shutErr, ctxErr) {
 			stopReason = joinLifecycleErrs(stopReason, shutErr)
 		}
 	case <-p.forceCtx.Done():

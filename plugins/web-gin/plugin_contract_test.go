@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -180,6 +181,58 @@ func TestWebGin_StopWithCanceledContextClassifiedAsControlError(t *testing.T) {
 	}
 	if !errors.Is(stopErr, context.Canceled) {
 		t.Fatalf("停机上下文取消必须保留原生 context.Canceled 根因, 得到: %v", stopErr)
+	}
+
+	<-requestDone
+	<-runDone
+}
+
+// TestWebGin_StopWithDeadlineExceededClassifiedAsControlError 验证在途请求未排空时停机超时
+// 稳定归一为控制类超时码（50401），不会因 srv.Shutdown 与 ctx.Done 重复观测而被错聚为 50020。
+func TestWebGin_StopWithDeadlineExceededClassifiedAsControlError(t *testing.T) {
+	handlerEntered := make(chan struct{})
+	route := func(_ context.Context, r *gin.Engine) {
+		r.GET("/slow", func(c *gin.Context) {
+			close(handlerEntered)
+			<-c.Request.Context().Done()
+			httpresult.Success(c, "timeout")
+		})
+	}
+
+	_, factory := webgin.New(webgin.WithAddr("127.0.0.1:0"), webgin.WithRoute(route))
+	p := factory().(*webgin.Plugin)
+
+	if err := p.Start(context.Background()); err != nil {
+		t.Fatalf("Start 失败: %v", err)
+	}
+	runDone := make(chan *apperr.Error, 1)
+	go func() {
+		runDone <- p.Run(context.Background())
+	}()
+
+	requestDone := make(chan struct{})
+	go func() {
+		defer close(requestDone)
+		resp, err := http.Get("http://" + p.Addr() + "/slow")
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
+	<-handlerEntered
+
+	stopCtx, cancelStop := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancelStop()
+
+	stopErr := p.Stop(stopCtx)
+	if stopErr == nil {
+		t.Fatal("停机上下文超时时 Stop 必须返回失败")
+	}
+	if stopErr.Code.Code != control.DeadlineExceeded.Code {
+		t.Fatalf("停机上下文超时的错误码错误: 期望 %d, 得到 %d (%v)", control.DeadlineExceeded.Code, stopErr.Code.Code, stopErr)
+	}
+	if !errors.Is(stopErr, context.DeadlineExceeded) {
+		t.Fatalf("停机上下文超时必须保留原生 context.DeadlineExceeded 根因, 得到: %v", stopErr)
 	}
 
 	<-requestDone

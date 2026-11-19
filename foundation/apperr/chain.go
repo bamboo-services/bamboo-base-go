@@ -7,8 +7,9 @@ import "reflect"
 // typ 始终记录节点的动态类型：同一个底层映射被转换成不同具方法命名类型时，
 // 属于不同节点，不会被错误去重。
 //
-// ptr 用于指针、映射、切片与函数类节点，length 用于区分同底层数组但长度不同的切片，
+// ptr 用于指针、映射与切片类节点，length 用于区分同底层数组但长度不同的切片，
 // value 用于值类型节点；value 只在运行时确认可比较时才会写入，保证它可以安全作为 map 键。
+// 函数值不按 value.Pointer() 判重，因为 Go 中同一函数体生成的不同闭包实例共享代码指针。
 type chainIdentity struct {
 	typ    reflect.Type
 	ptr    uintptr
@@ -30,7 +31,7 @@ func chainIdentityOf(err error) (chainIdentity, bool) {
 	typ := value.Type()
 
 	switch value.Kind() {
-	case reflect.Pointer, reflect.UnsafePointer, reflect.Func:
+	case reflect.Pointer, reflect.UnsafePointer:
 		return chainIdentity{typ: typ, ptr: value.Pointer()}, true
 	case reflect.Map:
 		return chainIdentity{typ: typ, ptr: uintptr(value.UnsafePointer())}, true

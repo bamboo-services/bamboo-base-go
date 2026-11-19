@@ -196,6 +196,35 @@ func TestPlugin_StartPingFailureCleansUp(t *testing.T) {
 	}
 }
 
+// TestPlugin_StartPingAndCleanupFailureUsesMultipleFailures 验证启动探测与清理同时失败时
+// 遵循 R04 返回 FrameworkMultipleFailures（50020），并完整保留两阶段根因供 errors.Is 识别。
+func TestPlugin_StartPingAndCleanupFailureUsesMultipleFailures(t *testing.T) {
+	adp, drv := newFakeAdapter("mock")
+	closeSentinel := errors.New("close pool failed")
+	drv.mu.Lock()
+	drv.pingErr = context.DeadlineExceeded
+	drv.closeErr = closeSentinel
+	drv.mu.Unlock()
+
+	_, factory := database.New(database.WithAdapter(adp))
+	p := factory()
+
+	err := p.Start(context.Background())
+	if err == nil {
+		t.Fatal("expected Start to fail when both ping and cleanup fail")
+	}
+	if err.Code.Code != apperr.FrameworkMultipleFailures.Code {
+		t.Fatalf("双阶段失败错误码 = %d, 期望 %d (FrameworkMultipleFailures)",
+			err.Code.Code, apperr.FrameworkMultipleFailures.Code)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("必须保留探测阶段超时根因: %v", err)
+	}
+	if !errors.Is(err, closeSentinel) {
+		t.Fatalf("必须保留清理阶段关闭失败根因: %v", err)
+	}
+}
+
 // 验证 PingContext 超时被取消
 func TestPlugin_StartPingCancelled(t *testing.T) {
 	adp, _ := newFakeAdapter("mock")

@@ -103,3 +103,38 @@ func TestJoinLifecycleErrs(t *testing.T) {
 		t.Fatalf("聚合必须保留全部子失败: %v", got)
 	}
 }
+
+type customDoneContext struct {
+	context.Context
+	done chan struct{}
+	err  error
+}
+
+func (c *customDoneContext) Done() <-chan struct{} { return c.done }
+func (c *customDoneContext) Err() error            { return c.err }
+
+// TestRequestGate_WaitDrainedCustomContextErrorFallback 验证 waitDrained 在遇到非标准 ctx.Err() 时
+// 绝不因 control.Classify 返回 nil 而假成功放行，而是兜底返回模块内部错误并保留原原因。
+func TestRequestGate_WaitDrainedCustomContextErrorFallback(t *testing.T) {
+	gate := newRequestGate()
+	if !gate.enter() {
+		t.Fatal("预期准入成功")
+	}
+	defer gate.leave()
+
+	ch := make(chan struct{})
+	close(ch)
+	customErr := errors.New("custom grpc drain abort")
+	ctx := &customDoneContext{Context: context.Background(), done: ch, err: customErr}
+
+	got := gate.waitDrained(ctx)
+	if got == nil {
+		t.Fatal("非标准 ctx.Err() 不得返回 nil 假成功")
+	}
+	if got.Code.Code != grpcresult.InternalError.Code {
+		t.Fatalf("错误码错误: 期望 %d, 得到 %d", grpcresult.InternalError.Code, got.Code.Code)
+	}
+	if !errors.Is(got, customErr) {
+		t.Fatalf("期望保留原始上下文错误, 得到: %v", got)
+	}
+}

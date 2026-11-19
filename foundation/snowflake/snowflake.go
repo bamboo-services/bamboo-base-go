@@ -254,8 +254,8 @@ func (s SnowflakeID) marshalJSONCore() ([]byte, *apperr.Error) {
 //
 // 支持字符串格式（如 "123456"）以及向前兼容纯数字格式（如 123456）。
 // 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
-// 并保留 [ErrNilReceiver] 为根因；遇到 JSON null 返回 [valueerr.InvalidType]（40015），
-// 数值超出 int64 范围返回 [valueerr.OutOfRange]（40014），其余解析失败返回
+// 并保留 [ErrNilReceiver] 为根因；遇到 JSON null 或非字符串/数字类型返回 [valueerr.InvalidType]（40015），
+// 数值超出 int64 范围（含字符串与纯数字）返回 [valueerr.OutOfRange]（40014），其余解析失败返回
 // [valueerr.InvalidFormat]（40013）；任何失败均保持接收器原值不变。
 //
 // 该方法的外部签名固定为 error：内部使用强类型核心，
@@ -267,36 +267,74 @@ func (s *SnowflakeID) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// parseDecimalID 解析十进制雪花 ID 文本，将溢出归一为 [valueerr.OutOfRange]（40014），
+// 其余格式错误归一为 [valueerr.InvalidFormat]（40013）。
+func parseDecimalID(raw string, invalidFormatMsg apperr.ErrMessage) (SnowflakeID, *apperr.Error) {
+	num, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			return 0, valueerr.From(valueerr.KindOutOfRange, "雪花 ID 超出有效范围", err)
+		}
+		return 0, valueerr.From(valueerr.KindInvalidFormat, invalidFormatMsg, err)
+	}
+	return SnowflakeID(num), nil
+}
+
 // unmarshalJSONCore 是 [SnowflakeID.UnmarshalJSON] 的强类型核心。
 //
-// 先拒绝 JSON null，再尝试按 JSON 字符串解析，失败后退化为纯数字格式；
-// 字符串溢出映射为越界错误，解析失败不会污染接收器原值。
+// 按 JSON token 类型精确分类：null 与非字符串/数字类型映射为类型错误，
+// 字符串或纯数字超出 int64 范围映射为越界错误，语法或格式不合法映射为格式错误；
+// 解析失败不会污染接收器原值。
 func (s *SnowflakeID) unmarshalJSONCore(data []byte) *apperr.Error {
 	if s == nil {
 		return valueerr.From(valueerr.KindInvalidReceiver, "雪花 ID 接收器为 nil", ErrNilReceiver)
 	}
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		var str string
+		err := json.Unmarshal(data, &str)
+		return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 失败", err)
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
 		return apperr.New(valueerr.InvalidType, "雪花 ID 不接受 JSON null")
 	}
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		// 兼容数字格式
+
+	switch trimmed[0] {
+	case '"':
+		var str string
+		if err := json.Unmarshal(trimmed, &str); err != nil {
+			return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 字符串失败", err)
+		}
+		id, appErr := parseDecimalID(str, "解析雪花 ID 字符串失败")
+		if appErr != nil {
+			return appErr
+		}
+		*s = id
+		return nil
+
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		var num int64
-		if numErr := json.Unmarshal(data, &num); numErr != nil {
+		if err := json.Unmarshal(trimmed, &num); err != nil {
+			var typeErr *json.UnmarshalTypeError
+			if errors.As(err, &typeErr) {
+				if _, parseErr := strconv.ParseInt(string(trimmed), 10, 64); errors.Is(parseErr, strconv.ErrRange) {
+					return apperr.New(valueerr.OutOfRange, "雪花 ID 超出有效范围", err, parseErr)
+				}
+			}
 			return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 失败", err)
 		}
 		*s = SnowflakeID(num)
 		return nil
-	}
-	num, err := strconv.ParseInt(str, 10, 64)
-	if err != nil {
-		if errors.Is(err, strconv.ErrRange) {
-			return valueerr.From(valueerr.KindOutOfRange, "雪花 ID 超出有效范围", err)
+
+	default:
+		var str string
+		err := json.Unmarshal(trimmed, &str)
+		var syntaxErr *json.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 失败", err)
 		}
-		return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 字符串失败", err)
+		return valueerr.From(valueerr.KindInvalidType, "雪花 ID 仅接受字符串或整数", err)
 	}
-	*s = SnowflakeID(num)
-	return nil
 }
 
 // MarshalBinary 实现 [encoding.BinaryMarshaler] 接口，将雪花 ID 转换为十进制字符串格式的字节切片。
@@ -320,8 +358,8 @@ func (s SnowflakeID) marshalBinaryCore() ([]byte, *apperr.Error) {
 // UnmarshalBinary 实现 [encoding.BinaryUnmarshaler] 接口，从十进制字节切片反序列化雪花 ID。
 //
 // 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
-// 并保留 [ErrNilReceiver] 为根因；若解析错误原有值保持不变，
-// 错误码为 [valueerr.InvalidFormat]（40013）。
+// 并保留 [ErrNilReceiver] 为根因；数值超出 int64 范围返回 [valueerr.OutOfRange]（40014），
+// 其余解析错误返回 [valueerr.InvalidFormat]（40013），任何失败均保持原有值不变。
 //
 // 该方法的外部签名固定为 error：内部使用强类型核心，
 // 成功时返回真正的 nil 错误。
@@ -337,11 +375,11 @@ func (s *SnowflakeID) unmarshalBinaryCore(data []byte) *apperr.Error {
 	if s == nil {
 		return valueerr.From(valueerr.KindInvalidReceiver, "雪花 ID 接收器为 nil", ErrNilReceiver)
 	}
-	val, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return valueerr.From(valueerr.KindInvalidFormat, "解析雪花 ID 字节数据失败", err)
+	id, appErr := parseDecimalID(string(data), "解析雪花 ID 字节数据失败")
+	if appErr != nil {
+		return appErr
 	}
-	*s = SnowflakeID(val)
+	*s = id
 	return nil
 }
 
@@ -369,7 +407,8 @@ func (s SnowflakeID) valueCore() (driver.Value, *apperr.Error) {
 // 当传入 value 为 nil 时，将接收器重置为 0 并返回 nil；
 // 若接收器指针为 nil 则返回错误码为 [valueerr.InvalidReceiver]（50019）的统一错误，
 // 并保留 [ErrNilReceiver] 为根因；
-// 遇到不支持的类型（错误码 [valueerr.InvalidType]，40015）或文本解析失败
+// 遇到不支持的类型（错误码 [valueerr.InvalidType]，40015）、数值越界
+// （错误码 [valueerr.OutOfRange]，40014）或文本解析失败
 // （错误码 [valueerr.InvalidFormat]，40013）时保留原值并返回错误。
 //
 // 该方法的外部签名固定为 error：内部使用强类型核心，
@@ -398,17 +437,17 @@ func (s *SnowflakeID) scanCore(value interface{}) *apperr.Error {
 	case int32:
 		*s = SnowflakeID(v)
 	case []byte:
-		num, err := strconv.ParseInt(string(v), 10, 64)
-		if err != nil {
-			return valueerr.From(valueerr.KindInvalidFormat, "扫描雪花 ID 失败", err)
+		id, appErr := parseDecimalID(string(v), "扫描雪花 ID 失败")
+		if appErr != nil {
+			return appErr
 		}
-		*s = SnowflakeID(num)
+		*s = id
 	case string:
-		num, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return valueerr.From(valueerr.KindInvalidFormat, "扫描雪花 ID 失败", err)
+		id, appErr := parseDecimalID(v, "扫描雪花 ID 失败")
+		if appErr != nil {
+			return appErr
 		}
-		*s = SnowflakeID(num)
+		*s = id
 	default:
 		return apperr.New(
 			valueerr.InvalidType,

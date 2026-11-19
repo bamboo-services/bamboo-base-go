@@ -291,7 +291,10 @@ func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return control.Classify(ctx.Err(), control.PhaseOperation)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return normalizeLifecycleErr(grpcresult.InternalError, "排空在途请求被中断", ctxErr)
+		}
+		return apperr.New(grpcresult.InternalError, "排空在途请求被中断")
 	}
 }
 

@@ -103,3 +103,52 @@ func TestJoinLifecycleErrs(t *testing.T) {
 		t.Fatalf("聚合必须保留全部子失败: %v", got)
 	}
 }
+
+type customDoneContext struct {
+	context.Context
+	done chan struct{}
+	err  error
+}
+
+func (c *customDoneContext) Done() <-chan struct{} { return c.done }
+func (c *customDoneContext) Err() error            { return c.err }
+
+// TestRequestGate_WaitDrainedCustomContextErrorFallback 验证 waitDrained 在遇到非标准 ctx.Err() 时
+// 绝不因 control.Classify 返回 nil 而假成功放行，而是兜底返回模块内部错误并保留原原因。
+func TestRequestGate_WaitDrainedCustomContextErrorFallback(t *testing.T) {
+	gate := newRequestGate()
+	if !gate.enter() {
+		t.Fatal("预期准入成功")
+	}
+	defer gate.leave()
+
+	ch := make(chan struct{})
+	close(ch)
+	customErr := errors.New("custom drain abort")
+	ctx := &customDoneContext{Context: context.Background(), done: ch, err: customErr}
+
+	got := gate.waitDrained(ctx)
+	if got == nil {
+		t.Fatal("非标准 ctx.Err() 不得返回 nil 假成功")
+	}
+	if got.Code.Code != httpresult.InternalError.Code {
+		t.Fatalf("错误码错误: 期望 %d, 得到 %d", httpresult.InternalError.Code, got.Code.Code)
+	}
+	if !errors.Is(got, customErr) {
+		t.Fatalf("期望保留原始上下文错误, 得到: %v", got)
+	}
+}
+
+// TestIsSameStopContextErr 验证同源控制错误不重复聚合，异源关闭错误仍正常进入多错聚合。
+func TestIsSameStopContextErr(t *testing.T) {
+	cancelStop := normalizeLifecycleErr(httpresult.InternalError, "停机等待被取消或超时", context.Canceled)
+	cancelShut := normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", context.Canceled)
+	if !isSameStopContextErr(cancelStop, cancelShut, context.Canceled) {
+		t.Fatal("同源 context.Canceled 应识别为同一次停机取消")
+	}
+
+	listenerErr := normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", errors.New("close tcp failed"))
+	if isSameStopContextErr(cancelStop, listenerErr, context.Canceled) {
+		t.Fatal("异源监听器关闭错误不得被当作同源取消忽略")
+	}
+}

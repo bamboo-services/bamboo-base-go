@@ -332,3 +332,27 @@ func TestFrom_CyclicSliceChainTerminates(t *testing.T) {
 		t.Fatalf("不同长度子切片不得误判为同一节点从而遮蔽后续统一错误: got %+v, want %+v", found, real)
 	}
 }
+
+type closureChainError func() error
+
+func (e closureChainError) Error() string { return "closure chain error" }
+func (e closureChainError) Unwrap() error { return e() }
+
+func wrapClosureChain(next error) error {
+	return closureChainError(func() error { return next })
+}
+
+// TestFrom_NestedClosureErrorChainPreservesStructuredError 断言同一闭包工厂构造的
+// 嵌套函数错误链不会被误判为环而提前截断，内层统一错误及其错误码必须完整保留。
+func TestFrom_NestedClosureErrorChainPreservesStructuredError(t *testing.T) {
+	real := apperr.New(apperr.FrameworkComponentNotFound, "组件未注册")
+	chain := wrapClosureChain(wrapClosureChain(real))
+
+	if found := apperr.Find(chain); found != real {
+		t.Fatalf("嵌套闭包错误链不得被误判为环: got %+v, want %+v", found, real)
+	}
+	got := apperr.From(apperr.FrameworkInternalError, "外层兜底", chain)
+	if got == nil || got.Code.Code != real.Code.Code {
+		t.Fatalf("From 必须保留内层错误码 %d, 实际 %+v", real.Code.Code, got)
+	}
+}

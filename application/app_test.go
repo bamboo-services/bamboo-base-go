@@ -328,8 +328,18 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 	}
 
 	if shutdownErr := app.Shutdown(); shutdownErr != nil {
-		// Stop panic 也会反映在关机错误中
+		// Stop panic 引发关机不完整时，最外层错误码必须保持 FrameworkShutdownIncomplete (50006)
+		if shutdownErr.Code.Code != apperr.FrameworkShutdownIncomplete.Code {
+			t.Fatalf("expected Shutdown outer code %d (FrameworkShutdownIncomplete), got %d (%v)",
+				apperr.FrameworkShutdownIncomplete.Code, shutdownErr.Code.Code, shutdownErr)
+		}
+		var hookPanic *HookPanicError
+		if !errors.As(shutdownErr, &hookPanic) {
+			t.Fatalf("expected HookPanicError preserved in Shutdown return, got %v", shutdownErr)
+		}
 		t.Logf("shutdown returned error: %v", shutdownErr)
+	} else {
+		t.Fatalf("expected non-nil shutdown error on stop panic")
 	}
 
 	var err *apperr.Error
@@ -341,6 +351,10 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("expected error from stop panic, got nil")
+	}
+	if err.Code.Code != apperr.FrameworkShutdownIncomplete.Code {
+		t.Fatalf("expected Run outer code %d (FrameworkShutdownIncomplete), got %d (%v)",
+			apperr.FrameworkShutdownIncomplete.Code, err.Code.Code, err)
 	}
 
 	var incompleteErr *StopIncompleteError

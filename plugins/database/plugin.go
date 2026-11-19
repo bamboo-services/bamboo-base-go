@@ -142,7 +142,7 @@ func (p *Plugin) Start(ctx context.Context) (retErr *apperr.Error) {
 	defer func() {
 		if retErr != nil {
 			if cleanupErr := p.closeSQLDB(); cleanupErr != nil {
-				retErr = apperr.Join(&retErr.Code, "数据库启动及清理失败", retErr, cleanupErr)
+				retErr = apperr.Join(apperr.FrameworkMultipleFailures, "数据库启动及清理失败", retErr, cleanupErr)
 			}
 		}
 	}()

@@ -60,7 +60,7 @@ func TestP4StartPreservesPingAndCleanupCauses(t *testing.T) {
 	driver.closeErr = closeCause
 	_, factory := database.New(database.WithAdapter(a))
 	err := factory().Start(context.Background())
-	if err == nil || err.Code.Code != database.DatabaseError.Code || !errors.Is(err, pingCause) || !errors.Is(err, closeCause) {
-		t.Fatalf("startup or cleanup cause lost: %v", err)
+	if err == nil || err.Code.Code != apperr.FrameworkMultipleFailures.Code || !errors.Is(err, pingCause) || !errors.Is(err, closeCause) {
+		t.Fatalf("startup or cleanup cause lost or unexpected aggregate code: %v", err)
 	}
 }

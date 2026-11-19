@@ -7,7 +7,7 @@
 
 从基线 `aaf73c684d2d108c0916bba1733ef8c608024831` 迁移到：SDK自有公开及内部失败结果的静态类型均为 `*apperr.Error`；固定外部方法集保留薄适配；HTTP/gRPC转换前已有明确的Code/Output，不能把通用500当作统一完成。
 
-**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，已提交为 `c8abf577`（未推送）。2026-11-12用户批准P4实际实施：已按已确认语义追加50033–50037（词表91→96项），公共契约、五适配器与模型迁移及Leader准出已完成，待用户审阅；P4已提交为 `e4930971`（未推送）。2026-11-15用户确认主推提案并批准P5实施：已集中登记42903与50038–50041（词表96→101项），cache/email/cron/async及仓内调用方迁移与Leader准出已完成，待用户审阅；P6–P7、提交推送及发布未启动。**不自动创建工作卡、推送或发布，不以P3代替整计划完成。
+**2026-11-09用户已明确授权P1开工，并要求Leader派发minimax-m3.1-flash/max子代理。P0技术台账据此准出；P1实现及Leader准出检查已完成，只覆盖错误核心、19项新增码和纯分类/编译契约测试。P2实现及Leader准出检查已完成并提交为 `fad7597c62496ea5c0e7f280227bb6a2de977782`（未推送）：Worker丢链修复、typed/ctxkey/env、snowflake/toolkit、logging强类型迁移及7项新码登记（词表84→91项）。P3实现及Leader准出检查已完成：application内核契约/账本与全部插件实现者（含examples与test消费者）一次原子切换为*apperr.Error，零新增码，全量门禁通过，已提交为 `c8abf577`（未推送）。2026-11-12用户批准P4实际实施：已按已确认语义追加50033–50037（词表91→96项），公共契约、五适配器与模型迁移及Leader准出已完成；P4已提交为 `e4930971`（未推送）。2026-11-15用户确认主推提案并批准P5实施：已集中登记42903与50038–50041（词表96→101项），cache/email/cron/async及仓内调用方迁移与Leader准出已提交为 `c5efbc3`（未推送）。随后用户批准P6实施：HTTP/gRPC协议出口收敛与R12原生信封补齐（零新增码）已提交为 `7e456a7`（未推送）。2026-11-18至2026-11-19按用户授权完成P7类型契约守卫（独立 `error-contract` 模块 + 3处内部助函数清零）、全量静态/竞态/消费者门禁、6项发布离线演练及MySQL/PostgreSQL/Redis/Mailpit四容器真引擎集成验证，已本地提交为 `3db459a`（未推送）；公开RC与正式发布仍待另行授权。**不自动创建工作卡、推送或发布，不以本地门禁代替公开RC/正式发布验收。
 
 包含14模块、自有接口和函数值、结果账本、错误聚合、插件实例、测试替身、示例及独立消费者。排除第三方实现、生成的 `.pb.go` 手工修改、工具脚本的错误风格改造，以及未获单独授权的GORM/Redis完整新门面。
 
@@ -588,14 +588,44 @@ git diff --check
 - 动作：强类型化Header/Binder/validator及自有解析辅助；生命周期已在P3同步切换。拆清自有强类型归一核心与最终status边界，按spec0003 R12为原生context/native status补齐信封；保留原生状态、显式文案和全部已有Details，已有BaseResponse不覆盖、不重复追加。
 - 交付：SDK自有错误经HTTP/RPC保持Code/Output/安全文案；原生各非OK状态均覆盖缺信封补齐、已有信封去重、未知/冲突/不可解码Details原载荷保留、包装层文本不外泄、取消/超时与typed-nil。补充编码失败须可观测降级并保留原状态，不伪称信封已补齐。
 - 准出：`go test -race ./plugins/web-gin/... ./plugins/grpc/... -count=1`；测试实际插件请求链，不复制适配实现。将上轮/tmp探针的有效场景转成仓库内持久测试，不依赖/tmp残留文件。
-- 状态：未执行。
+- 状态：已由用户批准完成并提交为 `7e456a7`（未推送）：`plugins/web-gin` 自有强类型出口收敛（零新增码）、`plugins/grpc` R12 原生状态与兼容信封补齐（`extractExplicitGRPCStatus` 零包装文本泄漏）与实链测试均已落地。
 
 ### P7：接入类型门禁、全量消费者及发布验收
 
 - 动作：在独立 `.github/scripts/ci/error-contract/` 子目录实现类型与例外守卫，避免与现有单文件main脚本混编；接入规划目标 `make error-contract-check`、脚本测试驱动和quality流程。另行验证RC与正式发布链路的依赖版本、不可变tag/commit、Manifest及预发布标记；当前Release Action有写入/推送副作用，未经另行授权不直接触发。
 - 交付：自有error返回/别名/匿名回调/错误字段/方法集绕过反例、白名单超范围/过期反例、原生成功nil与失败cause测试。检查器须基于实际类型；若引入go/packages等新工具依赖，先评审根工具模块变更，不能暗加SDK运行时依赖。
-- 准出：规划的 `make error-contract-check`、`GOWORK=off go test -race ./.github/scripts/ci/error-contract` 通过；以及下述全量门禁。两个规划命令本轮不存在，不能以当前执行失败或未执行当作实施成果。
-- 状态：未执行，自动扫描器与白名单清单均未创建。
+- 准出：规划的 `make error-contract-check`、`GOWORK=off go test -race ./.github/scripts/ci/error-contract` 通过；以及下述全量门禁。
+- 状态：已完成 P7.1–P7.3 实施（提交为 `3db459a`，未推送），并完成 P7.4 发布离线沙盒演练与四容器真引擎集成验收；公开 RC / 正式打 tag 发布待另行授权。
+
+#### P7准出记录（2026-11-19，待用户审阅）
+
+经用户确认采用 `.github/scripts/ci/error-contract/go.mod` 独立工具模块引入 `golang.org/x/tools v0.44.0`（`go/packages`），不污染 14 个业务 SDK 模块与根 `go.mod`；完成 P7.1–P7.3 后按用户授权本地提交为 `3db459a61690244b02401768608dbacdfc0e6e75`（`XiaoLFeng <gm@x-lf.cn>`，未推送），随后基于该 `HEAD` 完成 P7.4 发布离线沙盒演练与四容器真引擎集成验收。
+
+本次交付：
+
+- 独立契约守卫 `.github/scripts/ci/error-contract/`（`go.mod`/`go.sum`/`main.go`/`checker.go`/`whitelist.go`/`checker_test.go`）：基于 `go/packages`（`GOWORK=<repo>/go.work`）覆盖全部 14 模块 / 41 包，检查函数/方法/接口/类型别名/自定义 error 接口/结构体字段/包变量/参数回调与匿名函数字面量；内置 `W01–W11` 与 `STRUCT-CAUSE` 共 80 项精确符号台账（`ValidateWhitelist` 显式拒绝 glob 通配符、重复条目与空说明）。
+- 守卫自身 4 组 `-race` 单测（`2.377s–2.602s`）：`TestLiveRepoContractAndWhitelist`、`TestWhitelistValidationRejectsGlobsAndDuplicates`、`TestCheckerRejectsBypassPatterns`（14 类绕过与未使用白名单反例）及 `TestCompileNegativeUntypedErrorCannotSatisfyStrongSignature`。
+- 源码顺手清零（3 处内部 `error` 助函数）：`foundation/logging/rotator.go` `(*RotatingWriter).addFileToTar` 迁移为 `*apperr.Error`；`plugins/web-gin/validator/custom.go` `addBuiltinTranslation` 迁移为 `*apperr.Error` 且 9 处 `W11` 翻译回调成功直返字面量 `nil`；`plugins/email/error.go` 移除 `controlSentinel(error)` 包装与 `"errors"` 导入，直走 `control.Classify`。
+- CI 与脚本接线：`Makefile` 新增 `error-contract-check`；`.github/scripts/tests/run-all-tests.sh` `go` 目标同步以 `-race` 执行 `error-contract` 单测；`.github/workflows/quality.yml` 新增 `Check strong-error contract and whitelist` 步骤。
+
+实际准出命令与结果（基于提交 `3db459a`，`GOTOOLCHAIN=go1.25.11`）：
+
+| 命令 / 范围                                                                                                        | 实测结果与边界                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `make error-codes-check` & `make error-contract-check`                                                             | 通过；词表 101 项一致；全库扫描 14 模块 / 41 包 \| 命中白名单 80 \| 未使用 0 \| 违规 0                                          |
+| `(cd .github/scripts/ci/error-contract && GOWORK=off go test -race -v . && GOWORK=off golangci-lint run ...)`      | 通过；4 组 `-race` 测试全绿（2.602s），`golangci-lint` 0 issues                                                                 |
+| `make vet`、`make lint-go`、`make lint-go-oracle`（等效 `make lint-go-all`）                                       | 通过；全部 14 模块 + `error-contract` 0 issues                                                                                  |
+| `make race`（14 模块）、`make proto-check`、`make lint-docs`（21 文件）、`git diff --check`、foundation 反向依赖   | 通过；无竞态、Proto 一致、Docs 0 issues、foundation 零反向依赖                                                                  |
+| `make test-scripts`（7 套件）、`make check-examples`（`readme`/`worker-tool`/`http-db-cache`/`grpc-cron-async`）   | 通过；7 个脚本套件 44s 全绿（含 `error-contract` `-race` 2.377s）；4 个示例 `GOWORK=off` 独立编译通过                           |
+| `bash .github/scripts/consumer/check-v2-consumers.sh --flags '-race -count=1'` 与 `check-v2-examples.sh --fixture` | 通过；14/14 离线模块消费（`-race`）与 `sqlite-async`（1.661s）/ `http-db-cache`（1.627s）生命周期夹具全部通过，无本地 replace   |
+| `bash .github/scripts/release/test-release-offline.sh`                                                             | 通过（基于 `3db459a`）；6/6 离线发布演练用例通过（14 模块清单、依赖替换、Manifest 准入、14 tag、防漂移重入、按需发版）          |
+| `integration-env.sh up` → 真引擎 `-race` 集成 → `integration-env.sh down`                                          | 通过并零残留销毁：MySQL 8.4.4、PostgreSQL 17.4、Redis 7.4.2（`BAMBOO_TEST_REDIS_ENABLED=1`）、Mailpit v1.22.3 全部 `-race` PASS |
+
+未验收 / 显式保留边界：
+
+- **SQLServer**：按 `test/integration/README.md` 约定，ARM64 架构下保持隔离未验收状态。
+- **Oracle**：无真实独立商业/企业测试环境，按约定保持显式 `SKIP`，未用 SQLite 或其它容器降级替代。
+- **公开 RC 与正式发布**：`test-release-offline.sh` 已验证离线发布链路，但未向远端推送或触发 GitHub Release；实际 RC / 正式 tag 与外部下游验证仍待另行授权。
 
 ## 迁移与回滚
 
@@ -609,13 +639,13 @@ git diff --check
 
 - [x] P0技术核对：逐符号分类、固定方法集、仓内引用/实现者和受控消费者模板已展开；方向性问题已有用户裁决。
 - [x] P0整体准出：2026-11-09用户明确批准P1开工，已确认无仓外V2消费者；基线技术台账准出，仓内C01–C06候选图与行为仍随阶段验收。
-- [ ] 自有错误结果全部为 `*apperr.Error`，固定签名只保留已核实薄适配；Code/Output不是统一通用500。
-- [ ] Worker原错误、所有子cause、Is/As、成功nil、标准控制流及诊断账本全部有持久回归。
-- [ ] `make error-contract-check`（规划）、`make error-codes-check`、`make test-scripts`通过。
-- [ ] `make test`、`make race`、`make vet`、`make lint-go-all`、`make lint-docs`通过；缺少特殊驱动环境时记录实际范围和阻塞，不虚报全绿。
-- [ ] `make proto-check`通过或确认生成源未改且按发布流程完成一致性验证；不手改生成文件。
-- [ ] `make check-examples`及 `bash .github/scripts/consumer/check-v2-consumers.sh`通过，独立消费者没有本地replace补救。
-- [ ] 真实外部环境验收与默认跳过清单分离，所有未通过项有明确去向。
+- [x] 自有错误结果全部为 `*apperr.Error`，固定签名只保留已核实薄适配；Code/Output不是统一通用500（`make error-contract-check` 14 模块 / 41 包 0 违规）。
+- [x] Worker原错误、所有子cause、Is/As、成功nil、标准控制流及诊断账本全部有持久回归。
+- [x] `make error-contract-check`、`make error-codes-check`、`make test-scripts`通过。
+- [x] `make test`、`make race`、`make vet`、`make lint-go-all`、`make lint-docs`通过；缺少特殊驱动环境时记录实际范围和阻塞，不虚报全绿（SQLServer/Oracle 已显式记录未验收边界）。
+- [x] `make proto-check`通过或确认生成源未改且按发布流程完成一致性验证；不手改生成文件。
+- [x] `make check-examples`及 `bash .github/scripts/consumer/check-v2-consumers.sh`通过，独立消费者没有本地replace补救。
+- [x] 真实外部环境验收与默认跳过清单分离，所有未通过项有明确去向（MySQL / PG / Redis / Mailpit 四容器 `-race` 已验收；SQLServer / Oracle 显式保留 SKIP）。
 - [ ] 全部已知V2试用消费者在最终RC清单完成同步验证，正式稳定候选组合与公开独立取包通过，发布链路经人工准出且每次实际发布另获授权。
 - [ ] 用户完成规范/实现及首发兼容性验收后，才可将计划改done并归档；方向性待确认清零和文档检查通过均不勾选以上实施项。
 

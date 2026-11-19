@@ -248,7 +248,7 @@ func (p *Plugin) doStart() *apperr.Error {
 			)
 			if err != nil {
 				_ = s.Shutdown()
-				return lifecycleErr("cron: 任务调度表达式非法", fmt.Errorf("%w: job[%d] 表达式 [%s] 无效: %v", ErrInvalidJobSchedule, idx, j.spec, err))
+				return lifecycleErr("cron: 任务调度表达式非法", fmt.Errorf("%w: job[%d] 表达式 [%s] 无效: %w", ErrInvalidJobSchedule, idx, j.spec, err))
 			}
 		case jobKindInterval:
 			if j.interval <= 0 {
@@ -261,7 +261,7 @@ func (p *Plugin) doStart() *apperr.Error {
 			)
 			if err != nil {
 				_ = s.Shutdown()
-				return lifecycleErr("cron: 任务周期注册失败", fmt.Errorf("%w: job[%d] 间隔 [%v] 注册失败: %v", ErrInvalidJobSchedule, idx, j.interval, err))
+				return lifecycleErr("cron: 任务周期注册失败", fmt.Errorf("%w: job[%d] 间隔 [%v] 注册失败: %w", ErrInvalidJobSchedule, idx, j.interval, err))
 			}
 		default:
 			_ = s.Shutdown()

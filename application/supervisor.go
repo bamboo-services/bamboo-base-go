@@ -59,8 +59,8 @@ func (h *runHandleImpl) publishResult(res RunResult) {
 
 // computeWaitError 计算按照契约表交付给 Wait 的错误
 //
-// 工厂失败与未派发取消各自独占返回；多阶段失败按阶段顺序聚合，
-// 全部阶段错误均保留在错误链中。
+// 工厂失败与未派发取消各自独占返回；已派发但在 Start/Run 前取消时保留 CancelErr
+// （若同时伴随 StopErr 则一并聚合）；多阶段失败按阶段顺序聚合，全部阶段错误均保留在错误链中。
 func (r *RunResult) computeWaitError() *apperr.Error {
 	if r.FactoryErr != nil {
 		return r.FactoryErr
@@ -84,6 +84,12 @@ func (r *RunResult) computeWaitError() *apperr.Error {
 	}
 	if r.StopErr != nil {
 		errs = append(errs, r.StopErr)
+	}
+	if len(errs) == 0 && r.Outcome == OutcomeCancelled && r.CancelErr != nil {
+		return r.CancelErr
+	}
+	if r.Outcome == OutcomeFailed && r.CancelErr != nil && r.StartErr == nil && r.RunErr == nil && r.StopErr != nil {
+		errs = append([]*apperr.Error{r.CancelErr}, errs...)
 	}
 
 	return aggregateErrs(errs...)

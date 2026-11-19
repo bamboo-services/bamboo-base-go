@@ -53,6 +53,24 @@ func standardCodecEntries(id, pkgPath, valueType, ptrType string) []WhitelistEnt
 	}
 }
 
+func standardCodecInterfaceEntries(id, pkgPath, ifaceName string) []WhitelistEntry {
+	return []WhitelistEntry{
+		{ID: id, Contract: "encoding.TextMarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.MarshalText", ifaceName), Reason: "嵌入标准 encoding.TextMarshaler 固定签名"},
+		{ID: id, Contract: "encoding.TextUnmarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.UnmarshalText", ifaceName), Reason: "嵌入标准 encoding.TextUnmarshaler 固定签名"},
+		{ID: id, Contract: "encoding.BinaryMarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.MarshalBinary", ifaceName), Reason: "嵌入标准 encoding.BinaryMarshaler 固定签名"},
+		{ID: id, Contract: "encoding.BinaryUnmarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.UnmarshalBinary", ifaceName), Reason: "嵌入标准 encoding.BinaryUnmarshaler 固定签名"},
+		{ID: id, Contract: "json.Marshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.MarshalJSON", ifaceName), Reason: "嵌入标准 json.Marshaler 固定签名"},
+		{ID: id, Contract: "json.Unmarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.UnmarshalJSON", ifaceName), Reason: "嵌入标准 json.Unmarshaler 固定签名"},
+		{ID: id, Contract: "xml.Marshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.MarshalXML", ifaceName), Reason: "嵌入标准 xml.Marshaler 固定签名"},
+		{ID: id, Contract: "xml.Unmarshaler", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.UnmarshalXML", ifaceName), Reason: "嵌入标准 xml.Unmarshaler 固定签名"},
+		{ID: id, Contract: "xml.MarshalerAttr", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.MarshalXMLAttr", ifaceName), Reason: "嵌入标准 xml.MarshalerAttr 固定签名"},
+		{ID: id, Contract: "xml.UnmarshalerAttr", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.UnmarshalXMLAttr", ifaceName), Reason: "嵌入标准 xml.UnmarshalerAttr 固定签名"},
+		{ID: id, Contract: "database/sql/driver.Valuer", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.Value", ifaceName), Reason: "嵌入标准 driver.Valuer.Value 固定签名"},
+		{ID: id, Contract: "database/sql.Scanner", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.Scan", ifaceName), Reason: "嵌入标准 sql.Scanner.Scan 固定签名"},
+		{ID: id, Contract: "flag.Value.Set", Kind: KindInterface, PkgPath: pkgPath, Symbol: fmt.Sprintf("%s.Set", ifaceName), Reason: "嵌入标准 flag.Value.Set 固定签名"},
+	}
+}
+
 // DefaultWhitelist 返回 spec/0003 登记的 W01-W12 及原因链载体字段精确白名单。
 func DefaultWhitelist() []WhitelistEntry {
 	entries := []WhitelistEntry{
@@ -92,8 +110,9 @@ func DefaultWhitelist() []WhitelistEntry {
 		},
 	}
 
-	// W03: foundation/typed.String, foundation/ctxkey.Key, foundation/env.Key 标准编解码与 SQL/Flag 接口
+	// W03: foundation/typed.String / Convertible, foundation/ctxkey.Key, foundation/env.Key 标准编解码与 SQL/Flag 接口
 	entries = append(entries, standardCodecEntries("W03", "foundation/typed", "String", "*String")...)
+	entries = append(entries, standardCodecInterfaceEntries("W03", "foundation/typed", "Convertible")...)
 	entries = append(entries, standardCodecEntries("W03", "foundation/ctxkey", "Key", "*Key")...)
 	entries = append(entries, standardCodecEntries("W03", "foundation/env", "Key", "*Key")...)
 

@@ -339,7 +339,7 @@ func (w *RotatingWriter) renameCurrentLogByDateLocked(date string) *apperr.Error
 			break
 		}
 		if counter > 1000 {
-			return errConfigInvalid("无法生成唯一的日期日志文件名")
+			return apperr.New(RotationFailed, "无法生成唯一的日期日志文件名")
 		}
 		targetPath = w.datedFilePathWithIndex(date, counter)
 		counter++
@@ -391,7 +391,7 @@ func (w *RotatingWriter) rotateForNewDayLocked(newDate string) *apperr.Error {
 				break
 			}
 			if counter > 1000 {
-				return errConfigInvalid("无法生成唯一的日期日志文件名")
+				return apperr.New(RotationFailed, "无法生成唯一的日期日志文件名")
 			}
 			datedPath = w.datedFilePathWithIndex(w.currentDate, counter)
 			counter++
@@ -525,8 +525,10 @@ func (w *RotatingWriter) createTarGz(archivePath string, files []string) *apperr
 	if err != nil {
 		return errRotationFailed("创建归档文件失败", err)
 	}
+	return w.writeTarGz(archiveFile, files)
+}
 
-	var appErr *apperr.Error
+func (w *RotatingWriter) writeTarGz(archiveFile io.WriteCloser, files []string) (appErr *apperr.Error) {
 	defer func() {
 		if cErr := archiveFile.Close(); cErr != nil && appErr == nil {
 			appErr = errRotationFailed("关闭归档文件失败", cErr)

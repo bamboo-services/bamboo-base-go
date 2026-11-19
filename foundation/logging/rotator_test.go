@@ -283,3 +283,68 @@ func TestRotatingWriter_CloseWaitsForArchivalBarrier(t *testing.T) {
 		t.Fatalf("Close results mismatch: err1=%v, err2=%v", err1, err2)
 	}
 }
+
+type failingCloseWriteCloser struct {
+	writeErr error
+	closeErr error
+}
+
+func (f *failingCloseWriteCloser) Write(p []byte) (int, error) {
+	if f.writeErr != nil {
+		return 0, f.writeErr
+	}
+	return len(p), nil
+}
+
+func (f *failingCloseWriteCloser) Close() error {
+	return f.closeErr
+}
+
+func TestRotatingWriter_WriteTarGz_PropagatesDeferredCloseError(t *testing.T) {
+	dir := t.TempDir()
+	w := newTestWriter(t, dir, "app", 1024)
+	defer func() { _ = w.Close() }()
+
+	src := filepath.Join(dir, "app.0.log")
+	if err := os.WriteFile(src, []byte("important log line\n"), 0644); err != nil {
+		t.Fatalf("write source file failed: %v", err)
+	}
+
+	closeSentinel := errors.New("disk full on close")
+	appErr := w.writeTarGz(&failingCloseWriteCloser{closeErr: closeSentinel}, []string{src})
+	if appErr == nil {
+		t.Fatal("期望归档文件 Close 失败被传播返回，但返回 nil")
+	}
+	if appErr.Code != *RotationFailed {
+		t.Fatalf("错误码 = %+v, 期望 %+v", appErr.Code, *RotationFailed)
+	}
+	if !errors.Is(appErr, closeSentinel) {
+		t.Fatalf("期望保留 Close 根因 %v, 实际 %v", closeSentinel, appErr)
+	}
+}
+
+func TestRotatingWriter_RenameDateOverflow_UsesRotationFailed(t *testing.T) {
+	dir := t.TempDir()
+	w := newTestWriter(t, dir, "app", 1024)
+	defer func() { _ = w.Close() }()
+
+	date := "2020-01-01"
+	if err := os.WriteFile(w.datedFilePath(date), []byte("x"), 0644); err != nil {
+		t.Fatalf("create base dated file failed: %v", err)
+	}
+	for i := 1; i <= 1000; i++ {
+		if err := os.WriteFile(w.datedFilePathWithIndex(date, i), []byte("x"), 0644); err != nil {
+			t.Fatalf("create dated file %d failed: %v", i, err)
+		}
+	}
+
+	w.fileMu.Lock()
+	appErr := w.renameCurrentLogByDateLocked(date)
+	w.fileMu.Unlock()
+	if appErr == nil {
+		t.Fatal("超过 1000 个重名日期文件必须返回错误")
+	}
+	if appErr.Code != *RotationFailed {
+		t.Fatalf("错误码 = %+v, 期望 %+v", appErr.Code, *RotationFailed)
+	}
+}

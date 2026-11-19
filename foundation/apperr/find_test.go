@@ -304,3 +304,31 @@ func TestFrom_CyclicChainTerminates(t *testing.T) {
 		t.Fatalf("环链原因必须使用调用方显式给出的错误码: %+v", appErr.Code)
 	}
 }
+
+type cyclicSliceError []error
+
+func (e cyclicSliceError) Error() string { return "cyclic slice error" }
+func (e cyclicSliceError) Unwrap() []error {
+	return []error(e)
+}
+
+func TestFrom_CyclicSliceChainTerminates(t *testing.T) {
+	cycle := make(cyclicSliceError, 1)
+	cycle[0] = cycle
+
+	if apperr.Find(cycle) != nil {
+		t.Fatal("自引用切片环链中不存在统一错误")
+	}
+	appErr := apperr.From(apperr.FrameworkInternalError, "切片环链", cycle)
+	if appErr == nil || appErr.Code.Code != 50000 {
+		t.Fatalf("自引用切片环链必须终止并按显式码包装: %+v", appErr)
+	}
+
+	real := apperr.New(apperr.FrameworkComponentNotFound, "组件未注册")
+	backing := make(cyclicSliceError, 2)
+	backing[0] = backing[:1]
+	backing[1] = real
+	if found := apperr.Find(backing); found != real {
+		t.Fatalf("不同长度子切片不得误判为同一节点从而遮蔽后续统一错误: got %+v, want %+v", found, real)
+	}
+}

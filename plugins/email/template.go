@@ -95,7 +95,7 @@ func (t *TemplateManager) ListTemplates() []string {
 // 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
 // 失败按所属域错误码 [EmailError] 归一并保留底层原因。
 func (t *TemplateManager) AddDir(dir string) *apperr.Error {
-	if t == nil {
+	if t == nil || t.templates == nil {
 		return opErr("email: 模板管理器未初始化", ErrNotInitialized)
 	}
 	info, err := os.Stat(dir)
@@ -127,14 +127,14 @@ func (t *TemplateManager) AddDir(dir string) *apperr.Error {
 // 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
 // 文件系统为空、模板解析失败按所属域错误码 [EmailError] 归一并保留底层原因。
 func (t *TemplateManager) AddFS(fsys fs.FS, pattern string) *apperr.Error {
-	if t == nil {
+	if t == nil || t.templates == nil {
 		return opErr("email: 模板管理器未初始化", ErrNotInitialized)
 	}
 	if fsys == nil {
-		return opErr("email: 内嵌模板文件系统为空", ErrNotInitialized)
+		return apperr.New(EmailError, "email: 内嵌模板文件系统为空")
 	}
 	if pattern == "" {
-		return opErr("email: 内嵌模板匹配模式为空", ErrNotInitialized)
+		return apperr.New(EmailError, "email: 内嵌模板匹配模式为空")
 	}
 
 	externalTmpl, err := t.templates.Clone()

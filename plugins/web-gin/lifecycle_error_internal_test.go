@@ -96,8 +96,8 @@ func TestJoinLifecycleErrs(t *testing.T) {
 	if got == nil {
 		t.Fatal("多成员聚合必须产生失败结果")
 	}
-	if got.Code.Code != httpresult.InternalError.Code {
-		t.Fatalf("聚合错误码应沿用首个成员: 期望 %d, 得到 %d", httpresult.InternalError.Code, got.Code.Code)
+	if got.Code.Code != apperr.FrameworkMultipleFailures.Code {
+		t.Fatalf("多成员聚合错误码应为 FrameworkMultipleFailures: 期望 %d, 得到 %d", apperr.FrameworkMultipleFailures.Code, got.Code.Code)
 	}
 	if !errors.Is(got, first) || !errors.Is(got, second) {
 		t.Fatalf("聚合必须保留全部子失败: %v", got)

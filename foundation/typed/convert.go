@@ -163,6 +163,10 @@ func (s *String) unmarshalJSON(raw []byte) (String, *apperr.Error) {
 
 	var str string
 	if err := json.Unmarshal(raw, &str); err != nil {
+		var syntaxErr *json.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			return "", valueerr.From(valueerr.KindInvalidFormat, "JSON 语法非法", err)
+		}
 		return "", valueerr.From(valueerr.KindInvalidType, "JSON 内容不是字符串", err)
 	}
 

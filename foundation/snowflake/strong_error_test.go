@@ -288,4 +288,30 @@ func TestSnowflakeID_ParseFailure_UsesInvalidFormatCode(t *testing.T) {
 	if binary != 888 {
 		t.Errorf("解析失败不得污染原值: got %d", binary)
 	}
+
+	nullID := SnowflakeID(777)
+	err = nullID.UnmarshalJSON([]byte("null"))
+	if err == nil {
+		t.Fatal("JSON null 必须返回错误")
+	}
+	var nullAppErr *apperr.Error
+	if !errors.As(err, &nullAppErr) || nullAppErr.Code.Code != 40015 {
+		t.Fatalf("JSON null 错误码期望 40015, 实际 %+v", nullAppErr)
+	}
+	if nullID != 777 {
+		t.Errorf("JSON null 不得污染原值: got %d", nullID)
+	}
+
+	overflowID := SnowflakeID(666)
+	err = overflowID.UnmarshalJSON([]byte(`"999999999999999999999999"`))
+	if err == nil {
+		t.Fatal("溢出字符串必须返回错误")
+	}
+	var overflowAppErr *apperr.Error
+	if !errors.As(err, &overflowAppErr) || overflowAppErr.Code.Code != 40014 {
+		t.Fatalf("溢出字符串错误码期望 40014, 实际 %+v", overflowAppErr)
+	}
+	if overflowID != 666 {
+		t.Errorf("溢出解析失败不得污染原值: got %d", overflowID)
+	}
 }

@@ -180,8 +180,8 @@ func TestHandleErrorSafety(t *testing.T) {
 		t.Fatalf("响应反序列化失败: %v, body: %s", err, w.Body.String())
 	}
 
-	if resp.Code != 40006 {
-		t.Fatalf("预期错误码 40006，实际: %d", resp.Code)
+	if resp.Code != validatorPkg.ValidationError.Code {
+		t.Fatalf("校验失败预期错误码 %d，实际: %d", validatorPkg.ValidationError.Code, resp.Code)
 	}
 	if resp.ErrorMessage == "" {
 		t.Fatalf("预期包含 ErrorMessage")
@@ -201,6 +201,13 @@ func TestHandleErrorSafety(t *testing.T) {
 	engine.HandleError(c2, errors.New("unexpected end of JSON input"))
 	if w2.Code != http.StatusBadRequest {
 		t.Fatalf("绑定错误预期 400 状态码，实际: %d", w2.Code)
+	}
+	var resp2 envelope.Response
+	if err := json.Unmarshal(w2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("绑定错误响应反序列化失败: %v, body: %s", err, w2.Body.String())
+	}
+	if resp2.Code != validatorPkg.BodyError.Code {
+		t.Fatalf("绑定错误预期错误码 %d，实际: %d", validatorPkg.BodyError.Code, resp2.Code)
 	}
 }
 

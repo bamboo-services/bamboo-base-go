@@ -89,6 +89,8 @@ func TestCheckerRejectsBypassPatterns(t *testing.T) {
 
 	badGo := `package fixture
 
+import "io"
+
 type ErrAlias = error
 
 type CustomErr error
@@ -101,11 +103,19 @@ type WorkerIface interface {
 	Run() error
 }
 
+type EmbeddedCloser interface {
+	io.Closer
+}
+
 type HookFn func() error
 
 type BadHolder struct {
 	Cause error
 	Done  chan error
+}
+
+type GenericBox[T any] struct {
+	Value T
 }
 
 type impl struct{}
@@ -119,6 +129,10 @@ func AliasError() ErrAlias { return nil }
 func CustomErrReturn() CustomErr { return nil }
 
 func CustomIfaceReturn() CustomIface { return nil }
+
+func AnonStructReturn() struct{ Err error } { return struct{ Err error }{} }
+
+func GenericReturn() GenericBox[error] { return GenericBox[error]{} }
 
 func CallbackParam(cb func() error) {
 	_ = cb
@@ -154,6 +168,7 @@ func RunAnon() {
 		"CustomErr",
 		"CustomIface",
 		"WorkerIface.Run",
+		"EmbeddedCloser.Close",
 		"HookFn",
 		"BadHolder.Cause",
 		"BadHolder.Done",
@@ -162,6 +177,8 @@ func RunAnon() {
 		"AliasError",
 		"CustomErrReturn",
 		"CustomIfaceReturn",
+		"AnonStructReturn",
+		"GenericReturn",
 		"CallbackParam:param-callback",
 		"RunAnon/lit#1",
 	}

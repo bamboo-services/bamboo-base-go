@@ -7,12 +7,13 @@ import "reflect"
 // typ 始终记录节点的动态类型：同一个底层映射被转换成不同具方法命名类型时，
 // 属于不同节点，不会被错误去重。
 //
-// ptr 用于指针与映射类节点，value 用于值类型节点；
-// value 只在运行时确认可比较时才会写入，保证它可以安全作为 map 键。
+// ptr 用于指针、映射、切片与函数类节点，length 用于区分同底层数组但长度不同的切片，
+// value 用于值类型节点；value 只在运行时确认可比较时才会写入，保证它可以安全作为 map 键。
 type chainIdentity struct {
-	typ   reflect.Type
-	ptr   uintptr
-	value error
+	typ    reflect.Type
+	ptr    uintptr
+	length int
+	value  error
 }
 
 // chainIdentityOf 返回节点的遍历身份；无法稳定识别时返回 false。
@@ -29,10 +30,12 @@ func chainIdentityOf(err error) (chainIdentity, bool) {
 	typ := value.Type()
 
 	switch value.Kind() {
-	case reflect.Pointer, reflect.UnsafePointer:
+	case reflect.Pointer, reflect.UnsafePointer, reflect.Func:
 		return chainIdentity{typ: typ, ptr: value.Pointer()}, true
 	case reflect.Map:
 		return chainIdentity{typ: typ, ptr: uintptr(value.UnsafePointer())}, true
+	case reflect.Slice:
+		return chainIdentity{typ: typ, ptr: value.Pointer(), length: value.Len()}, true
 	}
 
 	if !value.Comparable() {

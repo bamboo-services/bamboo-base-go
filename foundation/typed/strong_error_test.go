@@ -255,6 +255,10 @@ func TestFormatAndTypeErrorCodes(t *testing.T) {
 			var v String
 			return v.UnmarshalJSON([]byte(`"bad key"`))
 		}},
+		{name: "UnmarshalJSON语法非法", call: func() error {
+			var v String
+			return v.UnmarshalJSON([]byte(`{"broken`))
+		}},
 		{name: "UnmarshalXMLAttr非法键", call: func() error {
 			var v String
 			return v.UnmarshalXMLAttr(xml.Attr{Value: "bad key"})

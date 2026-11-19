@@ -291,22 +291,30 @@ func checkPackage(
 								allowOrRecord(s.Pos(), KindFuncType, s.Name.Name+":param-callback", reason)
 							}
 						case *types.Interface:
-							// 检查自定义 error 接口或包含返回 error 方法的接口
+							// 检查自定义 error 接口或包含返回 error 方法的接口（含嵌入第三方接口的方法）
 							if isCustomErrorInterface(under, errorType) {
 								allowOrRecord(s.Pos(), KindInterface, s.Name.Name, "禁止定义自定义通用 error 接口替代 *apperr.Error")
 								continue
 							}
+							explicit := make(map[*types.Func]bool, under.NumExplicitMethods())
 							for i := 0; i < under.NumExplicitMethods(); i++ {
-								m := under.ExplicitMethod(i)
+								explicit[under.ExplicitMethod(i)] = true
+							}
+							for i := 0; i < under.NumMethods(); i++ {
+								m := under.Method(i)
 								sig, ok := m.Type().(*types.Signature)
 								if !ok {
 									continue
 								}
+								pos := m.Pos()
+								if !explicit[m] {
+									pos = s.Pos()
+								}
 								if reason := inspectSignatureReturn(sig, errorType); reason != "" {
-									allowOrRecord(m.Pos(), KindInterface, s.Name.Name+"."+m.Name(), reason)
+									allowOrRecord(pos, KindInterface, s.Name.Name+"."+m.Name(), reason)
 								}
 								if reason := inspectParamCallbacks(sig, errorType); reason != "" {
-									allowOrRecord(m.Pos(), KindInterface, s.Name.Name+"."+m.Name()+":param-callback", reason)
+									allowOrRecord(pos, KindInterface, s.Name.Name+"."+m.Name()+":param-callback", reason)
 								}
 							}
 						case *types.Struct:
@@ -460,13 +468,28 @@ func walkType(t types.Type, visited map[types.Type]bool, match func(types.Type) 
 	case *types.Map:
 		return walkType(u.Key(), visited, match) || walkType(u.Elem(), visited, match)
 	case *types.Named:
-		// 仅展开本库自有命名类型；外部第三方类型（如 grpc.UnaryServerInterceptor / mail.Option）不作为自有契约违规展开
+		if args := u.TypeArgs(); args != nil {
+			for i := 0; i < args.Len(); i++ {
+				if walkType(args.At(i), visited, match) {
+					return true
+				}
+			}
+		}
+		// 仅展开本库自有非结构体命名类型；命名结构体字段由 TypeSpec 统一检查并受白名单约束
 		if u.Obj() == nil || u.Obj().Pkg() == nil || !strings.HasPrefix(u.Obj().Pkg().Path(), modulePrefix) {
+			return false
+		}
+		if _, isStruct := u.Underlying().(*types.Struct); isStruct {
 			return false
 		}
 		return walkType(u.Underlying(), visited, match)
 	case *types.Struct:
-		// 不递归外部标准库结构体内部未导出字段，仅检查当前层；具体字段在 TypeSpec 中检查
+		// 匿名结构体（未包装为命名类型）需检查其字段是否夹带原生 error
+		for i := 0; i < u.NumFields(); i++ {
+			if walkType(u.Field(i).Type(), visited, match) {
+				return true
+			}
+		}
 		return false
 	case *types.Signature:
 		return false

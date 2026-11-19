@@ -337,7 +337,56 @@ func TestP5_TemplateManagerStrongErrors(t *testing.T) {
 
 	if fsErr := manager.AddFS(nil, "*.html"); fsErr == nil {
 		t.Fatal("文件系统为空时必须失败")
-	} else if fsErr.Code.Code != EmailError.Code {
-		t.Fatalf("AddFS 失败应归一为 EmailError，实际: %d", fsErr.Code.Code)
+	} else {
+		if fsErr.Code.Code != EmailError.Code {
+			t.Fatalf("AddFS 失败应归一为 EmailError，实际: %d", fsErr.Code.Code)
+		}
+		if errors.Is(fsErr, ErrNotInitialized) {
+			t.Fatal("AddFS 参数为空不得误绑 ErrNotInitialized 哨兵")
+		}
+	}
+
+	if patErr := manager.AddFS(defaultTemplateFS, ""); patErr == nil {
+		t.Fatal("匹配模式为空时必须失败")
+	} else {
+		if patErr.Code.Code != EmailError.Code {
+			t.Fatalf("AddFS 空模式应归一为 EmailError，实际: %d", patErr.Code.Code)
+		}
+		if errors.Is(patErr, ErrNotInitialized) {
+			t.Fatal("AddFS 空模式不得误绑 ErrNotInitialized 哨兵")
+		}
+	}
+
+	zeroManager := &TemplateManager{}
+	if err := zeroManager.AddDir(t.TempDir()); err == nil || !errors.Is(err, ErrNotInitialized) {
+		t.Fatalf("零值 TemplateManager.AddDir 必须返回 ErrNotInitialized 且不 panic，实际: %v", err)
+	}
+	if err := zeroManager.AddFS(defaultTemplateFS, "template/*.html"); err == nil || !errors.Is(err, ErrNotInitialized) {
+		t.Fatalf("零值 TemplateManager.AddFS 必须返回 ErrNotInitialized 且不 panic，实际: %v", err)
+	}
+}
+
+type customErrContext struct {
+	context.Context
+	err error
+}
+
+func (c customErrContext) Err() error { return c.err }
+
+// TestP5_OpErrWithContext_CustomContextErrorDoesNotPanic 断言非标准 ctx.Err() 不会触发空指针 panic。
+func TestP5_OpErrWithContext_CustomContextErrorDoesNotPanic(t *testing.T) {
+	ctxErr := errors.New("custom context failure")
+	cause := errors.New("smtp transport broken")
+	ctx := customErrContext{Context: context.Background(), err: ctxErr}
+
+	got := opErrWithContext("email: 发送失败", cause, ctx)
+	if got == nil {
+		t.Fatal("期望返回非 nil 错误")
+	}
+	if got.Code.Code != EmailError.Code {
+		t.Fatalf("非标准 ctx.Err() 应回退 EmailError，实际: %d", got.Code.Code)
+	}
+	if !errors.Is(got, ctxErr) || !errors.Is(got, cause) {
+		t.Fatalf("必须同时保留 ctxErr 与 cause，实际: %v", got)
 	}
 }

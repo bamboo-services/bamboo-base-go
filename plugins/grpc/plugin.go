@@ -60,8 +60,8 @@ func normalizeLifecycleErr(code *apperr.ErrorCode, msg apperr.ErrMessage, cause 
 // joinLifecycleErrs 聚合多个生命周期失败结果。
 //
 // 没有有效成员时返回 nil（真正的 nil 指针），只有一个成员时原样返回；
-// 多个成员时最外层错误沿用首个成员的错误码与描述，全部成员按入参顺序保留为根因，
-// 可经 errors.Is 与 errors.As 逐个遍历。
+// 多个成员时最外层错误使用 [apperr.FrameworkMultipleFailures]（50020），
+// 全部成员按入参顺序保留为根因，可经 errors.Is 与 errors.As 逐个遍历。
 func joinLifecycleErrs(errs ...*apperr.Error) *apperr.Error {
 	kept := make([]*apperr.Error, 0, len(errs))
 	for _, appErr := range errs {
@@ -76,7 +76,7 @@ func joinLifecycleErrs(errs ...*apperr.Error) *apperr.Error {
 	case 1:
 		return kept[0]
 	}
-	return apperr.Join(&kept[0].Code, kept[0].ErrorMessage, kept...)
+	return apperr.Join(apperr.FrameworkMultipleFailures, "多个生命周期阶段失败", kept...)
 }
 
 // ServiceRegistrar 是业务向 [grpc.Server] 挂载 gRPC Service 定义的回调函数。

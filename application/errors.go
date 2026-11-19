@@ -138,8 +138,9 @@ func normalizeErr(code *apperr.ErrorCode, msg apperr.ErrMessage, cause error) *a
 // 语义：
 //   - 没有有效成员时返回 nil；
 //   - 只有一个有效成员时原样返回，不额外套壳；
-//   - 多个有效成员时，最外层统一错误沿用首个成员的错误码与描述（承载首要责任），
-//     全部成员按入参顺序保留为根因，errors.Is 与 errors.As 可逐个遍历。
+//   - 多个有效成员时，最外层统一错误使用 [apperr.FrameworkMultipleFailures]（50020），
+//     避免任意挑选单个子错误码掩盖“多个阶段失败”，全部成员按入参顺序保留为根因，
+//     errors.Is 与 errors.As 可逐个遍历。
 func aggregateErrs(errs ...*apperr.Error) *apperr.Error {
 	kept := make([]*apperr.Error, 0, len(errs))
 	for _, appErr := range errs {
@@ -154,7 +155,7 @@ func aggregateErrs(errs ...*apperr.Error) *apperr.Error {
 	case 1:
 		return kept[0]
 	}
-	return apperr.Join(&kept[0].Code, kept[0].ErrorMessage, kept...)
+	return apperr.Join(apperr.FrameworkMultipleFailures, "多个阶段或组件执行失败", kept...)
 }
 
 type canceledSentinelError struct {

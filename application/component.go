@@ -301,7 +301,11 @@ func (e *componentEngine) executePipeline(
 			return
 		}
 
-		res.Outcome = OutcomeCancelled
+		if res.StopErr != nil {
+			res.Outcome = OutcomeFailed
+		} else {
+			res.Outcome = OutcomeCancelled
+		}
 		terminate(res, compInst, true)
 		return
 	}

@@ -45,8 +45,13 @@ func opErrWithContext(msg apperr.ErrMessage, cause error, ctxs ...context.Contex
 		if ctxErr == nil {
 			continue
 		}
-		classified := control.Classify(ctxErr, control.PhaseOperation)
-		return apperr.New(&classified.Code, msg, cause, ctxErr)
+		if classified := control.Classify(ctxErr, control.PhaseOperation); classified != nil {
+			return apperr.New(&classified.Code, msg, cause, ctxErr)
+		}
+		if classified := control.Classify(cause, control.PhaseOperation); classified != nil {
+			return apperr.New(&classified.Code, msg, cause, ctxErr)
+		}
+		return apperr.New(EmailError, msg, cause, ctxErr)
 	}
 	return opErr(msg, cause)
 }

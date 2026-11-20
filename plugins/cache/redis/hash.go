@@ -230,7 +230,7 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 		return err
 	}
 	k := driver.EncodeKey(c.enc, key)
-	args := make([]any, 0, len(m)*2)
+	var args []any
 	for f, v := range m {
 		vData, err := c.codec.Marshal(v)
 		if err != nil {

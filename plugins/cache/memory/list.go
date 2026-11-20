@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
@@ -90,20 +91,14 @@ func (c *ListCache[K, V]) Prepend(ctx context.Context, key K, values []V, opts .
 				return UpdateNoChange
 			}
 			// 必须新建切片，避免在共享底层数组上写
-			newList := make([][]byte, 0, len(encoded)+len(l))
-			newList = append(newList, encoded...)
-			newList = append(newList, l...)
-			return newList
+			return slices.Concat(encoded, l)
 		})
 		return nil
 	}
 	c.store.Update(k, cfg.TTL, func(old any) any {
 		l, _ := old.([][]byte)
 		// 必须新建切片，避免在共享底层数组上写
-		newList := make([][]byte, 0, len(encoded)+len(l))
-		newList = append(newList, encoded...)
-		newList = append(newList, l...)
-		return newList
+		return slices.Concat(encoded, l)
 	})
 	return nil
 }
@@ -148,19 +143,15 @@ func (c *ListCache[K, V]) Append(ctx context.Context, key K, values []V, opts ..
 			if cfg.XX && l == nil {
 				return UpdateNoChange
 			}
-			newList := make([][]byte, 0, len(encoded)+len(l))
-			newList = append(newList, l...)
-			newList = append(newList, encoded...)
-			return newList
+			// 必须新建切片，避免在共享底层数组上写
+			return slices.Concat(l, encoded)
 		})
 		return nil
 	}
 	c.store.Update(k, cfg.TTL, func(old any) any {
 		l, _ := old.([][]byte)
-		newList := make([][]byte, 0, len(encoded)+len(l))
-		newList = append(newList, l...)
-		newList = append(newList, encoded...)
-		return newList
+		// 必须新建切片，避免在共享底层数组上写
+		return slices.Concat(l, encoded)
 	})
 	return nil
 }

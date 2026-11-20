@@ -8,31 +8,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 // 本文件自有的测试 fixture，避免与其它测试 mock 命名冲突。
 type acceptanceWorkerFixture struct {
-	startFunc func(ctx context.Context) error
-	runFunc   func(ctx context.Context) error
-	stopFunc  func(ctx context.Context) error
+	startFunc func(ctx context.Context) *apperr.Error
+	runFunc   func(ctx context.Context) *apperr.Error
+	stopFunc  func(ctx context.Context) *apperr.Error
 }
 
-func (w *acceptanceWorkerFixture) Start(ctx context.Context) error {
+func (w *acceptanceWorkerFixture) Start(ctx context.Context) *apperr.Error {
 	if w.startFunc != nil {
 		return w.startFunc(ctx)
 	}
 	return nil
 }
 
-func (w *acceptanceWorkerFixture) Run(ctx context.Context) error {
+func (w *acceptanceWorkerFixture) Run(ctx context.Context) *apperr.Error {
 	if w.runFunc != nil {
 		return w.runFunc(ctx)
 	}
 	return nil
 }
 
-func (w *acceptanceWorkerFixture) Stop(ctx context.Context) error {
+func (w *acceptanceWorkerFixture) Stop(ctx context.Context) *apperr.Error {
 	if w.stopFunc != nil {
 		return w.stopFunc(ctx)
 	}
@@ -40,26 +41,26 @@ func (w *acceptanceWorkerFixture) Stop(ctx context.Context) error {
 }
 
 type acceptanceComponentFixture struct {
-	startFunc func(ctx context.Context) error
-	runFunc   func(ctx context.Context) error
-	stopFunc  func(ctx context.Context) error
+	startFunc func(ctx context.Context) *apperr.Error
+	runFunc   func(ctx context.Context) *apperr.Error
+	stopFunc  func(ctx context.Context) *apperr.Error
 }
 
-func (c *acceptanceComponentFixture) Start(ctx context.Context) error {
+func (c *acceptanceComponentFixture) Start(ctx context.Context) *apperr.Error {
 	if c.startFunc != nil {
 		return c.startFunc(ctx)
 	}
 	return nil
 }
 
-func (c *acceptanceComponentFixture) Run(ctx context.Context) error {
+func (c *acceptanceComponentFixture) Run(ctx context.Context) *apperr.Error {
 	if c.runFunc != nil {
 		return c.runFunc(ctx)
 	}
 	return nil
 }
 
-func (c *acceptanceComponentFixture) Stop(ctx context.Context) error {
+func (c *acceptanceComponentFixture) Stop(ctx context.Context) *apperr.Error {
 	if c.stopFunc != nil {
 		return c.stopFunc(ctx)
 	}
@@ -97,12 +98,12 @@ func TestActivatorAcceptance_OverlapSkip_RejectsUntilStopReturned(t *testing.T) 
 	}, func() RunnablePlugin {
 		atomic.AddInt32(&compFactoryCalls, 1)
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(compRunEntered)
 				<-releaseCompRun
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				close(compStopEntered)
 				<-releaseCompStop
 				return nil
@@ -115,7 +116,7 @@ func TestActivatorAcceptance_OverlapSkip_RejectsUntilStopReturned(t *testing.T) 
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				close(workerStarted)
 
 				act := requireActivator(t, app)
@@ -167,7 +168,7 @@ func TestActivatorAcceptance_OverlapSkip_RejectsUntilStopReturned(t *testing.T) 
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -200,7 +201,7 @@ func TestActivatorAcceptance_OverlapAllow_LimitExceeded(t *testing.T) {
 		},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				runEntered <- struct{}{}
 				<-releaseRun
 				return nil
@@ -212,7 +213,7 @@ func TestActivatorAcceptance_OverlapAllow_LimitExceeded(t *testing.T) {
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 
 				// 激活达到上限并发 (2)
@@ -245,7 +246,7 @@ func TestActivatorAcceptance_OverlapAllow_LimitExceeded(t *testing.T) {
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -292,7 +293,7 @@ func TestActivatorAcceptance_OverlapQueue_SharedFifo_MaxQueueWaitingOnly_Context
 		id := string(rune('A' - 1 + calls))
 		recordDispatch(id)
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				taskStarted <- id
 				<-releaseCurrentTask
 				return nil
@@ -309,7 +310,7 @@ func TestActivatorAcceptance_OverlapQueue_SharedFifo_MaxQueueWaitingOnly_Context
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerAKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				workerALifetime = lifetimeCtx
 				close(barrierWorkerA)
 				<-lifetimeCtx.Done()
@@ -320,7 +321,7 @@ func TestActivatorAcceptance_OverlapQueue_SharedFifo_MaxQueueWaitingOnly_Context
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerBKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				workerBLifetime = lifetimeCtx
 				close(barrierWorkerB)
 				<-lifetimeCtx.Done()
@@ -329,7 +330,7 @@ func TestActivatorAcceptance_OverlapQueue_SharedFifo_MaxQueueWaitingOnly_Context
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -435,16 +436,16 @@ func TestActivatorAcceptance_UnDispatchedCancelledOnAppOrParentShutdown(t *testi
 	}, func() RunnablePlugin {
 		atomic.AddInt32(&factoryCalls, 1)
 		return &acceptanceComponentFixture{
-			startFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error {
 				atomic.AddInt32(&startCalls, 1)
 				return nil
 			},
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(firstTaskStarted)
 				<-blockFirstTask
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				atomic.AddInt32(&stopCalls, 1)
 				return nil
 			},
@@ -457,7 +458,7 @@ func TestActivatorAcceptance_UnDispatchedCancelledOnAppOrParentShutdown(t *testi
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(lifetimeCtx context.Context) error {
+			runFunc: func(lifetimeCtx context.Context) *apperr.Error {
 				close(workerStarted)
 				act := requireActivator(t, app)
 
@@ -485,7 +486,7 @@ func TestActivatorAcceptance_UnDispatchedCancelledOnAppOrParentShutdown(t *testi
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -553,7 +554,7 @@ func TestActivatorAcceptance_NestedQueue_WouldBlock_And_ActivationCycle(t *testi
 		},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case targetRunStarted <- struct{}{}:
 				default:
@@ -573,7 +574,7 @@ func TestActivatorAcceptance_NestedQueue_WouldBlock_And_ActivationCycle(t *testi
 		},
 	}, func() RunnablePlugin {
 		return &acceptanceComponentFixture{
-			runFunc: func(componentLifetimeCtx context.Context) error {
+			runFunc: func(componentLifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 
 				// 1. 尝试祖先环激活：父级为 compParentKey，目标亦为 compParentKey -> 必须返回 ErrActivationCycle
@@ -597,7 +598,7 @@ func TestActivatorAcceptance_NestedQueue_WouldBlock_And_ActivationCycle(t *testi
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &acceptanceWorkerFixture{
-			runFunc: func(workerLifetimeCtx context.Context) error {
+			runFunc: func(workerLifetimeCtx context.Context) *apperr.Error {
 				act := requireActivator(t, app)
 
 				// Worker 先激活 compTargetKey，占住执行槽
@@ -627,7 +628,7 @@ func TestActivatorAcceptance_NestedQueue_WouldBlock_And_ActivationCycle(t *testi
 		}
 	})
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()

@@ -42,22 +42,22 @@ func TestNew_CodeSnapshot(t *testing.T) {
 
 func TestNew_NilCodeDefault(t *testing.T) {
 	err := apperr.New(nil, "缺省测试")
-	if err.Code != *apperr.ServerInternalError {
-		t.Fatalf("nil 代码未回退为 ServerInternalError: %+v", err.Code)
+	if err.Code != *apperr.FrameworkInternalError {
+		t.Fatalf("nil 代码未回退为 FrameworkInternalError: %+v", err.Code)
 	}
-	if err.Code.Code != 50000 || err.Code.Output != "SERVER_INTERNAL_ERROR" {
+	if err.Code.Code != 50000 || err.Code.Output != "FRAMEWORK_INTERNAL_ERROR" {
 		t.Fatalf("默认错误码字段不符: %+v", err.Code)
 	}
 }
 
 func TestNew_CauseHandlingAndUnwrap(t *testing.T) {
 	t.Run("无根因或全nil", func(t *testing.T) {
-		err1 := apperr.New(apperr.ServerInternalError, "无根因")
+		err1 := apperr.New(apperr.FrameworkInternalError, "无根因")
 		if err1.Err != nil || err1.Unwrap() != nil {
 			t.Fatalf("期望 Err 和 Unwrap 为 nil: %v", err1.Err)
 		}
 
-		err2 := apperr.New(apperr.ServerInternalError, "全nil根因", nil, nil)
+		err2 := apperr.New(apperr.FrameworkInternalError, "全nil根因", nil, nil)
 		if err2.Err != nil || err2.Unwrap() != nil {
 			t.Fatalf("全 nil 根因期望 Err 和 Unwrap 为 nil: %v", err2.Err)
 		}
@@ -67,12 +67,12 @@ func TestNew_CauseHandlingAndUnwrap(t *testing.T) {
 		target := errors.New("底层根因")
 		custom := &customError{msg: "自定义错误"}
 
-		err := apperr.New(apperr.ServerInternalError, "包装错误", target)
+		err := apperr.New(apperr.FrameworkInternalError, "包装错误", target)
 		if !errors.Is(err, target) {
 			t.Fatalf("errors.Is 判定失败")
 		}
 
-		errWithCustom := apperr.New(apperr.ServerInternalError, "自定义包装", custom)
+		errWithCustom := apperr.New(apperr.FrameworkInternalError, "自定义包装", custom)
 		var extracted *customError
 		if !errors.As(errWithCustom, &extracted) || extracted.msg != "自定义错误" {
 			t.Fatalf("errors.As 提取失败")
@@ -83,7 +83,7 @@ func TestNew_CauseHandlingAndUnwrap(t *testing.T) {
 		root1 := errors.New("root 1")
 		root2 := &customError{msg: "root 2"}
 
-		err := apperr.New(apperr.ServerInternalError, "多错误", nil, root1, nil, root2)
+		err := apperr.New(apperr.FrameworkInternalError, "多错误", nil, root1, nil, root2)
 		if !errors.Is(err, root1) {
 			t.Fatalf("多根因中未找到 root1")
 		}
@@ -97,7 +97,7 @@ func TestNew_CauseHandlingAndUnwrap(t *testing.T) {
 
 func TestNew_JSONSerializationDoesNotLeakErr(t *testing.T) {
 	root := errors.New("sensitive db connection password string")
-	appErr := apperr.New(apperr.ServerInternalError, "查询失败", root)
+	appErr := apperr.New(apperr.FrameworkInternalError, "查询失败", root)
 	appErr.Data = map[string]string{"key": "value"}
 
 	bytes, err := json.Marshal(appErr)
@@ -116,7 +116,7 @@ func TestNew_JSONSerializationDoesNotLeakErr(t *testing.T) {
 }
 
 func TestNew_DataAssignment(t *testing.T) {
-	err := apperr.New(apperr.ServerInternalError, "带数据错误")
+	err := apperr.New(apperr.FrameworkInternalError, "带数据错误")
 	if err.Data != nil {
 		t.Fatalf("初始 Data 应为 nil")
 	}
@@ -133,7 +133,7 @@ func TestNew_DataAssignment(t *testing.T) {
 }
 
 func TestNew_NoLoggingSideEffect(t *testing.T) {
-	err := apperr.New(apperr.ServerInternalError, "无副作用测试", fmt.Errorf("纯内存运算"))
+	err := apperr.New(apperr.FrameworkInternalError, "无副作用测试", fmt.Errorf("纯内存运算"))
 	if err == nil {
 		t.Fatal("返回了 nil 错误")
 	}

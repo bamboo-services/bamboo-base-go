@@ -31,7 +31,7 @@
 //
 //   - 日志记录：若传入了非 nil 的 [logging.LogNamedLogger]，异常信息将记录至应用日志；
 //   - 响应写回：通过 [httpresult.AbortError] 向客户端返回 500
-//     [apperr.ServerInternalError]，提示信息统一为“系统内部异常”；
+//     [httpresult.InternalError]，提示信息统一为“系统内部异常”；
 //   - 安全隔离：原始 panic 对象仅作为内部 Cause 保留，绝不将其堆栈或敏感字段暴露至 HTTP 响应。
 //
 // # 响应兜底与开发者纠错
@@ -42,7 +42,7 @@
 //     则按原错误码输出，否则包装为 500 异常写出；
 //   - 未写入响应且无任何错误：若响应状态码非 301 [http.StatusMovedPermanently]
 //     或 302 [http.StatusFound]，判定为业务处理逻辑遗漏了响应写出动作，
-//     自动向客户端输出带有 [apperr.DeveloperError] 错误码的提示。
+//     自动向客户端输出带有 [httpresult.ResponseMissing] 错误码的提示。
 //
 // # 并发安全
 //

@@ -130,7 +130,7 @@ func ToStatusError(ctx context.Context, err *apperr.Error) error {
 	overhead := resolveOverhead(ctx)
 
 	if err == nil {
-		fallback := apperr.ServerInternalError
+		fallback := InternalError
 		st := status.New(codes.Internal, string(fallback.Message))
 		detailResp := &generate.BaseResponse{
 			Context:  reqKey,

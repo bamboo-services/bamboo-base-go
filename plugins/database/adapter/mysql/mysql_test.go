@@ -258,14 +258,14 @@ func TestRealEngine_MySQL(t *testing.T) {
 		t.Fatalf("Open failed: %v", err)
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open failed: %v", err)
+	db, openErr := gorm.Open(dialector, &gorm.Config{})
+	if openErr != nil {
+		t.Fatalf("gorm.Open failed: %v", openErr)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("db.DB() failed: %v", err)
+	sqlDB, dbErr := db.DB()
+	if dbErr != nil {
+		t.Fatalf("db.DB() failed: %v", dbErr)
 	}
 	defer func() {
 		_ = sqlDB.Close()

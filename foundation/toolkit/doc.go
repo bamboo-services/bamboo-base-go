@@ -53,9 +53,12 @@
 //
 // # 错误处理
 //
-// 校验类函数（IsXxx、VerifyXxx）直接返回布尔值，不区分失败原因。
+// 校验类函数（IsXxx）直接返回布尔值，不区分失败原因。
 // 解析类函数以第二个 bool 返回值表示成败。仅 [EncryptPassword]、
-// [EncryptPasswordString] 与 [Parse] 返回 error；对应的 Must 前缀
+// [EncryptPasswordString]、[VerifyPassword] 与 [Parse] 返回统一错误
+// [*apperr.Error]：密码相关失败归 [PasswordFailed]（50032），
+// 时间解析失败归 [valueerr.InvalidFormat]（40013），原始原因保留为根因；
+// 成功路径返回真正的 nil 错误。对应的 Must 前缀
 // 变体（[MustEncryptPassword]、[MustParse] 等）在失败时 panic，
 // 只应用于初始化阶段已保证合法的输入。
 //

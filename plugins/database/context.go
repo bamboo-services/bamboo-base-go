@@ -12,15 +12,15 @@ import (
 // Get 从上下文中提取已绑定当前请求上下文的 [*gorm.DB] 句柄。
 //
 // 该函数内部调用 [application.Get] 泛型提取句柄，并在 ctx 非空时自动执行
-// db.WithContext(ctx) 绑定上下文取消与超时语义。若句柄缺失或为 nil，返回包含
-// [apperr.DatabaseError] 的错误。
+// db.WithContext(ctx) 绑定上下文取消与超时语义。提取失败时透传 application 的错误；
+// 提取成功但句柄为 nil 时返回包含 [DatabaseError] 的错误。
 func Get(ctx context.Context) (*gorm.DB, *apperr.Error) {
 	db, err := application.Get[*gorm.DB](ctx, ctxkey.DatabaseKey)
 	if err != nil {
 		return nil, err
 	}
 	if db == nil {
-		return nil, apperr.New(apperr.DatabaseError, "上下文中的数据库句柄为 nil", nil)
+		return nil, apperr.New(DatabaseError, "上下文中的数据库句柄为 nil", nil)
 	}
 	if ctx != nil {
 		return db.WithContext(ctx), nil

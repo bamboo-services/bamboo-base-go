@@ -9,30 +9,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 type testComponentFixture struct {
-	startFunc func(ctx context.Context) error
-	runFunc   func(ctx context.Context) error
-	stopFunc  func(ctx context.Context) error
+	startFunc func(ctx context.Context) *apperr.Error
+	runFunc   func(ctx context.Context) *apperr.Error
+	stopFunc  func(ctx context.Context) *apperr.Error
 }
 
-func (f *testComponentFixture) Start(ctx context.Context) error {
+func (f *testComponentFixture) Start(ctx context.Context) *apperr.Error {
 	if f.startFunc != nil {
 		return f.startFunc(ctx)
 	}
 	return nil
 }
 
-func (f *testComponentFixture) Run(ctx context.Context) error {
+func (f *testComponentFixture) Run(ctx context.Context) *apperr.Error {
 	if f.runFunc != nil {
 		return f.runFunc(ctx)
 	}
 	return nil
 }
 
-func (f *testComponentFixture) Stop(ctx context.Context) error {
+func (f *testComponentFixture) Stop(ctx context.Context) *apperr.Error {
 	if f.stopFunc != nil {
 		return f.stopFunc(ctx)
 	}
@@ -96,12 +97,12 @@ func TestComponentEngine_Skip_BarrierStopsUntilStopReturned(t *testing.T) {
 		idx := atomic.AddInt32(&instanceCount, 1)
 		if idx == 1 {
 			return &testComponentFixture{
-				runFunc: func(ctx context.Context) error {
+				runFunc: func(ctx context.Context) *apperr.Error {
 					close(runEntered1)
 					<-releaseRun1
 					return nil
 				},
-				stopFunc: func(ctx context.Context) error {
+				stopFunc: func(ctx context.Context) *apperr.Error {
 					close(stopEntered1)
 					<-releaseStop1
 					return nil
@@ -109,12 +110,12 @@ func TestComponentEngine_Skip_BarrierStopsUntilStopReturned(t *testing.T) {
 			}
 		}
 		return &testComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(runEntered4)
 				<-releaseRun4
 				return nil
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				close(stopEntered4)
 				<-releaseStop4
 				return nil
@@ -196,7 +197,7 @@ func TestComponentEngine_Allow_ConcurrencyLimit(t *testing.T) {
 		},
 	}, func() RunnablePlugin {
 		return &testComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				runEntered <- struct{}{}
 				<-releaseRun
 				return nil
@@ -268,7 +269,7 @@ func TestComponentEngine_Queue_SharedFIFO_MaxQueue_ContextIndependence(t *testin
 		call := atomic.AddInt32(&factoryCalls, 1)
 		tag := fmt.Sprintf("task_%d", call)
 		return &testComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				dispatchMu.Lock()
 				dispatchOrder = append(dispatchOrder, tag)
 				dispatchMu.Unlock()
@@ -381,7 +382,7 @@ func TestComponentEngine_UndispatchedCancelledOnParentClose(t *testing.T) {
 	}, func() RunnablePlugin {
 		atomic.AddInt32(&factoryCalls, 1)
 		return &testComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(firstStarted)
 				<-blockFirst
 				return nil
@@ -411,7 +412,7 @@ func TestComponentEngine_UndispatchedCancelledOnParentClose(t *testing.T) {
 	}
 
 	// 3. 关闭 Worker 父级
-	engine.closeParent(workerID, ErrParentClosing)
+	engine.closeParent(workerID, normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing))
 
 	// 释放 T1
 	close(blockFirst)
@@ -475,7 +476,7 @@ func TestComponentEngine_NestedQueue_WouldBlock_And_Cycle(t *testing.T) {
 		},
 	}, func() RunnablePlugin {
 		return &testComponentFixture{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				select {
 				case targetRunStarted <- struct{}{}:
 				default:
@@ -496,7 +497,7 @@ func TestComponentEngine_NestedQueue_WouldBlock_And_Cycle(t *testing.T) {
 		},
 	}, func() RunnablePlugin {
 		return &testComponentFixture{
-			runFunc: func(compCtx context.Context) error {
+			runFunc: func(compCtx context.Context) *apperr.Error {
 				// 1. 尝试激活祖先环：父自身为 compParentKey，目标亦为 compParentKey
 				hCycle, errCycle := engine.Activate(compCtx, compParentKey)
 				if !errors.Is(errCycle, ErrActivationCycle) || hCycle != nil {
@@ -577,7 +578,7 @@ func TestComponentEngine_IdentityAndStateDefense(t *testing.T) {
 	workerKey := ctxkey.Key("worker_defense")
 	workerID := "worker_defense_1"
 	engine.registerWorker(workerID, workerKey)
-	engine.closeParent(workerID, ErrParentClosing)
+	engine.closeParent(workerID, normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing))
 
 	workerCtx := newWorkerTestContext(app1, workerID, workerKey)
 	h3, err3 := engine.Activate(workerCtx, compKey)
@@ -620,7 +621,7 @@ func TestComponentEngine_StopPanic_RetainsDepsAndTriggersAppShutdown(t *testing.
 		Requires: []ctxkey.Key{depKey},
 	}, func() RunnablePlugin {
 		return &testComponentFixture{
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				panic("boom in component stop")
 			},
 		}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/plugins/async/v2"
 	sqliteadapter "github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/sqlite/v2"
@@ -22,11 +23,14 @@ type lifecycleTestWorker struct {
 	runFn func(ctx context.Context) error
 }
 
-func (w *lifecycleTestWorker) Start(_ context.Context) error { return nil }
-func (w *lifecycleTestWorker) Stop(_ context.Context) error  { return nil }
-func (w *lifecycleTestWorker) Run(ctx context.Context) error {
+func (w *lifecycleTestWorker) Start(_ context.Context) *apperr.Error { return nil }
+func (w *lifecycleTestWorker) Stop(_ context.Context) *apperr.Error  { return nil }
+func (w *lifecycleTestWorker) Run(ctx context.Context) *apperr.Error {
 	if w.runFn != nil {
-		return w.runFn(ctx)
+		if runErr := w.runFn(ctx); runErr != nil {
+			return apperr.From(apperr.FrameworkInternalError, "生命周期测试工作器运行失败", runErr)
+		}
+		return nil
 	}
 	<-ctx.Done()
 	return nil
@@ -76,7 +80,7 @@ func TestSQLiteAsyncLifecycle_CaseA_AppForceUnblocksTask_OrderlyShutdown(t *test
 				return err
 			}
 
-			task, err := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
+			task, submitErr := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
 				close(taskStarted)
 				<-taskCtx.Done()
 				close(appForceReceived)
@@ -87,10 +91,13 @@ func TestSQLiteAsyncLifecycle_CaseA_AppForceUnblocksTask_OrderlyShutdown(t *test
 				}
 				close(sqlCompleted)
 			})
-			if err != nil {
-				return err
+			if submitErr != nil {
+				return submitErr
 			}
-			return task.Wait()
+			if waitErr := task.Wait(); waitErr != nil {
+				return waitErr
+			}
+			return nil
 		},
 	}
 
@@ -105,7 +112,7 @@ func TestSQLiteAsyncLifecycle_CaseA_AppForceUnblocksTask_OrderlyShutdown(t *test
 	}
 
 	runDone := make(chan struct{})
-	var runErr error
+	var runErr *apperr.Error
 	t.Cleanup(func() {
 		_ = app.Shutdown()
 		select {
@@ -210,7 +217,7 @@ func TestSQLiteAsyncLifecycle_CaseB_TaskIgnoresCancel_RetainsDatabase_Incomplete
 	var taskDoneFlag atomic.Bool
 
 	runDone := make(chan struct{})
-	var runErr error
+	var runErr *apperr.Error
 
 	t.Cleanup(func() {
 		releaseOnce.Do(func() { close(releaseTask) })
@@ -253,7 +260,7 @@ func TestSQLiteAsyncLifecycle_CaseB_TaskIgnoresCancel_RetainsDatabase_Incomplete
 				return err
 			}
 
-			tSub, err := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
+			tSub, submitErr := pool.Submit(lifetimeCtx, func(taskCtx context.Context) {
 				close(taskStarted)
 				<-releaseTask
 				safeCtx := context.Background()
@@ -262,8 +269,8 @@ func TestSQLiteAsyncLifecycle_CaseB_TaskIgnoresCancel_RetainsDatabase_Incomplete
 				}
 				taskDoneFlag.Store(true)
 			})
-			if err != nil {
-				return err
+			if submitErr != nil {
+				return submitErr
 			}
 			capturedTask = tSub
 			close(taskReady)

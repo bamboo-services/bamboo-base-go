@@ -68,12 +68,21 @@
 //
 // # 错误处理
 //
+// 提交与等待阶段的失败结果统一为框架强类型错误 [*apperr.Error]：
+// 成功路径返回真正的 nil 指针，失败路径的错误码、补充描述与根因链均可稳定读取。
+//
 // 调用方需针对提交阶段与等待阶段的不同错误做出决策：
 //
-//   - 提交失败：使用 [errors.Is] 区分 [ErrPoolFull]（触发削峰或降级）、
-//     [ErrPoolClosed]（应用正准备停机）与 [ErrNilTaskFunc]（编程错误）；
+//   - 提交失败：使用 [errors.Is] 区分 [ErrPoolFull]（池已满，错误码 [PoolFull]，
+//     42903 / ASYNC_POOL_FULL，触发削峰或降级）、[ErrPoolClosed]（应用正准备停机，
+//     错误码 [PoolError]，50041 / ASYNC_POOL_ERROR）与 [ErrNilTaskFunc]（编程错误）；
+//   - 其它池内故障：[ErrInvalidContext]、[ErrNotInitialized] 与底层 ants 原生错误
+//     统一归一为 [PoolError]（50041 / ASYNC_POOL_ERROR），哨兵继续作为根因保留；
+//   - 容器提取失败：应用层原错误码（50001 / 50005 / 50006 等）原样保留，不被改判为池错误；
+//     目标组件已停止或不可用时，同时可经 [errors.Is] 判定 [ErrPoolClosed] 与原错误；
 //   - 运行期 Panic：任务内的 panic 将被自动捕获隔离并记录错误日志，
 //     可通过 [Task.Panicked]、[Task.PanicValue] 和 [Task.PanicStack] 进行事后审计；
-//   - 等待超时：[Task.Wait] 或 [Task.WaitFor] 超时返回 [context.DeadlineExceeded]，
+//   - 等待超时：[Task.Wait] 或 [Task.WaitFor] 超时归一为 [control.DeadlineExceeded]（50401），
+//     等待期间上下文取消归一为 [control.Canceled]（49900），原生 context 哨兵作为根因保留，
 //     调用方应认识到该超时仅代表调用方放弃等待，任务本身并未被强杀。
 package async

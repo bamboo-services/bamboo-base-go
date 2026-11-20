@@ -36,6 +36,17 @@
 //		return app, nil
 //	}
 //
+// # 错误契约
+//
+// [dialect.Adapter.Open] 在配置非法时返回框架统一错误 apperr.Error：
+//
+//   - 配置非法（DSN 为空或格式非法、环境变量端口或主机为空）统一映射到
+//     [dialect.AdapterConfigInvalid]（DATABASE_DIALECT_ADAPTER_CONFIG_INVALID）。
+//   - 适配器实例为 nil 时映射到 [dialect.AdapterInvalid]（DATABASE_DIALECT_ADAPTER_INVALID）。
+//
+// 错误的补充描述为安全中文说明，底层根因保留已脱敏的原始原因；
+// 错误文本与 JSON 序列化均不携带 DSN 明文或数据库密码。
+//
 // # 生命周期与资源归属
 //
 // [New] 与 [FromEnv] 均为纯内存操作，不触发网络握手或数据库探测。

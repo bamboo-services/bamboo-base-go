@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/httpresult"
 	"github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2/validator"
 	"github.com/gin-gonic/gin"
 )
@@ -27,10 +29,11 @@ type Binder struct {
 
 // New 使用显式传入的独立 [*validator.Engine] 实例构造全新的 [Binder]。
 //
-// 若传入的 engine 为 nil，返回 [ErrNilEngine]。构造过程绝不使用全局验证器单例。
-func New(engine *validator.Engine) (*Binder, error) {
+// 若传入的 engine 为 nil，返回错误码为 [httpresult.InternalError]（50008）的统一错误
+// 并保留 [ErrNilEngine] 作为根因。构造过程绝不使用全局验证器单例。
+func New(engine *validator.Engine) (*Binder, *apperr.Error) {
 	if engine == nil {
-		return nil, ErrNilEngine
+		return nil, apperr.New(httpresult.InternalError, "", ErrNilEngine)
 	}
 	return &Binder{engine: engine}, nil
 }

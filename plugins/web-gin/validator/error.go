@@ -20,6 +20,14 @@ type ValidationErrorDetail struct {
 	Value   any    `json:"value,omitempty"` // 触发校验错误的原始字段值，为了防范敏感信息外泄默认置为 nil。
 }
 
+const bindParameterErrorOutput apperr.Output = "HTTP_BIND_PARAMETER_ERROR"
+
+func isBindingOrValidationCode(code apperr.ErrorCode) bool {
+	return code.Code == BodyError.Code ||
+		code.Code == ValidationError.Code ||
+		code.Output == bindParameterErrorOutput
+}
+
 // handleErrorInternal 将验证或绑定错误统一安全转换为 apperr.Error 并使用 httpresult 写出。
 // 严禁将底层内部 err.Err 暴露至响应，不循环引用 bind。
 func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
@@ -30,10 +38,12 @@ func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
 	var (
 		errorDetails      []ValidationErrorDetail
 		firstErrorMessage string
+		outCode           = BodyError
 	)
 
 	var valErrs v10.ValidationErrors
 	if errors.As(bindErr, &valErrs) {
+		outCode = ValidationError
 		translated := e.TranslateError(bindErr)
 		for i, fe := range valErrs {
 			msg := translated[fe.Field()]
@@ -51,6 +61,15 @@ func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
 			})
 		}
 	} else {
+		var existing *apperr.Error
+		if errors.As(bindErr, &existing) {
+			if !isBindingOrValidationCode(existing.Code) {
+				httpresult.Error(ctx, existing)
+				return
+			}
+			codeCopy := existing.Code
+			outCode = &codeCopy
+		}
 		detail := parseBindingErrorDetail(bindErr)
 		firstErrorMessage = detail.Message
 		errorDetails = append(errorDetails, detail)
@@ -62,7 +81,7 @@ func (e *Engine) handleErrorInternal(ctx *gin.Context, bindErr error) {
 
 	// 构造统一 apperr.Error。注意：底层根因保留在 Err 内部供日志与 unwrap 使用，
 	// httpresult.Error 内部 buildEnvelope 绝不会把 Err 序列化泄漏给客户端。
-	appErr := apperr.New(apperr.BodyError, apperr.ErrMessage(firstErrorMessage), bindErr)
+	appErr := apperr.New(outCode, apperr.ErrMessage(firstErrorMessage), bindErr)
 	appErr.Data = errorDetails
 
 	httpresult.Error(ctx, appErr)

@@ -3,10 +3,12 @@ package async
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -15,17 +17,17 @@ type testWorker struct {
 	stopCh    chan struct{}
 }
 
-func (w *testWorker) Start(_ context.Context) error {
+func (w *testWorker) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testWorker) Run(lifetimeCtx context.Context) error {
+func (w *testWorker) Run(lifetimeCtx context.Context) *apperr.Error {
 	w.startedCh <- lifetimeCtx
 	<-w.stopCh
 	return nil
 }
 
-func (w *testWorker) Stop(_ context.Context) error {
+func (w *testWorker) Stop(_ context.Context) *apperr.Error {
 	close(w.stopCh)
 	return nil
 }
@@ -53,7 +55,7 @@ func setupTestApp(t *testing.T, asyncOpts ...Option) (*application.App, context.
 		t.Fatalf("RegisterWorker failed: %v", err)
 	}
 
-	appRunErr := make(chan error, 1)
+	appRunErr := make(chan *apperr.Error, 1)
 	go func() {
 		appRunErr <- app.Run()
 	}()
@@ -69,6 +71,18 @@ func setupTestApp(t *testing.T, asyncOpts ...Option) (*application.App, context.
 	bridgeCtx := application.BridgeRequest(reqCtx, lifetimeCtx, "test-trace-12345")
 
 	return app, bridgeCtx
+}
+
+// waitActiveZero 阻塞等待池内活跃任务计数真实归零。
+//
+// 该等待基于插件内部条件变量的广播机制，不使用轮询与 sleep 断言时序。
+func waitActiveZero(t *testing.T, p *Plugin) {
+	t.Helper()
+	p.zeroMu.Lock()
+	defer p.zeroMu.Unlock()
+	for atomic.LoadInt64(&p.active) > 0 {
+		p.zeroCond.Wait()
+	}
 }
 
 func TestPlugin_NewAndInfo(t *testing.T) {
@@ -138,8 +152,10 @@ func TestPlugin_ContextDetachedFromParentCancel(t *testing.T) {
 	parentCtx, parentCancel := context.WithCancel(baseCtx)
 
 	taskExecuted := make(chan struct{})
+	releaseTask := make(chan struct{})
 	task, err := Submit(parentCtx, func(taskCtx context.Context) {
-		time.Sleep(50 * time.Millisecond)
+		// 通道屏障：任务在释放信号到达后才检查上下文状态
+		<-releaseTask
 		// 校验任务的 ctx 未被父 context 的取消所影响
 		if taskCtx.Err() != nil {
 			t.Errorf("detached context should not be canceled, got: %v", taskCtx.Err())
@@ -151,8 +167,9 @@ func TestPlugin_ContextDetachedFromParentCancel(t *testing.T) {
 	}
 
 	// 立即取消原父请求 Context
+	// 立即取消原父请求 Context，再释放任务形成确定性顺序
 	parentCancel()
-
+	close(releaseTask)
 	select {
 	case <-taskExecuted:
 	case <-time.After(1 * time.Second):
@@ -225,8 +242,10 @@ func TestPlugin_WaitWithTimeoutDoesNotCancelTask(t *testing.T) {
 	}()
 
 	taskContinued := make(chan struct{})
+	releaseTask := make(chan struct{})
 	task, err := Submit(ctx, func(taskCtx context.Context) {
-		time.Sleep(100 * time.Millisecond)
+		// 通道屏障：任务在释放信号到达后才检查上下文状态
+		<-releaseTask
 		// 校验 Wait 超时并没有取消 taskCtx
 		if taskCtx.Err() == nil {
 			close(taskContinued)
@@ -244,6 +263,9 @@ func TestPlugin_WaitWithTimeoutDoesNotCancelTask(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected context.DeadlineExceeded, got: %v", err)
 	}
+
+	// 释放任务，确认等待超时并未取消后台任务
+	close(releaseTask)
 
 	// 任务依然在后台运行且未被取消
 	select {
@@ -336,6 +358,15 @@ func TestPlugin_PoolFullRejection(t *testing.T) {
 func TestPlugin_RejectDuringStoppingAndClosed(t *testing.T) {
 	app, ctx := setupTestApp(t)
 
+	pool, getErr := application.Get[Pool](ctx, PoolKey)
+	if getErr != nil {
+		t.Fatalf("Get[Pool] failed: %v", getErr)
+	}
+	plugin, ok := pool.(*Plugin)
+	if !ok {
+		t.Fatal("容器中的池不是 *async.Plugin")
+	}
+
 	taskBlock := make(chan struct{})
 	started := make(chan struct{})
 
@@ -348,14 +379,16 @@ func TestPlugin_RejectDuringStoppingAndClosed(t *testing.T) {
 	}
 	<-started
 
-	shutdownDone := make(chan error, 1)
+	shutdownDone := make(chan *apperr.Error, 1)
 	go func() {
 		shutdownDone <- app.Shutdown()
 	}()
 
-	// 等待 App 状态转为 Stopping
-	for app.State() != application.StateStopping && app.State() != application.StateStopped {
-		time.Sleep(5 * time.Millisecond)
+	// 等待协程池准入门禁关闭（内部屏障，无需轮询与 sleep）
+	select {
+	case <-plugin.closedCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("等待协程池准入门禁关闭超时")
 	}
 
 	// 此时提交新任务应被立即拒绝为 ErrPoolClosed
@@ -430,15 +463,18 @@ func TestPlugin_IgnoreCancelTaskMakesStopWait(t *testing.T) {
 	}
 	<-started
 
-	stopReturned := make(chan error, 1)
+	plugin := p.(*Plugin)
+	stopReturned := make(chan *apperr.Error, 1)
 	go func() {
-		stopReturned <- p.(*Plugin).Stop(context.Background())
+		stopReturned <- plugin.Stop(context.Background())
 	}()
 
+	// 门禁关闭信号是确定性屏障：此刻 Stop 正在等待活跃任务归零，不可能已返回
+	<-plugin.closedCh
 	select {
-	case <-stopReturned:
-		t.Fatal("Stop must not return while active task is still running")
-	case <-time.After(50 * time.Millisecond):
+	case err := <-stopReturned:
+		t.Fatalf("Stop must not return while active task is still running, got: %v", err)
+	default:
 	}
 
 	close(taskBlock)
@@ -531,10 +567,10 @@ func TestPlugin_CrossAppAndBackgroundRejection(t *testing.T) {
 	<-aDone
 	_ = taskA.Wait()
 
-	// 安全等待 worker 归还池中，确保 running 计数安全归零
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for poolA.Running() != 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
+	// 安全等待 worker 归还池中：内部条件变量屏障确保 running 计数安全归零
+	waitActiveZero(t, poolA.(*Plugin))
+	if r := poolA.Running(); r != 0 {
+		t.Fatalf("poolA.Running() expected 0 after taskA finish, got %d", r)
 	}
 	if r := poolA.Running(); r != 0 {
 		t.Fatalf("poolA.Running() expected 0 after taskA finish, got %d", r)

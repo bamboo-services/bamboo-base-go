@@ -3,6 +3,9 @@ package toolkit
 import (
 	"fmt"
 	"time"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/valueerr"
 )
 
 // 常用时间格式常量，取值为 time 包的参考时间布局，
@@ -76,7 +79,9 @@ func FormatNow(layout string) string {
 // Parse 解析时间字符串。
 //
 // 语义与 time.Parse 一致，解析结果为 UTC 时区（无时区信息时）；
-// 解析失败时返回零值时间与错误。
+// 解析失败时返回零值时间与错误码为 [valueerr.InvalidFormat]（40013）的
+// 统一错误 [*apperr.Error]，原始解析错误保留为根因；
+// 成功路径返回的 nil 是真正的 nil 错误。
 //
 // 参数说明:
 //   - layout: 格式模板。
@@ -85,8 +90,12 @@ func FormatNow(layout string) string {
 // 返回值:
 //   - 解析后的时间。
 //   - 解析失败时返回对应错误。
-func Parse(layout, value string) (time.Time, error) {
-	return time.Parse(layout, value)
+func Parse(layout, value string) (time.Time, *apperr.Error) {
+	parsed, err := time.Parse(layout, value)
+	if err != nil {
+		return time.Time{}, valueerr.From(valueerr.KindInvalidFormat, "时间字符串格式非法", err)
+	}
+	return parsed, nil
 }
 
 // MustParse 解析时间字符串，如果解析失败则 panic。
@@ -101,7 +110,7 @@ func Parse(layout, value string) (time.Time, error) {
 // 返回值:
 //   - 解析后的时间；解析失败时 panic 并携带错误信息。
 func MustParse(layout, value string) time.Time {
-	t, err := time.Parse(layout, value)
+	t, err := Parse(layout, value)
 	if err != nil {
 		panic(fmt.Sprintf("解析时间失败: %v", err))
 	}

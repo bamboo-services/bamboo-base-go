@@ -11,6 +11,7 @@ import (
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
@@ -19,10 +20,8 @@ import (
 	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/middleware"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 )
 
 // DefaultGRPCPluginKey 是 gRPC 插件默认的 Worker 插件标识键。
@@ -35,7 +34,50 @@ var (
 	ErrServerClosed         = errors.New("grpc: 服务已停止")               // 服务已经停止或正在关机过程中，拒绝接收入站新请求。
 	ErrNoLifetimeContext    = errors.New("grpc: 缺少 lifetime context") // 缺少可信的生命周期上下文，无法完成服务启动与运行。
 	ErrStopTimeout          = errors.New("grpc: 停机等待超时")              // 服务在执行优雅停机排空等待时超过了预设的超时预算。
+	ErrNotStarted           = errors.New("grpc: 服务尚未启动")              // 插件尚未完成 [Plugin.Start]，服务不可用。
 )
+
+// normalizeLifecycleErr 按内核统一的归因顺序归一生命周期内部失败。
+//
+// 归一顺序与 application/errors.go 的 normalizeErr 保持一致：
+//   - 原因为空或 nil 载体时返回 nil，表示没有失败；
+//   - 原因链中已存在 [*apperr.Error] 时沿用其错误码与描述，并保留整条原因链；
+//   - 取消与超时经 [control.Classify] 归一为控制类错误码，原生 context 哨兵继续作为根因保留；
+//   - 其余普通原因按调用方给出的所属错误码兜底，原始原因链完整保留。
+func normalizeLifecycleErr(code *apperr.ErrorCode, msg apperr.ErrMessage, cause error) *apperr.Error {
+	if apperr.IsNil(cause) {
+		return nil
+	}
+	if structured := apperr.Find(cause); structured != nil {
+		return apperr.From(&structured.Code, structured.ErrorMessage, cause)
+	}
+	if classified := control.Classify(cause, control.PhaseOperation); classified != nil {
+		return apperr.New(&classified.Code, msg, cause)
+	}
+	return apperr.From(code, msg, cause)
+}
+
+// joinLifecycleErrs 聚合多个生命周期失败结果。
+//
+// 没有有效成员时返回 nil（真正的 nil 指针），只有一个成员时原样返回；
+// 多个成员时最外层错误使用 [apperr.FrameworkMultipleFailures]（50020），
+// 全部成员按入参顺序保留为根因，可经 errors.Is 与 errors.As 逐个遍历。
+func joinLifecycleErrs(errs ...*apperr.Error) *apperr.Error {
+	kept := make([]*apperr.Error, 0, len(errs))
+	for _, appErr := range errs {
+		if appErr != nil {
+			kept = append(kept, appErr)
+		}
+	}
+
+	switch len(kept) {
+	case 0:
+		return nil
+	case 1:
+		return kept[0]
+	}
+	return apperr.Join(apperr.FrameworkMultipleFailures, "多个生命周期阶段失败", kept...)
+}
 
 // ServiceRegistrar 是业务向 [grpc.Server] 挂载 gRPC Service 定义的回调函数。
 //
@@ -227,7 +269,7 @@ func (g *requestGate) closeGate() {
 	}
 }
 
-func (g *requestGate) waitDrained(ctx context.Context) error {
+func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	g.mu.Lock()
 	if g.inflight == 0 {
 		g.mu.Unlock()
@@ -249,7 +291,10 @@ func (g *requestGate) waitDrained(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return normalizeLifecycleErr(grpcresult.InternalError, "排空在途请求被中断", ctxErr)
+		}
+		return apperr.New(grpcresult.InternalError, "排空在途请求被中断")
 	}
 }
 
@@ -281,7 +326,7 @@ type Plugin struct {
 	lifetimeMu  sync.RWMutex
 
 	stopOnce sync.Once
-	stopErr  error
+	stopErr  *apperr.Error
 	doneChan chan struct{}
 
 	namedLog *logging.LogNamedLogger
@@ -385,17 +430,19 @@ func (p *Plugin) Addr() string {
 // Start 完成端口监听分配、Server 初始化、私有拦截器装配与业务 Service 挂载。
 //
 // 启动逻辑依循以下顺序执行：
-//  1. 状态检查：若底层 listener 已分配，说明服务重复启动，返回 [ErrServerAlreadyStarted]；
+//  1. 状态检查：若底层 listener 已分配，说明服务重复启动，返回以
+//     [ErrServerAlreadyStarted] 为根因、错误码为 [grpcresult.InvalidState] 的统一错误；
 //  2. 强制上下文派生：从传入的 ctx 中提取应用级 Force 取消分支，用于超时强杀联动；
 //  3. 端口监听：调用底层网络库在目标地址启动 TCP 监听；
 //  4. 拦截器组装：依次将框架内置入口桥接拦截器与自定义拦截器拼接成链；
 //  5. Server 初始化：创建原生 [grpc.Server] 并依次执行已注册的 [ServiceRegistrar]；
 //  6. 反射注册：若配置或环境变量开启反射，则通过 [reflection.Register] 挂载反射服务。
 //
-// 若启动过程中遇到端口占用或网络监听失败，将立即触发内部清理并返回带有地址说明的包装错误。
-func (p *Plugin) Start(ctx context.Context) error {
+// 若启动过程中遇到端口占用或网络监听失败，将立即触发内部清理，
+// 并返回错误码 [grpcresult.InternalError]、带有地址说明的统一错误，底层错误继续作为根因保留。
+func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 	if p.listener != nil {
-		return ErrServerAlreadyStarted
+		return apperr.From(grpcresult.InvalidState, "服务已启动，禁止重复启动", ErrServerAlreadyStarted)
 	}
 
 	// 派生实例私有的强制取消分支
@@ -410,7 +457,7 @@ func (p *Plugin) Start(ctx context.Context) error {
 		if p.cancelForce != nil {
 			p.cancelForce()
 		}
-		return fmt.Errorf("grpc: 监听地址 %s 失败: %w", targetAddr, err)
+		return normalizeLifecycleErr(grpcresult.InternalError, apperr.ErrMessage("监听地址 "+targetAddr+" 失败"), err)
 	}
 	p.listener = ln
 
@@ -462,13 +509,15 @@ func (p *Plugin) Start(ctx context.Context) error {
 // Run 封存应用生命周期上下文并阻塞运行 gRPC 服务监听。
 //
 // 调用方传入由应用容器注入的可信 lifetimeCtx。若在未成功执行 [Plugin.Start]
-// 之前直接调用本方法，将返回明确的编程未就绪错误。
+// 之前直接调用本方法，将返回错误码 [grpcresult.ServiceUnavailable] 的统一错误，
+// 并以 [ErrNotStarted] 作为根因。
 //
 // 该方法会持续阻塞在底层 [grpc.Server.Serve] 上，直到服务被正常关闭或外部强制终止。
-// 若服务因 [grpc.ErrServerStopped] 退出，本方法正常返回 nil，不视作异常。
-func (p *Plugin) Run(lifetimeCtx context.Context) error {
+// 若服务因 [grpc.ErrServerStopped] 退出，本方法正常返回 nil，不视作异常；
+// 其余非预期的退出原因归一为错误码 [grpcresult.InternalError] 的统一错误，底层错误继续作为根因保留。
+func (p *Plugin) Run(lifetimeCtx context.Context) *apperr.Error {
 	if p.server == nil || p.listener == nil {
-		return errors.New("grpc: 服务未完成 Start 即调用 Run")
+		return apperr.From(grpcresult.ServiceUnavailable, "服务未完成 Start 即调用 Run", ErrNotStarted)
 	}
 
 	p.lifetimeMu.Lock()
@@ -477,7 +526,7 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 
 	err := p.server.Serve(p.listener)
 	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-		return err
+		return normalizeLifecycleErr(grpcresult.InternalError, "gRPC 服务监听循环异常退出", err)
 	}
 	return nil
 }
@@ -485,9 +534,9 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 // Quiesce 执行入站关闸操作。
 //
 // 该方法通过内部准入闸门关闭新请求准入（随后到达的 RPC 请求将立即被桥接拦截器拒绝并返回
-// 包含 [apperr.ServiceUnavailable] 的状态错误），但不会调用 Stop，不会打断正在处理中的请求，
+// 包含 [grpcresult.ServiceUnavailable] 的状态错误），但不会调用 Stop，不会打断正在处理中的请求，
 // 也不分配新的停机超时预算。此方法可并发幂等调用。
-func (p *Plugin) Quiesce(ctx context.Context) error {
+func (p *Plugin) Quiesce(ctx context.Context) *apperr.Error {
 	p.gate.closeGate()
 	return nil
 }
@@ -502,7 +551,7 @@ func (p *Plugin) Quiesce(ctx context.Context) error {
 //  4. 核心保障：无超时等待飞行中的所有 Handler 与 Stream 完全排空（waitDrained），
 //     绝不因外部 ctx 截止而假返回或提前释放底层资源；
 //  5. 显式关闭 listener 并返回汇总的关闭错误。
-func (p *Plugin) Stop(ctx context.Context) error {
+func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)
 		close(p.doneChan)
@@ -511,7 +560,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return p.stopErr
 }
 
-func (p *Plugin) doStop(ctx context.Context) (stopReason error) {
+func (p *Plugin) doStop(ctx context.Context) (stopReason *apperr.Error) {
 	defer func() {
 		if p.cancelForce != nil {
 			p.cancelForce()
@@ -521,7 +570,7 @@ func (p *Plugin) doStop(ctx context.Context) (stopReason error) {
 	if p.server == nil {
 		if p.listener != nil {
 			if err := p.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-				stopReason = errors.Join(stopReason, err)
+				stopReason = normalizeLifecycleErr(grpcresult.InternalError, "关闭监听器失败", err)
 			}
 		}
 		return stopReason
@@ -542,7 +591,7 @@ func (p *Plugin) doStop(ctx context.Context) (stopReason error) {
 	case <-gracefulDone:
 		// 正常排空结束
 	case <-ctx.Done():
-		stopReason = ctx.Err()
+		stopReason = normalizeLifecycleErr(grpcresult.InternalError, "停机等待被取消或超时", ctx.Err())
 		p.server.Stop()
 	case <-p.forceCtx.Done():
 		// App 正常 Force 信号不作为 stopReason 失败错误
@@ -561,13 +610,13 @@ func (p *Plugin) doStop(ctx context.Context) (stopReason error) {
 	// 使用无超时的等待，确保 Handler 完全结束才释放底层资源
 	drainErr := p.gate.waitDrained(context.Background())
 	if drainErr != nil && stopReason == nil {
-		stopReason = drainErr
+		stopReason = normalizeLifecycleErr(grpcresult.InternalError, "排空在途请求失败", drainErr)
 	}
 
 	// 6. 显式关闭 listener（未 Serve 的 listener 不被 Server.GracefulStop 管理，幂等忽略 net.ErrClosed）
 	if p.listener != nil {
 		if err := p.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-			stopReason = errors.Join(stopReason, err)
+			stopReason = joinLifecycleErrs(stopReason, normalizeLifecycleErr(grpcresult.InternalError, "关闭监听器失败", err))
 		}
 	}
 
@@ -590,39 +639,28 @@ func extractRequestUUID(ctx context.Context) string {
 	return uuid.NewString()
 }
 
-// normalizeRPCError 对 RPC 调用过程产生的 error 进行标准化安全归一：
-// 1. nil 原样返回 nil；
-// 2. errors.As(*apperr.Error) 转为 grpcresult.ToStatusError；
-// 3. context.Canceled / context.DeadlineExceeded 转换为对应标准 gRPC status 与固定 sentinel 文案（避免包装错泄漏 secret）；
-// 4. 显式带有 gRPC status 的调用错误保持既有状态与语义不变；
-// 5. 其余普通未知 error 用 namedLog 记录内部原错，并返回包含 ServerInternalError 的安全 50000 status 错误。
+// normalizeRPCError 按 spec/0003 R12 契约对 RPC 调用产生的 error 执行协议边界转换：
+// 1. nil / typed-nil / codes.OK 原样返回 nil；
+// 2. 链内含 *apperr.Error 转为 grpcresult.ToStatusError；
+// 3. context.Canceled / context.DeadlineExceeded 转为对应控制码与固定安全文案，并附带 BaseResponse；
+// 4. 合法非 OK 原生 gRPC status 保留原状态、显式文案与原 Details，缺 BaseResponse 时补齐单个兼容信封；
+// 5. 其余普通未知 error 记录内部日志并返回 GRPC_INTERNAL_ERROR（50011）安全 status 错误。
 func (p *Plugin) normalizeRPCError(ctx context.Context, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	var appErr *apperr.Error
-	if errors.As(err, &appErr) {
-		return grpcresult.ToStatusError(ctx, appErr)
-	}
-
-	if errors.Is(err, context.Canceled) {
-		return status.Error(codes.Canceled, "上下文已取消")
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return status.Error(codes.DeadlineExceeded, "请求超时")
-	}
-
-	if _, ok := status.FromError(err); ok {
-		return err
-	}
-
-	if p.namedLog != nil {
-		p.namedLog.Error(ctx, fmt.Sprintf("gRPC 调用未预期内部错误: %v", err))
-	}
-
-	internalErr := apperr.New(apperr.ServerInternalError, "系统内部异常", err)
-	return grpcresult.ToStatusError(ctx, internalErr)
+	return grpcresult.NormalizeToStatusError(
+		ctx,
+		err,
+		control.PhaseOperation,
+		func(unknown error) {
+			if p.namedLog != nil {
+				p.namedLog.Error(ctx, fmt.Sprintf("gRPC 调用未预期内部错误: %v", unknown))
+			}
+		},
+		func(reason string) {
+			if p.namedLog != nil {
+				p.namedLog.Warn(ctx, reason)
+			}
+		},
+	)
 }
 
 // unaryBridgeInterceptor 实现一元调用的入口桥接：准入关卡、生命周期挂载、时间/追踪注入、
@@ -630,7 +668,7 @@ func (p *Plugin) normalizeRPCError(ctx context.Context, err error) error {
 func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		if !p.gate.enter() {
-			return nil, grpcresult.ToStatusError(ctx, apperr.New(apperr.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
+			return nil, grpcresult.ToStatusError(ctx, apperr.New(grpcresult.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
 		}
 		defer p.gate.leave()
 
@@ -663,7 +701,7 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 				if p.namedLog != nil {
 					p.namedLog.Error(bridgedCtx, fmt.Sprintf("gRPC 一元调用发生 panic: %v", r))
 				}
-				panicErr := apperr.New(apperr.ServerInternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
+				panicErr := apperr.New(grpcresult.InternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
 				resp = nil
 				err = grpcresult.ToStatusError(bridgedCtx, panicErr)
 			}
@@ -688,10 +726,12 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		if err != nil {
-			return nil, p.normalizeRPCError(bridgedCtx, err)
+			if normErr := p.normalizeRPCError(bridgedCtx, err); normErr != nil {
+				return nil, normErr
+			}
 		}
 		if resp == nil {
-			return nil, grpcresult.ToStatusError(bridgedCtx, apperr.New(apperr.DeveloperError, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」"))
+			return nil, grpcresult.ToStatusError(bridgedCtx, apperr.New(grpcresult.ResponseMissing, "没有正常输出信息或报错信息，请检查代码逻辑「开发者错误」"))
 		}
 
 		return resp, nil
@@ -703,7 +743,7 @@ func (p *Plugin) unaryBridgeInterceptor() grpc.UnaryServerInterceptor {
 func (p *Plugin) streamBridgeInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 		if !p.gate.enter() {
-			return grpcresult.ToStatusError(ss.Context(), apperr.New(apperr.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
+			return grpcresult.ToStatusError(ss.Context(), apperr.New(grpcresult.ServiceUnavailable, "服务不可用或正在关机", ErrServerClosed))
 		}
 		defer p.gate.leave()
 
@@ -735,7 +775,7 @@ func (p *Plugin) streamBridgeInterceptor() grpc.StreamServerInterceptor {
 				if p.namedLog != nil {
 					p.namedLog.Error(bridgedCtx, fmt.Sprintf("gRPC 流式调用发生 panic: %v", r))
 				}
-				panicErr := apperr.New(apperr.ServerInternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
+				panicErr := apperr.New(grpcresult.InternalError, "系统内部异常", fmt.Errorf("panic: %v", r))
 				err = grpcresult.ToStatusError(bridgedCtx, panicErr)
 			}
 		}()

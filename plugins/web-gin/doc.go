@@ -69,7 +69,20 @@
 //   - [ErrServerAlreadyStarted]：服务已启动或处于启动中；
 //   - [ErrServerClosed]：服务处于关机或已停止状态，拒绝接纳新请求；
 //   - [ErrNoLifetimeContext]：缺少有效的应用生命周期上下文；
-//   - [ErrStopTimeout]：服务停机等待超时。
+//   - [ErrStopTimeout]：服务停机等待超时；
+//   - [ErrNotStarted]：尚未完成 [Plugin.Start]，服务不可用。
+//
+// # 生命周期错误契约
+//
+// [Plugin.Start]、[Plugin.Run]、[Plugin.Quiesce] 与 [Plugin.Stop] 统一返回
+// [*apperr.Error]，成功路径返回真正的 nil 指针，失败路径按下表归一：
+//
+//   - 重复启动：[httpresult.InvalidState]，根因保留 [ErrServerAlreadyStarted]；
+//   - 未启动即调用 [Plugin.Run]：[httpresult.ServiceUnavailable]，根因保留 [ErrNotStarted]；
+//   - 引擎初始化、监听绑定、监听循环异常退出与停机失败：[httpresult.InternalError]，
+//     底层错误（地址占用、关闭失败等）继续作为根因保留；
+//   - 启动或停机上下文取消与超时：经 [foundation/v2/control] 归一为控制类错误码，
+//     原生 context 哨兵继续作为根因保留。
 //
 // 可通过 [WithTimeouts] 配置 HTTP 读、写、空闲及停机等待超时时间。
 //

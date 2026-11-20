@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/plugins/async/v2"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cron/v2"
@@ -24,7 +25,7 @@ type cronTargetComponent struct {
 	pool async.Pool
 }
 
-func (c *cronTargetComponent) Start(ctx context.Context) error {
+func (c *cronTargetComponent) Start(ctx context.Context) *apperr.Error {
 	pool, getPoolErr := application.Get[async.Pool](ctx, async.PoolKey)
 	if getPoolErr != nil {
 		return getPoolErr
@@ -33,24 +34,24 @@ func (c *cronTargetComponent) Start(ctx context.Context) error {
 	return nil
 }
 
-func (c *cronTargetComponent) Run(ctx context.Context) error {
+func (c *cronTargetComponent) Run(ctx context.Context) *apperr.Error {
 	task, err := c.pool.Submit(ctx, func(taskCtx context.Context) {
 		fmt.Printf("[async] executed job under lifetime context: %s\n", time.Now().Format(time.RFC3339))
 	})
 	if err != nil {
-		return fmt.Errorf("submit async task failed: %w", err)
+		return apperr.From(&err.Code, "提交异步任务失败", err)
 	}
 	if waitErr := task.Wait(); waitErr != nil {
-		return fmt.Errorf("wait async task failed: %w", waitErr)
+		return apperr.From(&waitErr.Code, "等待异步任务失败", waitErr)
 	}
 	return nil
 }
 
-func (c *cronTargetComponent) Quiesce(context.Context) error {
+func (c *cronTargetComponent) Quiesce(context.Context) *apperr.Error {
 	return nil
 }
 
-func (c *cronTargetComponent) Stop(context.Context) error {
+func (c *cronTargetComponent) Stop(context.Context) *apperr.Error {
 	return nil
 }
 

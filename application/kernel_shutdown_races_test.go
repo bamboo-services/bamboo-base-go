@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -17,17 +18,17 @@ type blockStartPlugin struct {
 	stopCalled   chan struct{}
 }
 
-func (p *blockStartPlugin) Start(ctx context.Context) error {
+func (p *blockStartPlugin) Start(ctx context.Context) *apperr.Error {
 	close(p.startEntered)
 	select {
 	case <-p.releaseStart:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return ctxErrToAppErr(ctx.Err())
 	}
 }
 
-func (p *blockStartPlugin) Stop(ctx context.Context) error {
+func (p *blockStartPlugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopped.Store(true)
 	select {
 	case <-p.stopCalled:
@@ -55,7 +56,7 @@ func TestF2_ShutdownDuringStartClaim(t *testing.T) {
 		t.Fatalf("register tool failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -68,7 +69,7 @@ func TestF2_ShutdownDuringStartClaim(t *testing.T) {
 	}
 
 	// Trigger concurrent Shutdown while Start is blocked
-	shutErrCh := make(chan error, 1)
+	shutErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		shutErrCh <- app.Shutdown()
 	}()
@@ -91,6 +92,10 @@ func TestF2_ShutdownDuringStartClaim(t *testing.T) {
 	case err := <-runErrCh:
 		if !errors.Is(err, ErrStartupInterrupted) {
 			t.Fatalf("expected ErrStartupInterrupted from Run, got: %v", err)
+		}
+		if err.Code.Code != apperr.FrameworkComponentInvalidState.Code {
+			t.Fatalf("expected single startup interruption code %d (FrameworkComponentInvalidState), got %d (%v)",
+				apperr.FrameworkComponentInvalidState.Code, err.Code.Code, err)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for Run to return")
@@ -116,8 +121,8 @@ type ignoreCtxWorker struct {
 	releaseRun chan struct{}
 }
 
-func (w *ignoreCtxWorker) Start(ctx context.Context) error { return nil }
-func (w *ignoreCtxWorker) Stop(ctx context.Context) error {
+func (w *ignoreCtxWorker) Start(ctx context.Context) *apperr.Error { return nil }
+func (w *ignoreCtxWorker) Stop(ctx context.Context) *apperr.Error {
 	select {
 	case <-w.stopCalled:
 	default:
@@ -127,7 +132,7 @@ func (w *ignoreCtxWorker) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (w *ignoreCtxWorker) Run(ctx context.Context) error {
+func (w *ignoreCtxWorker) Run(ctx context.Context) *apperr.Error {
 	close(w.started)
 	// Ignore ctx.Done() completely until releaseRun
 	<-w.releaseRun
@@ -171,7 +176,7 @@ func TestF4_StopNilWhileRunBlocks(t *testing.T) {
 		t.Fatal("timed out waiting for worker Run to start")
 	}
 
-	shutErrCh := make(chan error, 1)
+	shutErrCh := make(chan *apperr.Error, 1)
 	startShut := time.Now()
 	go func() {
 		shutErrCh <- app.Shutdown()
@@ -201,7 +206,7 @@ func TestF4_StopWinsBeforeRun(t *testing.T) {
 	key := ctxkey.Key("test_f4_stopwins")
 	entered := make(chan struct{}, 1)
 	w := &stubWorker{
-		runFn: func(ctx context.Context) error {
+		runFn: func(ctx context.Context) *apperr.Error {
 			entered <- struct{}{}
 			return nil
 		},
@@ -231,7 +236,7 @@ func TestF4_StopWinsBeforeRun(t *testing.T) {
 	app.state = StateRunning
 	app.stateMu.Unlock()
 
-	watchdogErrChan := make(chan error, 1)
+	watchdogErrChan := make(chan *apperr.Error, 1)
 	app.launchWorkers(watchdogErrChan)
 
 	select {
@@ -242,12 +247,12 @@ func TestF4_StopWinsBeforeRun(t *testing.T) {
 }
 
 type stubWorker struct {
-	runFn func(ctx context.Context) error
+	runFn func(ctx context.Context) *apperr.Error
 }
 
-func (s *stubWorker) Start(ctx context.Context) error { return nil }
-func (s *stubWorker) Stop(ctx context.Context) error  { return nil }
-func (s *stubWorker) Run(ctx context.Context) error {
+func (s *stubWorker) Start(ctx context.Context) *apperr.Error { return nil }
+func (s *stubWorker) Stop(ctx context.Context) *apperr.Error  { return nil }
+func (s *stubWorker) Run(ctx context.Context) *apperr.Error {
 	if s.runFn != nil {
 		return s.runFn(ctx)
 	}
@@ -274,13 +279,13 @@ func TestF3_AppStoppingCancelsQueueImmediately(t *testing.T) {
 	}, func() RunnablePlugin {
 		factoryCalls.Add(1)
 		return &stubRunnable{
-			runFn: func(ctx context.Context) error {
+			runFn: func(ctx context.Context) *apperr.Error {
 				close(activeRunning)
 				select {
 				case <-releaseActive:
 					return nil
 				case <-ctx.Done():
-					return ctx.Err()
+					return ctxErrToAppErr(ctx.Err())
 				}
 			},
 		}
@@ -293,7 +298,7 @@ func TestF3_AppStoppingCancelsQueueImmediately(t *testing.T) {
 
 	if err := app.RegisterWorker(PluginInfo{Key: workerKey, Mode: ModeWorker}, func() RunnablePlugin {
 		return &stubRunnable{
-			runFn: func(ctx context.Context) error {
+			runFn: func(ctx context.Context) *apperr.Error {
 				// 1. Activate active task
 				h1, err := app.componentEngine.Activate(ctx, compKey)
 				if err != nil {
@@ -317,16 +322,16 @@ func TestF3_AppStoppingCancelsQueueImmediately(t *testing.T) {
 				// h2 (queued) should be cancelled promptly
 				res2, _ := h2.Wait(ctx)
 				if res2.Dispatched {
-					return errors.New("expected queued item not dispatched")
+					return apperr.New(apperr.FrameworkInternalError, "expected queued item not dispatched")
 				}
 				if !res2.CancelRequested || res2.CancelErr == nil {
-					return errors.New("expected queued item CancelRequested with CancelErr")
+					return apperr.New(apperr.FrameworkInternalError, "expected queued item CancelRequested with CancelErr")
 				}
 
 				// active task should NOT be cancelled yet (grace not elapsed)
 				select {
 				case <-ctx.Done():
-					return errors.New("worker ctx cancelled prematurely")
+					return apperr.New(apperr.FrameworkInternalError, "worker ctx cancelled prematurely")
 				default:
 				}
 
@@ -338,7 +343,7 @@ func TestF3_AppStoppingCancelsQueueImmediately(t *testing.T) {
 		t.Fatalf("register worker failed: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -359,12 +364,12 @@ func TestF3_AppStoppingCancelsQueueImmediately(t *testing.T) {
 }
 
 type stubRunnable struct {
-	runFn func(ctx context.Context) error
+	runFn func(ctx context.Context) *apperr.Error
 }
 
-func (s *stubRunnable) Start(ctx context.Context) error { return nil }
-func (s *stubRunnable) Stop(ctx context.Context) error  { return nil }
-func (s *stubRunnable) Run(ctx context.Context) error {
+func (s *stubRunnable) Start(ctx context.Context) *apperr.Error { return nil }
+func (s *stubRunnable) Stop(ctx context.Context) *apperr.Error  { return nil }
+func (s *stubRunnable) Run(ctx context.Context) *apperr.Error {
 	if s.runFn != nil {
 		return s.runFn(ctx)
 	}

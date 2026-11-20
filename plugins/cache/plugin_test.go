@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
@@ -106,18 +107,18 @@ type testLifetimeWorker struct {
 	ctxChan chan context.Context
 }
 
-func (w *testLifetimeWorker) Start(ctx context.Context) error {
+func (w *testLifetimeWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *testLifetimeWorker) Run(ctx context.Context) error {
+func (w *testLifetimeWorker) Run(ctx context.Context) *apperr.Error {
 	w.ctxChan <- ctx
 	close(w.ready)
 	<-ctx.Done()
 	return nil
 }
 
-func (w *testLifetimeWorker) Stop(ctx context.Context) error {
+func (w *testLifetimeWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -146,7 +147,7 @@ func runWithCacheApp(t *testing.T, opts ...Option) (context.Context, func()) {
 		t.Fatalf("app.RegisterWorker failed: %v", err)
 	}
 
-	errCh := make(chan error, 1)
+	errCh := make(chan *apperr.Error, 1)
 	go func() {
 		errCh <- app.Run()
 	}()

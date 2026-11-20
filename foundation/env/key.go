@@ -3,7 +3,6 @@ package env
 import (
 	"database/sql/driver"
 	"encoding/xml"
-	"fmt"
 	"os"
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/typed"
@@ -15,6 +14,11 @@ import (
 // 零值为空字符串，[Key.IsValid] 返回 false。
 // 校验与编解码行为与 [typed.String] 对应方法一致：编码前先校验键名，
 // 解码仅在候选值校验成功后写回，失败不改变原值。
+//
+// 十三个标准接口方法保留标准库要求的固定签名，失败时返回 [*apperr.Error]：
+// 受控键名语法不合法为 40013，输入源类型不合法（JSON null 与非字符串、
+// 嵌套 XML 子元素、SQL NULL 与非 string/[]byte）为 40015，
+// 接收器为 nil 为 50019。
 type Key typed.String
 
 var (
@@ -68,12 +72,12 @@ func (k Key) MarshalText() ([]byte, error) {
 }
 
 // UnmarshalText 实现 encoding.TextUnmarshaler。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.UnmarshalText] 一致，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) UnmarshalText(text []byte) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalText(text); err != nil {
@@ -91,12 +95,12 @@ func (k Key) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary 实现 encoding.BinaryUnmarshaler。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.UnmarshalBinary] 一致，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) UnmarshalBinary(data []byte) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalBinary(data); err != nil {
@@ -114,12 +118,12 @@ func (k Key) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON 实现 json.Unmarshaler。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.UnmarshalJSON] 一致：拒绝 JSON null 与非字符串，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) UnmarshalJSON(raw []byte) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalJSON(raw); err != nil {
@@ -137,12 +141,12 @@ func (k Key) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 }
 
 // UnmarshalXML 实现 xml.Unmarshaler。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.UnmarshalXML] 一致：拒绝空内容与嵌套子元素，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalXML(d, start); err != nil {
@@ -160,12 +164,12 @@ func (k Key) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 }
 
 // UnmarshalXMLAttr 实现 xml.UnmarshalerAttr。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.UnmarshalXMLAttr] 一致，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) UnmarshalXMLAttr(attr xml.Attr) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.UnmarshalXMLAttr(attr); err != nil {
@@ -183,12 +187,12 @@ func (k Key) Value() (driver.Value, error) {
 }
 
 // Scan 实现 sql.Scanner。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.Scan] 一致：仅接受 string 与 []byte、拒绝 NULL，
 // 仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) Scan(src any) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.Scan(src); err != nil {
@@ -199,12 +203,12 @@ func (k *Key) Scan(src any) error {
 }
 
 // Set 实现 flag.Value，解析命令行参数值并写回。
-// 接收器为 nil 时返回 "env.Key: nil receiver" 错误；
+// 接收器为 nil 时返回错误（50019）；
 // 行为与 [typed.String.Set] 一致，配合 [Key.String] 使 *Key
 // 完整满足 [flag.Value]；仅当候选值校验成功后写回，失败不改变原值。
 func (k *Key) Set(raw string) error {
 	if k == nil {
-		return fmt.Errorf("env.Key: nil receiver")
+		return nilReceiverError()
 	}
 	var candidate typed.String
 	if err := candidate.Set(raw); err != nil {

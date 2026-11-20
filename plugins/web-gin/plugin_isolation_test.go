@@ -39,11 +39,11 @@ type toolPlugin struct {
 	value  string
 }
 
-func (p *toolPlugin) Start(_ context.Context) error {
+func (p *toolPlugin) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (p *toolPlugin) Stop(_ context.Context) error {
+func (p *toolPlugin) Stop(_ context.Context) *apperr.Error {
 	return nil
 }
 
@@ -65,11 +65,11 @@ func newWitnessWorker() *witnessWorker {
 	}
 }
 
-func (w *witnessWorker) Start(_ context.Context) error {
+func (w *witnessWorker) Start(_ context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *witnessWorker) Run(ctx context.Context) error {
+func (w *witnessWorker) Run(ctx context.Context) *apperr.Error {
 	w.runCtx = ctx
 	w.once.Do(func() {
 		close(w.ready)
@@ -82,7 +82,7 @@ func (w *witnessWorker) RunContext() context.Context {
 	return w.runCtx
 }
 
-func (w *witnessWorker) Stop(_ context.Context) error {
+func (w *witnessWorker) Stop(_ context.Context) *apperr.Error {
 	return nil
 }
 
@@ -128,7 +128,7 @@ func buildApp(
 		engine.POST("/test", func(c *gin.Context) {
 			b := bind.FromContext(c)
 			if b == nil {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "binder not injected", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "binder not injected", nil))
 				return
 			}
 
@@ -141,23 +141,23 @@ func buildApp(
 			reqCtx := c.Request.Context()
 			reqKey := ctxkey.GetRequestKey(reqCtx)
 			if reqKey == "" {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "missing RequestKey", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "missing RequestKey", nil))
 				return
 			}
 
 			svc, hGetErr := application.Get[string](reqCtx, resourceKey)
 			if hGetErr != nil || svc == "" {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get resource in handler", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "failed to get resource in handler", nil))
 				return
 			}
 
 			cVal := c.Value(resourceKey)
 			if cVal == nil {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get resource via c.Value", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "failed to get resource via c.Value", nil))
 				return
 			}
 			if strVal, ok := cVal.(string); !ok || strVal != toolVal {
-				httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "resource mismatch via c.Value", nil))
+				httpresult.AbortError(c, apperr.New(httpresult.InternalError, "resource mismatch via c.Value", nil))
 				return
 			}
 
@@ -165,7 +165,7 @@ func buildApp(
 		})
 	}
 
-	validatorRegistrar := func(vEng *validator.Engine) error {
+	validatorRegistrar := func(vEng *validator.Engine) *apperr.Error {
 		return vEng.RegisterValidation("same_rule", func(fl v10.FieldLevel) bool {
 			return fl.Field().String() == expectedRuleVal
 		})
@@ -265,7 +265,7 @@ func TestWebGin_TwoApps_FullIsolation(t *testing.T) {
 	appA, _, witnessA, capturedA := buildApp(t, resourceKey, "VALUE_A", "ONLY_A", true)
 	appB, _, witnessB, capturedB := buildApp(t, resourceKey, "VALUE_B", "ONLY_B", true)
 
-	runErrChA := make(chan error, 1)
+	runErrChA := make(chan *apperr.Error, 1)
 	go func() {
 		runErrChA <- appA.Run()
 	}()
@@ -277,7 +277,7 @@ func TestWebGin_TwoApps_FullIsolation(t *testing.T) {
 		}
 	})
 
-	runErrChB := make(chan error, 1)
+	runErrChB := make(chan *apperr.Error, 1)
 	go func() {
 		runErrChB <- appB.Run()
 	}()
@@ -452,7 +452,7 @@ func TestWebGin_UndeclaredDependency_RejectedInStart(t *testing.T) {
 		t.Fatalf("RegisterTool failed: %v", err)
 	}
 
-	startAccessErrCh := make(chan error, 1)
+	startAccessErrCh := make(chan *apperr.Error, 1)
 	routeRegistrar := func(startCtx context.Context, engine *gin.Engine) {
 		_, getErr := application.Get[string](startCtx, resourceKey)
 		startAccessErrCh <- getErr
@@ -469,7 +469,7 @@ func TestWebGin_UndeclaredDependency_RejectedInStart(t *testing.T) {
 	}
 
 	runDoneCh := make(chan struct{})
-	var runErr error
+	var runErr *apperr.Error
 	go func() {
 		runErr = app.Run()
 		close(runDoneCh)
@@ -482,7 +482,7 @@ func TestWebGin_UndeclaredDependency_RejectedInStart(t *testing.T) {
 		}
 	})
 
-	var startAccessErr error
+	var startAccessErr *apperr.Error
 	select {
 	case startAccessErr = <-startAccessErrCh:
 	case <-time.After(2 * time.Second):

@@ -26,15 +26,14 @@ type sampleData struct {
 func TestJSONCodec(t *testing.T) {
 	codec := driver.JSONCodec{}
 	orig := sampleData{Name: "alice", Age: 18}
-
 	encodedBytes, err := codec.Marshal(orig)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	expectedJSON, err := json.Marshal(orig)
-	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
+	expectedJSON, jsonErr := json.Marshal(orig)
+	if jsonErr != nil {
+		t.Fatalf("json.Marshal failed: %v", jsonErr)
 	}
 	if !bytes.Equal(encodedBytes, expectedJSON) {
 		t.Fatalf("expected marshaled JSON %s, got %s", expectedJSON, encodedBytes)
@@ -51,6 +50,8 @@ func TestJSONCodec(t *testing.T) {
 	var invalid sampleData
 	if err := codec.Unmarshal([]byte("invalid json"), &invalid); err == nil {
 		t.Fatalf("expected error on invalid JSON, got nil")
+	} else if err.Code.Code != driver.CodecFailed.Code {
+		t.Fatalf("expected CodecFailed (%d), got %d", driver.CodecFailed.Code, err.Code.Code)
 	}
 }
 

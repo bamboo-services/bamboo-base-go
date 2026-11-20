@@ -8,23 +8,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 // mockTool 实现基础 Tool
 type mockTool struct {
-	startFunc func(ctx context.Context) error
-	stopFunc  func(ctx context.Context) error
+	startFunc func(ctx context.Context) *apperr.Error
+	stopFunc  func(ctx context.Context) *apperr.Error
 }
 
-func (m *mockTool) Start(ctx context.Context) error {
+func (m *mockTool) Start(ctx context.Context) *apperr.Error {
 	if m.startFunc != nil {
 		return m.startFunc(ctx)
 	}
 	return nil
 }
 
-func (m *mockTool) Stop(ctx context.Context) error {
+func (m *mockTool) Stop(ctx context.Context) *apperr.Error {
 	if m.stopFunc != nil {
 		return m.stopFunc(ctx)
 	}
@@ -44,10 +45,10 @@ func (m *mockExposingTool) Expose() map[ctxkey.Key]any {
 // mockWorker 实现基础 Worker
 type mockWorker struct {
 	mockTool
-	runFunc func(ctx context.Context) error
+	runFunc func(ctx context.Context) *apperr.Error
 }
 
-func (m *mockWorker) Run(ctx context.Context) error {
+func (m *mockWorker) Run(ctx context.Context) *apperr.Error {
 	if m.runFunc != nil {
 		return m.runFunc(ctx)
 	}
@@ -99,7 +100,7 @@ func TestApp_Run_OnceAndAlreadyRun(t *testing.T) {
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				close(barrier)
 				<-ctx.Done()
 				return nil
@@ -107,7 +108,7 @@ func TestApp_Run_OnceAndAlreadyRun(t *testing.T) {
 		}
 	})
 
-	errChan := make(chan error, 1)
+	errChan := make(chan *apperr.Error, 1)
 	go func() {
 		errChan <- app.Run()
 	}()
@@ -159,21 +160,21 @@ func TestApp_StartFailureRollback(t *testing.T) {
 
 	_ = app.RegisterTool(PluginInfo{Key: toolKey1}, func() Plugin {
 		return &mockTool{
-			startFunc: func(ctx context.Context) error { return nil },
-			stopFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error { return nil },
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				stop1Called.Store(true)
 				return nil
 			},
 		}
 	})
 
-	startErr2 := errors.New("start failed on tool 2")
+	startErr2 := apperr.New(apperr.FrameworkInternalError, "start failed on tool 2")
 	_ = app.RegisterTool(PluginInfo{Key: toolKey2, Requires: []ctxkey.Key{toolKey1}}, func() Plugin {
 		return &mockTool{
-			startFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error {
 				return startErr2
 			},
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				stop2Called.Store(true)
 				return nil
 			},
@@ -199,7 +200,7 @@ func TestApp_WorkerUnexpectedExit(t *testing.T) {
 
 	_ = app.RegisterWorker(PluginInfo{Key: workerKey}, func() RunnablePlugin {
 		return &mockWorker{
-			runFunc: func(ctx context.Context) error {
+			runFunc: func(ctx context.Context) *apperr.Error {
 				// 立即早退返回 nil
 				return nil
 			},
@@ -223,7 +224,7 @@ func TestApp_ExposeValidationFailure(t *testing.T) {
 	_ = app.RegisterTool(PluginInfo{Key: k, Provides: []ctxkey.Key{res}}, func() Plugin {
 		return &mockExposingTool{
 			mockTool: mockTool{
-				stopFunc: func(ctx context.Context) error {
+				stopFunc: func(ctx context.Context) *apperr.Error {
 					stopCalled.Store(true)
 					return nil
 				},
@@ -260,7 +261,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 
 	var dbStopCount atomic.Int64
 	dbTool := &mockTool{
-		stopFunc: func(ctx context.Context) error {
+		stopFunc: func(ctx context.Context) *apperr.Error {
 			dbStopCount.Add(1)
 			return nil
 		},
@@ -275,7 +276,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 		Requires: []ctxkey.Key{dbKey},
 	}, func() Plugin {
 		return &mockTool{
-			stopFunc: func(ctx context.Context) error {
+			stopFunc: func(ctx context.Context) *apperr.Error {
 				panic("stop critical hardware failure")
 			},
 		}
@@ -287,7 +288,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 	var stopOnce sync.Once
 
 	worker := &mockWorker{
-		runFunc: func(ctx context.Context) error {
+		runFunc: func(ctx context.Context) *apperr.Error {
 			defer close(runDone)
 			close(ready)
 			select {
@@ -297,7 +298,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 			return nil
 		},
 	}
-	worker.stopFunc = func(ctx context.Context) error {
+	worker.stopFunc = func(ctx context.Context) *apperr.Error {
 		stopOnce.Do(func() {
 			close(stopRun)
 		})
@@ -305,7 +306,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 		case <-runDone:
 			return nil
 		case <-ctx.Done():
-			return ctx.Err()
+			return ctxErrToAppErr(ctx.Err())
 		}
 	}
 
@@ -313,7 +314,7 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 		return worker
 	})
 
-	errChan := make(chan error, 1)
+	errChan := make(chan *apperr.Error, 1)
 	go func() {
 		errChan <- app.Run()
 	}()
@@ -327,11 +328,21 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 	}
 
 	if shutdownErr := app.Shutdown(); shutdownErr != nil {
-		// Stop panic 也会反映在关机错误中
+		// Stop panic 引发关机不完整时，最外层错误码必须保持 FrameworkShutdownIncomplete (50006)
+		if shutdownErr.Code.Code != apperr.FrameworkShutdownIncomplete.Code {
+			t.Fatalf("expected Shutdown outer code %d (FrameworkShutdownIncomplete), got %d (%v)",
+				apperr.FrameworkShutdownIncomplete.Code, shutdownErr.Code.Code, shutdownErr)
+		}
+		var hookPanic *HookPanicError
+		if !errors.As(shutdownErr, &hookPanic) {
+			t.Fatalf("expected HookPanicError preserved in Shutdown return, got %v", shutdownErr)
+		}
 		t.Logf("shutdown returned error: %v", shutdownErr)
+	} else {
+		t.Fatalf("expected non-nil shutdown error on stop panic")
 	}
 
-	var err error
+	var err *apperr.Error
 	select {
 	case err = <-errChan:
 	case <-time.After(5 * time.Second):
@@ -340,6 +351,10 @@ func TestApp_StopPanic_RetainsDependency(t *testing.T) {
 
 	if err == nil {
 		t.Fatalf("expected error from stop panic, got nil")
+	}
+	if err.Code.Code != apperr.FrameworkShutdownIncomplete.Code {
+		t.Fatalf("expected Run outer code %d (FrameworkShutdownIncomplete), got %d (%v)",
+			apperr.FrameworkShutdownIncomplete.Code, err.Code.Code, err)
 	}
 
 	var incompleteErr *StopIncompleteError
@@ -405,11 +420,11 @@ func TestApp_Context_RequiresStartScopeWhitelist(t *testing.T) {
 	var undeclaredErr error
 	_ = app.RegisterTool(PluginInfo{Key: k2}, func() Plugin { // 未在 Requires 声明 k1
 		return &mockTool{
-			startFunc: func(ctx context.Context) error {
+			startFunc: func(ctx context.Context) *apperr.Error {
 				_, appErr := Get[Plugin](ctx, k1)
 				if appErr != nil {
 					undeclaredErr = appErr.Err
-					return appErr.Err
+					return appErr
 				}
 				return nil
 			},

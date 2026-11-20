@@ -77,8 +77,8 @@ func TestToStatusError_NilError(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected BaseResponse detail, got %T", st.Details()[0])
 	}
-	if detail.Code != uint64(apperr.ServerInternalError.Code) {
-		t.Errorf("expected code %d, got %d", apperr.ServerInternalError.Code, detail.Code)
+	if detail.Code != uint64(InternalError.Code) {
+		t.Errorf("expected code %d, got %d", InternalError.Code, detail.Code)
 	}
 }
 

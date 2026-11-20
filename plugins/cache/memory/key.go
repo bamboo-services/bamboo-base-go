@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
@@ -26,11 +27,23 @@ func NewKeyCache[K any, V any](store *Store, codec driver.Codec, enc driver.KeyE
 	return &KeyCache[K, V]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 [Store] 时 panic。
+func (c *KeyCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.store == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // Get 从内存中读取键对应的值。
 //
-// 不存在或已过期时返回 nil, false, nil。反序列化失败返回 nil, false, err。
+// 不存在或已过期时返回 nil, false, nil。反序列化失败返回 nil, false, 错误，
+// 且保留编解码器给出的原始错误码（[driver.CodecFailed] 50038）。
 // [Store.Get] 在锁内返回 Value 的引用拷贝，与并发 Set 不产生 data race。
-func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
+func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -56,7 +69,10 @@ func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
 //
 // NoSlide 对 KeyCache 无意义（Set 本身就是整体覆盖），传入时被忽略。
 // 无任何条件选项时走 [Store.Set] 保持原有行为。
-func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...driver.SetOption) error {
+func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if value == nil {
 		return c.Delete(ctx, key)
 	}
@@ -76,12 +92,18 @@ func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...drive
 }
 
 // Exists 判断键是否存在且未过期。
-func (c *KeyCache[K, V]) Exists(ctx context.Context, key K) (bool, error) {
+func (c *KeyCache[K, V]) Exists(ctx context.Context, key K) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	return c.store.Exists(driver.EncodeKey(c.enc, key)), nil
 }
 
 // Delete 删除键。键不存在时不报错。
-func (c *KeyCache[K, V]) Delete(ctx context.Context, key K) error {
+func (c *KeyCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	c.store.Delete(driver.EncodeKey(c.enc, key))
 	return nil
 }

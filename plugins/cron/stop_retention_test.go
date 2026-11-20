@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -30,7 +31,7 @@ func newBlockingActivatorProxy(instID string) *blockingActivatorProxy {
 	}
 }
 
-func (b *blockingActivatorProxy) Activate(ctx context.Context, compKey ctxkey.Key, _ ...application.ActivateOption) (application.RunHandle, error) {
+func (b *blockingActivatorProxy) Activate(ctx context.Context, compKey ctxkey.Key, _ ...application.ActivateOption) (application.RunHandle, *apperr.Error) {
 	b.mu.Lock()
 	b.callCount++
 	b.lastTarget = compKey
@@ -49,7 +50,7 @@ func (b *blockingActivatorProxy) Activate(ctx context.Context, compKey ctxkey.Ke
 	case <-b.releaseCh:
 		return &fakeRunHandle{id: b.instID}, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, apperr.From(apperr.FrameworkInternalError, "激活上下文被取消", ctx.Err())
 	}
 }
 
@@ -96,7 +97,7 @@ func TestStopActiveTriggersRetentionAndDeadline(t *testing.T) {
 	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
 	defer cancelLifetime()
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- plugin.Run(lifetimeCtx)
 	}()
@@ -111,7 +112,7 @@ func TestStopActiveTriggersRetentionAndDeadline(t *testing.T) {
 	defer cancelStop()
 
 	type stopResult struct {
-		err error
+		err *apperr.Error
 	}
 	stopResultCh := make(chan stopResult, 1)
 

@@ -43,13 +43,21 @@
 // 各通道的额外约束：JSON 拒绝 null 与非字符串，SQL 仅接受 string 与
 // []byte 且拒绝 NULL，XML 元素拒绝嵌套子元素，CLI Flag 由 [String.Set]
 // 与 [String.String] 共同实现 [flag.Value]。
-// 接收器为 nil 时返回 [ErrNilReceiver]，可用 errors.Is 识别。
+// 接收器为 nil 时返回以 [ErrNilReceiver] 为根因的错误（错误码 50019），
+// 可用 errors.Is 识别。
+//
+// 十三个标准接口方法保留标准库要求的固定签名，内部调用强类型核心：
+// 核心成功时适配层返回真正的 nil，核心失败时返回 [*apperr.Error]。
+// 错误码按实际失败分支给出：受控键名语法不合法为 40013，
+// 输入源类型不合法（JSON null 与非字符串、嵌套 XML 子元素、
+// SQL NULL 与非 string/[]byte）为 40015，接收器为 nil 为 50019。
 //
 // # 原生类型解析
 //
 // [String.Int]、[String.Uint8]、[String.Float64]、[String.Bool]、
 // [String.Duration] 等方法先去除首尾空白，再按目标类型的严格位宽解析，
-// 失败时原样返回 strconv 与 time 的下游错误。
+// 失败时返回 [*apperr.Error]：语法非法为 40013，超出目标位宽范围为 40014，
+// 原生 strconv 与 time 错误作为根因保留。
 // 布尔解析忽略大小写，真值接受 "true"、"1"、"yes"、"on"、"enabled"，
 // 假值接受 "false"、"0"、"no"、"off"、"disabled"，其余输入报错。
 //

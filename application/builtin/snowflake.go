@@ -2,10 +2,10 @@ package builtin
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/snowflake"
 )
@@ -74,12 +74,12 @@ type snowflakePlugin struct {
 }
 
 // Start 启动受管雪花算法组件，调用底层 NewNode 并对非法 ID 校验报错。
-func (p *snowflakePlugin) Start(ctx context.Context) error {
+func (p *snowflakePlugin) Start(ctx context.Context) *apperr.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.started {
-		return errors.New("builtin snowflake: already started")
+		return apperr.New(apperr.FrameworkComponentInvalidState, "内置雪花组件已处于启动状态")
 	}
 
 	node, err := snowflake.NewNode(p.datacenterID, p.nodeID)
@@ -93,7 +93,7 @@ func (p *snowflakePlugin) Start(ctx context.Context) error {
 }
 
 // Stop 停止雪花组件，清理实例引用并不再发布。
-func (p *snowflakePlugin) Stop(ctx context.Context) error {
+func (p *snowflakePlugin) Stop(ctx context.Context) *apperr.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

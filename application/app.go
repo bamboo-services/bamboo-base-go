@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -35,18 +36,18 @@ type staticInstanceRecord struct {
 	handle     *runHandleImpl // 交付给运行时的句柄
 
 	// 状态与错误追踪
-	started  bool  // 标记 Start 阶段是否已执行完成
-	startErr error // 记录 Start 阶段产生的错误
+	started  bool          // 标记 Start 阶段是否已执行完成
+	startErr *apperr.Error // 记录 Start 阶段产生的错误
 
-	expectedStop atomic.Bool // 标记是否属于受控正常停止，避免看门狗误报崩溃
-	runExited    atomic.Bool // 标记 Run 主函数是否已退出
-	runErr       error       // 记录 Run 主函数返回的错误
+	expectedStop atomic.Bool   // 标记是否属于受控正常停止，避免看门狗误报崩溃
+	runExited    atomic.Bool   // 标记 Run 主函数是否已退出
+	runErr       *apperr.Error // 记录 Run 主函数返回的错误
 
-	quiesced   bool  // 标记 Quiesce 静默收拢阶段是否已执行完成
-	quiesceErr error // 记录 Quiesce 阶段产生的错误
+	quiesced   bool          // 标记 Quiesce 静默收拢阶段是否已执行完成
+	quiesceErr *apperr.Error // 记录 Quiesce 阶段产生的错误
 
-	stopped atomic.Bool // 标记 Stop 资源清理阶段是否已执行完成
-	stopErr error       // 记录 Stop 阶段产生的错误
+	stopped atomic.Bool   // 标记 Stop 资源清理阶段是否已执行完成
+	stopErr *apperr.Error // 记录 Stop 阶段产生的错误
 
 	// 停止过程并发控制；stopDone 在实例构造时即创建，任意时刻可等待，
 	// Stop 完成（含 panic 路径）后关闭且仅关闭一次，作为静态实例收尾的统一完成信号
@@ -63,8 +64,9 @@ type staticInstanceRecord struct {
 	startCancel  context.CancelFunc // Start 启动超时或异常时的取消函数
 
 	// panic 记录
-	stopPanicked atomic.Bool     // 标记 Stop 阶段是否发生 panic
-	stopPanicErr *HookPanicError // 捕获并封装的 Stop 阶段 panic 详细信息
+	stopPanicked    atomic.Bool     // 标记 Stop 阶段是否发生 panic
+	stopPanicErr    *HookPanicError // 捕获并封装的 Stop 阶段 panic 详细信息
+	stopPanicAppErr *apperr.Error   // 封装 Stop 阶段 panic 的统一错误；同一实例只构造一次，保证并发调用方获得同一错误
 }
 
 // ==============================
@@ -83,8 +85,8 @@ type staticInstanceRecord struct {
 // 各类组件注册方法（如 [App.RegisterTool]）内部受互斥锁保护，但必须在单线程装配
 // 阶段或 [App.Run] 启动之前调用；在应用启动后调用注册方法将返回 [ErrRegistrationClosed]。
 type App struct {
-	cfg    Config // 应用运行配置选项（包含各类超时预算）
-	cfgErr error  // 配置解析或校验阶段产生的致命错误
+	cfg    Config        // 应用运行配置选项（包含各类超时预算）
+	cfgErr *apperr.Error // 配置解析或校验阶段产生的致命错误
 
 	stateMu     sync.RWMutex // 保护状态机状态与运行消费标记的读写锁
 	state       AppState     // 当前应用所处的全局生命周期状态
@@ -109,8 +111,8 @@ type App struct {
 	staticInstances map[ctxkey.Key]*staticInstanceRecord // 已初始化的静态工具与工作者实例映射表
 
 	// 运行结果
-	runErrMu sync.Mutex // 保护运行期错误收集列表的互斥锁
-	runErrs  []error    // 运行期与关机阶段收集的聚合错误列表
+	runErrMu sync.Mutex      // 保护运行期错误收集列表的互斥锁
+	runErrs  []*apperr.Error // 运行期与关机阶段收集的聚合错误列表
 
 	// 强制取消与生命周期根
 	graceCancelFunc context.CancelFunc // 触发平滑停机的根取消函数
@@ -188,16 +190,16 @@ func (a *App) State() AppState {
 //   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
 //
 // 注册阶段不执行工厂调用或拓扑校验，实际依赖解析与实例化延迟至 [App.Run] 执行。
-func (a *App) RegisterTool(info PluginInfo, factory func() Plugin) error {
+func (a *App) RegisterTool(info PluginInfo, factory func() Plugin) *apperr.Error {
 	if factory == nil {
-		return ErrNilFactory
+		return newAppErr(ErrNilFactory, "插件工厂函数不得为 nil")
 	}
 	info.Mode = ModeTool
 
 	a.stateMu.Lock()
 	defer a.stateMu.Unlock()
 	if a.state != StateNew || a.runConsumed {
-		return ErrRegistrationClosed
+		return newAppErr(ErrRegistrationClosed, "应用已进入启动或运行阶段，组件注册已冻结")
 	}
 
 	a.regMu.Lock()
@@ -225,16 +227,16 @@ func (a *App) RegisterTool(info PluginInfo, factory func() Plugin) error {
 //   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
 //
 // 注册阶段不执行工厂调用或拓扑校验，实际依赖解析与实例化延迟至 [App.Run] 执行。
-func (a *App) RegisterWorker(info PluginInfo, factory func() RunnablePlugin) error {
+func (a *App) RegisterWorker(info PluginInfo, factory func() RunnablePlugin) *apperr.Error {
 	if factory == nil {
-		return ErrNilFactory
+		return newAppErr(ErrNilFactory, "插件工厂函数不得为 nil")
 	}
 	info.Mode = ModeWorker
 
 	a.stateMu.Lock()
 	defer a.stateMu.Unlock()
 	if a.state != StateNew || a.runConsumed {
-		return ErrRegistrationClosed
+		return newAppErr(ErrRegistrationClosed, "应用已进入启动或运行阶段，组件注册已冻结")
 	}
 
 	a.regMu.Lock()
@@ -262,16 +264,16 @@ func (a *App) RegisterWorker(info PluginInfo, factory func() RunnablePlugin) err
 //   - 若 App 当前状态不为 [StateNew] 或已调用过 [App.Run]，返回 [ErrRegistrationClosed]。
 //
 // 注册阶段仅登记定义与重入策略，实际依赖解析延迟至 [App.Run] 执行。
-func (a *App) RegisterComponent(info PluginInfo, factory func() RunnablePlugin) error {
+func (a *App) RegisterComponent(info PluginInfo, factory func() RunnablePlugin) *apperr.Error {
 	if factory == nil {
-		return ErrNilFactory
+		return newAppErr(ErrNilFactory, "插件工厂函数不得为 nil")
 	}
 	info.Mode = ModeComponent
 
 	a.stateMu.Lock()
 	defer a.stateMu.Unlock()
 	if a.state != StateNew || a.runConsumed {
-		return ErrRegistrationClosed
+		return newAppErr(ErrRegistrationClosed, "应用已进入启动或运行阶段，组件注册已冻结")
 	}
 
 	a.regMu.Lock()
@@ -311,22 +313,23 @@ func (a *App) Activator() Activator {
 //  6. 启动 Worker 看门狗：为所有 Worker 启动独立协程运行 [RunnablePlugin.Run]；
 //     在 Running 期间若任何 Worker 提前退出（包括返回 nil），看门狗将其判定为异常崩溃，
 //     触发应用级平滑关机并记录 [ErrWorkerUnexpectedExit]；
+//     错误链同时保留 [ErrWorkerUnexpectedExit] 与原始退出错误，可经 errors.Is / errors.As 精确判定；
 //  7. 阻塞等待：等待关机协调器完成或 Worker 看门狗错误触发停机，并返回合并后的错误。
 //
 // # 并发与时序语义
 //
 // Run 本身不是线程安全的，不可被多个 goroutine 同时并发执行。
 // 启动完成后，外部 goroutine 可安全调用 [App.Shutdown] 触发优雅关机。
-func (a *App) Run() error {
+func (a *App) Run() *apperr.Error {
 	// 1. 状态流转与单次运行权限检查
 	a.stateMu.Lock()
 	if a.runConsumed {
 		a.stateMu.Unlock()
-		return ErrAlreadyRun
+		return newAppErr(ErrAlreadyRun, "应用实例已执行过 Run，禁止重复运行")
 	}
 	if a.state == StateStopped || a.state == StateStopping || a.state == StateIncomplete {
 		a.stateMu.Unlock()
-		return ErrAppClosed
+		return newAppErr(ErrAppClosed, "应用已关闭或正在关机，拒绝执行启动")
 	}
 	a.runConsumed = true
 	a.state = StateStarting
@@ -387,18 +390,9 @@ func (a *App) Run() error {
 	// 5. 启动流水线：按拓扑分层启动 Tool 和 Worker
 	startErr := a.startStaticLayers(cfg, defMap)
 	if startErr != nil {
-		// 启动失败，Shutdown 进行回滚
+		// 启动失败，Shutdown 进行回滚并保留原启动错误链（含 ErrStartupInterrupted 与同期清理错误）
 		shutdownErr := a.Shutdown()
-		a.stateMu.RLock()
-		st := a.state
-		a.stateMu.RUnlock()
-		if st == StateStopped || st == StateIncomplete {
-			// 如果是在 Starting 收到外部中断，返回 ErrStartupInterrupted 并保留同期错误
-			if errors.Is(startErr, ErrStartupInterrupted) {
-				return errors.Join(ErrStartupInterrupted, shutdownErr)
-			}
-		}
-		return errors.Join(startErr, shutdownErr)
+		return aggregateErrs(startErr, shutdownErr)
 	}
 
 	// 6. 检查是否在启动期间已经收到了关机请求
@@ -406,7 +400,7 @@ func (a *App) Run() error {
 	if a.state == StateStopping || a.state == StateStopped || a.state == StateIncomplete {
 		a.stateMu.Unlock()
 		shutdownErr := a.Shutdown()
-		return errors.Join(ErrStartupInterrupted, shutdownErr)
+		return aggregateErrs(newAppErr(ErrStartupInterrupted, "启动阶段被外部中断"), shutdownErr)
 	}
 	// 冻结共享容器为只读，发布 StateRunning
 	a.container.freeze()
@@ -414,7 +408,7 @@ func (a *App) Run() error {
 	a.stateMu.Unlock()
 
 	// 7. 启动常驻 Worker.Run 并监督看门狗
-	watchdogErrChan := make(chan error, len(defsSnapshot)+1)
+	watchdogErrChan := make(chan *apperr.Error, len(defsSnapshot)+1)
 	a.launchWorkers(watchdogErrChan)
 
 	// 8. 等待运行结束（Worker 异常退出、信号触发、或外部主动调用 Shutdown）
@@ -425,10 +419,10 @@ func (a *App) Run() error {
 			a.recordRunErr(workerErr)
 		}
 		shutdownErr := a.Shutdown()
-		return errors.Join(a.getRunErr(), shutdownErr)
+		return aggregateErrs(append(a.getRunErrs(), shutdownErr)...)
 	case <-a.coordinator.done:
 		// 关机协调器完成
-		return errors.Join(a.getRunErr(), a.coordinator.res.err)
+		return aggregateErrs(append(a.getRunErrs(), a.coordinator.res.err)...)
 	}
 }
 
@@ -436,7 +430,8 @@ func (a *App) Run() error {
 // 私有方法：拓扑启动与运行监控
 // ==============================
 
-func (a *App) recordRunErr(err error) {
+// recordRunErr 将运行期错误登记入应用错误账本。
+func (a *App) recordRunErr(err *apperr.Error) {
 	if err == nil {
 		return
 	}
@@ -445,13 +440,19 @@ func (a *App) recordRunErr(err error) {
 	a.runErrs = append(a.runErrs, err)
 }
 
-func (a *App) getRunErr() error {
+// getRunErrs 返回当前错误账本的快照副本。
+func (a *App) getRunErrs() []*apperr.Error {
 	a.runErrMu.Lock()
 	defer a.runErrMu.Unlock()
-	return errors.Join(a.runErrs...)
+	if len(a.runErrs) == 0 {
+		return nil
+	}
+	copied := make([]*apperr.Error, len(a.runErrs))
+	copy(copied, a.runErrs)
+	return copied
 }
 
-func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistration) (retErr error) {
+func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistration) (retErr *apperr.Error) {
 	for _, layer := range a.graph.layers {
 		for _, key := range layer {
 			def := defMap[key]
@@ -465,7 +466,7 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 			st := a.state
 			a.stateMu.RUnlock()
 			if st != StateStarting {
-				return ErrStartupInterrupted
+				return newAppErr(ErrStartupInterrupted, "启动阶段被外部中断")
 			}
 
 			// 1. 调用工厂函数实例化（不在锁内调用）
@@ -509,7 +510,7 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 			if a.state != StateStarting {
 				a.stateMu.Unlock()
 				startCancel()
-				return ErrStartupInterrupted
+				return newAppErr(ErrStartupInterrupted, "启动阶段被外部中断")
 			}
 
 			// 在 record 独立互斥锁下安全封存 startCancel/startDone 并设置 started=true
@@ -538,7 +539,7 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 
 			// 3. 将 safeCallStart 放入内核明确持有的 goroutine 中异步执行
 			// 启动驱动 select 真实完成与 startCtx.Done，使忽略 ctx 的 Start 也能在超时/取消后让 Run 失败关机
-			startResCh := make(chan error, 1)
+			startResCh := make(chan *apperr.Error, 1)
 
 			go func() {
 				resErr := a.safeCallStart(rec, ctxWithView)
@@ -552,7 +553,7 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 				startCancel()
 			}()
 
-			var err error
+			var err *apperr.Error
 			select {
 			case err = <-startResCh:
 			case <-startCtx.Done():
@@ -564,11 +565,16 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 					isStopping := (a.state == StateStopping || a.state == StateStopped || a.state == StateIncomplete)
 					a.stateMu.RUnlock()
 
-					var retErr error
+					var retErr *apperr.Error
 					if isStopping {
-						retErr = errors.Join(ErrStartupInterrupted, startCtx.Err())
+						retErr = apperr.New(
+							apperr.FrameworkComponentInvalidState,
+							"启动阶段被外部中断",
+							ErrStartupInterrupted,
+							startCtx.Err(),
+						)
 					} else {
-						retErr = fmt.Errorf("plugin %s start timed out: %w", key, startCtx.Err())
+						retErr = normalizeErr(apperr.FrameworkInternalError, apperr.ErrMessage("插件 "+string(key)+" 启动超时"), startCtx.Err())
 					}
 
 					// 仅启动一条内核收尾 goroutine 等待 hook 真退后幂等 safeCallStop，绝不落入下面 err 分支同步 Stop/裸写 rec.startErr
@@ -589,32 +595,38 @@ func (a *App) startStaticLayers(cfg Config, defMap map[ctxkey.Key]pluginRegistra
 				// Start 失败：Start 已真退（startDone 已 close），先为当前失败实例调用唯一一次 Stop，再退出以触发逆序回滚
 				stopErr := a.safeCallStop(rec, cfg)
 				if afterStopping && errors.Is(err, context.Canceled) {
-					return errors.Join(ErrStartupInterrupted, err, stopErr)
+					interruptedErr := apperr.New(
+						apperr.FrameworkComponentInvalidState,
+						"启动阶段被外部中断",
+						ErrStartupInterrupted,
+						err,
+					)
+					return aggregateErrs(interruptedErr, stopErr)
 				}
-				return errors.Join(err, stopErr)
+				return aggregateErrs(err, stopErr)
 			}
 
 			if afterStopping {
 				// Start 已真退且 App 已切入 Stopping：先执行幂等 Stop 兜底清理，再退出交由关机协调
 				stopErr := a.safeCallStop(rec, cfg)
-				return errors.Join(ErrStartupInterrupted, stopErr)
+				return aggregateErrs(newAppErr(ErrStartupInterrupted, "启动阶段被外部中断"), stopErr)
 			}
 
 			// 4. 交付校验 Exposer 与发布共享条目
 			exposeErr := a.publishExposedKeys(def.info, inst)
 			if exposeErr != nil {
 				stopErr := a.safeCallStop(rec, cfg)
-				return errors.Join(exposeErr, stopErr)
+				return aggregateErrs(exposeErr, stopErr)
 			}
 		}
 	}
 	return nil
 }
 
-func (a *App) createPluginInstance(def pluginRegistration) (Plugin, string, error) {
+func (a *App) createPluginInstance(def pluginRegistration) (Plugin, string, *apperr.Error) {
 	instID := fmt.Sprintf("%s_%d", def.info.Key, time.Now().UnixNano())
 	var inst Plugin
-	var facErr error
+	var facErr *HookPanicError
 
 	func() {
 		defer func() {
@@ -641,10 +653,10 @@ func (a *App) createPluginInstance(def pluginRegistration) (Plugin, string, erro
 	}()
 
 	if facErr != nil {
-		return nil, "", facErr
+		return nil, "", newHookPanicErr(facErr)
 	}
 	if inst == nil || isTypedNil(inst) {
-		return nil, "", fmt.Errorf("%w: plugin %s", ErrNilPlugin, def.info.Key)
+		return nil, "", newAppErr(ErrNilPlugin, "插件 "+string(def.info.Key)+" 的工厂返回了空实例")
 	}
 	return inst, instID, nil
 }
@@ -662,22 +674,22 @@ func isTypedNil(val any) bool {
 	}
 }
 
-func (a *App) safeCallStart(rec *staticInstanceRecord, ctx context.Context) (retErr error) {
+func (a *App) safeCallStart(rec *staticInstanceRecord, ctx context.Context) (retErr *apperr.Error) {
 	defer func() {
 		if r := recover(); r != nil {
-			retErr = &HookPanicError{
+			retErr = newHookPanicErr(&HookPanicError{
 				PluginKey:  rec.info.Key,
 				InstanceID: rec.instanceID,
 				Stage:      "start",
 				Value:      r,
 				Stack:      debug.Stack(),
-			}
+			})
 		}
 	}()
 	return rec.plugin.Start(ctx)
 }
 
-func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*budgetMetadata) (retErr error) {
+func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*budgetMetadata) (retErr *apperr.Error) {
 	rec.stopMu.Lock()
 	if rec.stopDone == nil {
 		rec.stopDone = make(chan struct{})
@@ -687,7 +699,7 @@ func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*bud
 		rec.stopMu.Unlock()
 		<-done
 		if rec.stopPanicked.Load() && rec.stopPanicErr != nil {
-			return rec.stopPanicErr
+			return rec.stopPanicAppErr
 		}
 		return rec.stopErr
 	}
@@ -710,8 +722,8 @@ func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*bud
 				Stack:      debug.Stack(),
 			}
 			rec.stopPanicErr = panicErr
-			retErr = panicErr
-
+			rec.stopPanicAppErr = newHookPanicErr(panicErr)
+			retErr = rec.stopPanicAppErr
 			// Stop panic: 标记为 EntryUnavailable 并保留依赖
 			a.container.setOwnerState(rec.info.Key, EntryUnavailable)
 			a.coordinator.recordStuck(StuckInstance{
@@ -719,7 +731,7 @@ func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*bud
 				InstanceID:   rec.instanceID,
 				Stage:        "stop-panic",
 				RetainedDeps: rec.info.Requires,
-				Err:          panicErr,
+				Err:          rec.stopPanicAppErr,
 			})
 		}
 	}()
@@ -773,16 +785,16 @@ func (a *App) safeCallStop(rec *staticInstanceRecord, cfg Config, budget ...*bud
 	return retErr
 }
 
-func (a *App) publishExposedKeys(info PluginInfo, inst Plugin) error {
+func (a *App) publishExposedKeys(info PluginInfo, inst Plugin) *apperr.Error {
 	// 1. 先在锁外安全执行 Expose() 与 recover，不持有任何容器锁
 	exposer, hasExposer := inst.(ctxkey.Exposer)
 	if len(info.Provides) > 0 && !hasExposer {
-		return fmt.Errorf("%w: plugin %s declared provides but does not implement ctxkey.Exposer", ErrExposedKeysMismatch, info.Key)
+		return newAppErr(ErrExposedKeysMismatch, "插件 "+string(info.Key)+" 声明了 provides 但未实现 ctxkey.Exposer")
 	}
 
 	var exposedMap map[ctxkey.Key]any
 	if hasExposer {
-		var exposePanic error
+		var exposePanic *HookPanicError
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -798,15 +810,15 @@ func (a *App) publishExposedKeys(info PluginInfo, inst Plugin) error {
 		}()
 
 		if exposePanic != nil {
-			return exposePanic
+			return newHookPanicErr(exposePanic)
 		}
 
 		// 严格校验暴露键集合：不能为 nil、漏键、多键
 		if exposedMap == nil {
-			return fmt.Errorf("%w: plugin %s exposed nil map", ErrExposedKeysMismatch, info.Key)
+			return newAppErr(ErrExposedKeysMismatch, "插件 "+string(info.Key)+" 暴露了空的键集合")
 		}
 		if len(exposedMap) != len(info.Provides) {
-			return fmt.Errorf("%w: exposed count %d does not match declared provides count %d", ErrExposedKeysMismatch, len(exposedMap), len(info.Provides))
+			return newAppErr(ErrExposedKeysMismatch, "插件暴露键数量与声明的 provides 数量不一致")
 		}
 
 		declaredSet := make(map[ctxkey.Key]struct{}, len(info.Provides))
@@ -816,13 +828,13 @@ func (a *App) publishExposedKeys(info PluginInfo, inst Plugin) error {
 
 		for k, v := range exposedMap {
 			if _, ok := declaredSet[k]; !ok {
-				return fmt.Errorf("%w: exposed key %s was not declared in provides", ErrExposedKeysMismatch, k)
+				return newAppErr(ErrExposedKeysMismatch, "暴露键 "+string(k)+" 未在 provides 中声明")
 			}
 			if k == info.Key {
-				return fmt.Errorf("%w: exposed key cannot overwrite plugin key %s", ErrDuplicateExposedKey, k)
+				return newAppErr(ErrDuplicateExposedKey, "暴露键 "+string(k)+" 与插件主键重复")
 			}
 			if v == nil || isTypedNil(v) {
-				return fmt.Errorf("%w: exposed nil value for key %s", ErrExposedKeysMismatch, k)
+				return newAppErr(ErrExposedKeysMismatch, "暴露键 "+string(k)+" 的值为空")
 			}
 		}
 	}
@@ -848,7 +860,7 @@ func (a *App) publishExposedKeys(info PluginInfo, inst Plugin) error {
 	return a.container.publishBatch(batch)
 }
 
-func (a *App) launchWorkers(watchdogErrChan chan error) {
+func (a *App) launchWorkers(watchdogErrChan chan *apperr.Error) {
 	a.staticMu.RLock()
 	defer a.staticMu.RUnlock()
 
@@ -906,17 +918,17 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 				a.componentEngine.registerWorker(currentRec.instanceID, currentRec.info.Key)
 			}
 
-			var runErr error
+			var runErr *apperr.Error
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						runErr = &HookPanicError{
+						runErr = newHookPanicErr(&HookPanicError{
 							PluginKey:  currentRec.info.Key,
 							InstanceID: currentRec.instanceID,
 							Stage:      "run",
 							Value:      r,
 							Stack:      debug.Stack(),
-						}
+						})
 					}
 				}()
 				runErr = currentRec.runnable.Run(lifetimeCtx)
@@ -925,7 +937,7 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 			if a.componentEngine != nil {
 				closeCause := runErr
 				if closeCause == nil {
-					closeCause = ErrParentClosing
+					closeCause = normalizeErr(apperr.FrameworkComponentInvalidState, "父级组件正在关闭", ErrParentClosing)
 				}
 				a.componentEngine.closeParent(currentRec.instanceID, closeCause)
 				_ = a.componentEngine.waitParent(context.Background(), currentRec.instanceID)
@@ -941,11 +953,24 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 			a.stateMu.Unlock()
 
 			if currentState == StateRunning && !isExpected {
-				// 在 Running 状态下提前退出，无论 nil 还是错误，均触发失败关机
+				// 在 Running 状态下提前退出，无论 nil 还是错误，均触发失败关机。
+				//
+				// 错误链必须同时保留框架哨兵 [ErrWorkerUnexpectedExit] 与原始退出错误，
+				// 使下游可通过 errors.Is / errors.As 精确识别失败原因，
+				// 禁止将原始错误降级为文本。
 				if runErr == nil {
-					watchdogErrChan <- fmt.Errorf("%w: worker %s exited unexpectedly with nil error", ErrWorkerUnexpectedExit, currentRec.info.Key)
+					watchdogErrChan <- apperr.New(
+						apperr.FrameworkWorkerUnexpectedExit,
+						apperr.ErrMessage("worker "+string(currentRec.info.Key)+" 以 nil 错误意外退出"),
+						ErrWorkerUnexpectedExit,
+					)
 				} else {
-					watchdogErrChan <- fmt.Errorf("%w: worker %s: %v", ErrWorkerUnexpectedExit, currentRec.info.Key, runErr)
+					watchdogErrChan <- apperr.New(
+						apperr.FrameworkWorkerUnexpectedExit,
+						apperr.ErrMessage("worker "+string(currentRec.info.Key)+" 意外退出"),
+						ErrWorkerUnexpectedExit,
+						runErr,
+					)
 				}
 			} else {
 				// 正常关机或预期停止
@@ -983,7 +1008,7 @@ func (a *App) launchWorkers(watchdogErrChan chan error) {
 // # 幂等性与并发安全
 //
 // 多次并发或串行调用 Shutdown 是幂等且协程安全的，所有调用方均获得相同的结果错误。
-func (a *App) Shutdown() error {
+func (a *App) Shutdown() *apperr.Error {
 	a.coordinator.mu.Lock()
 	if a.coordinator.started {
 		a.coordinator.mu.Unlock()
@@ -1026,7 +1051,7 @@ func (a *App) Shutdown() error {
 	}
 
 	if a.componentEngine != nil {
-		a.componentEngine.requestStopAll(ErrShuttingDown)
+		a.componentEngine.requestStopAll(normalizeErr(apperr.FrameworkComponentInvalidState, "宿主应用正在关机", ErrShuttingDown))
 	}
 
 	// 2. 读取配置，若配置有误直接返回错误（无默认静默降级）
@@ -1061,8 +1086,17 @@ func (a *App) Shutdown() error {
 	stuckList := a.coordinator.getStuckInstances()
 	if len(stuckList) > 0 {
 		a.state = StateIncomplete
-		incompleteErr := &StopIncompleteError{StuckInstances: stuckList}
-		shutdownErr = errors.Join(shutdownErr, incompleteErr)
+		incompleteErr := newStopIncompleteErr(stuckList)
+		if shutdownErr != nil {
+			shutdownErr = apperr.Join(
+				apperr.FrameworkShutdownIncomplete,
+				"关机未完整完成，存在未确认停止的实例",
+				incompleteErr,
+				shutdownErr,
+			)
+		} else {
+			shutdownErr = incompleteErr
+		}
 	} else {
 		a.state = StateStopped
 	}
@@ -1117,7 +1151,7 @@ func (a *App) computeDynamicHoldProviders(activeDeps map[ctxkey.Key]int) map[ctx
 	return holds
 }
 
-func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, totalDeadline, graceDeadline time.Time, retainedProviders map[ctxkey.Key]struct{}) error {
+func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, totalDeadline, graceDeadline time.Time, retainedProviders map[ctxkey.Key]struct{}) *apperr.Error {
 	// 关机路径调用 Stop 前确认 Start 真实返回；未退等待到 totalDeadline，超时报 start 残留并保依赖
 	if !a.waitForStartDone(rec, totalDeadline, retainedProviders) {
 		return nil
@@ -1130,19 +1164,19 @@ func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, to
 			InstanceID:   rec.instanceID,
 			Stage:        "timeout",
 			RetainedDeps: rec.info.Requires,
-			Err:          context.DeadlineExceeded,
+			Err:          normalizeErr(apperr.FrameworkInternalError, "关机总截止时间已到，实例未退", context.DeadlineExceeded),
 		})
 		retainedProviders[rec.info.Key] = struct{}{}
 		a.markRetainedTransitiveClosure(rec.info.Key, retainedProviders)
 		return nil
 	}
 
-	var errs []error
+	var errs []*apperr.Error
 	// 1. 若实现了 Quiescer，先执行 Quiesce（内核持有 goroutine + buffered 结果 chan，外层 select totalDeadline）
 	if quiescer, ok := rec.plugin.(Quiescer); ok && !rec.quiesced {
 		rec.quiesced = true
 
-		quiesceDoneChan := make(chan error, 1)
+		quiesceDoneChan := make(chan *apperr.Error, 1)
 		go func(targetRec *staticInstanceRecord, q Quiescer) {
 			quiesceDoneChan <- a.safeCallQuiesce(targetRec, q, totalDeadline, graceDeadline, cfg.CleanupTimeout)
 		}(rec, quiescer)
@@ -1175,12 +1209,12 @@ func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, to
 				InstanceID:   rec.instanceID,
 				Stage:        "quiesce",
 				RetainedDeps: rec.info.Requires,
-				Err:          context.DeadlineExceeded,
+				Err:          normalizeErr(apperr.FrameworkInternalError, "静默排空超时", context.DeadlineExceeded),
 			})
 			retainedProviders[rec.info.Key] = struct{}{}
 			a.markRetainedTransitiveClosure(rec.info.Key, retainedProviders)
 			// 超时保护闭包：不调用该实例 Stop、不置 stopped/retired、不重复 Quiesce、不假释放，直接返回
-			return errors.Join(errs...)
+			return aggregateErrs(errs...)
 		}
 	}
 
@@ -1191,7 +1225,7 @@ func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, to
 		cleanupLimit:  cfg.CleanupTimeout,
 	}
 
-	stopDoneChan := make(chan error, 1)
+	stopDoneChan := make(chan *apperr.Error, 1)
 	go func(targetRec *staticInstanceRecord) {
 		stopDoneChan <- a.safeCallStop(targetRec, cfg, budget)
 	}(rec)
@@ -1223,7 +1257,7 @@ func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, to
 			InstanceID:   rec.instanceID,
 			Stage:        "stop",
 			RetainedDeps: rec.info.Requires,
-			Err:          context.DeadlineExceeded,
+			Err:          normalizeErr(apperr.FrameworkInternalError, "停止钩子超时", context.DeadlineExceeded),
 		})
 	}
 
@@ -1233,7 +1267,7 @@ func (a *App) stopStaticInstanceRecord(rec *staticInstanceRecord, cfg Config, to
 		a.markRetainedTransitiveClosure(rec.info.Key, retainedProviders)
 	}
 
-	return errors.Join(errs...)
+	return aggregateErrs(errs...)
 }
 
 func (a *App) waitForStartDone(rec *staticInstanceRecord, totalDeadline time.Time, retainedProviders map[ctxkey.Key]struct{}) bool {
@@ -1259,7 +1293,7 @@ func (a *App) waitForStartDone(rec *staticInstanceRecord, totalDeadline time.Tim
 			InstanceID:   rec.instanceID,
 			Stage:        "start",
 			RetainedDeps: rec.info.Requires,
-			Err:          context.DeadlineExceeded,
+			Err:          normalizeErr(apperr.FrameworkInternalError, "启动钩子超时未退", context.DeadlineExceeded),
 		})
 		a.markRetainedTransitiveClosure(rec.info.Key, retainedProviders)
 		return false
@@ -1277,15 +1311,15 @@ func (a *App) waitForStartDone(rec *staticInstanceRecord, totalDeadline time.Tim
 			InstanceID:   rec.instanceID,
 			Stage:        "start",
 			RetainedDeps: rec.info.Requires,
-			Err:          context.DeadlineExceeded,
+			Err:          normalizeErr(apperr.FrameworkInternalError, "启动钩子超时未退", context.DeadlineExceeded),
 		})
 		a.markRetainedTransitiveClosure(rec.info.Key, retainedProviders)
 		return false
 	}
 }
 
-func (a *App) executeShutdownTopology(cfg Config, totalDeadline, graceDeadline time.Time) error {
-	var errs []error
+func (a *App) executeShutdownTopology(cfg Config, totalDeadline, graceDeadline time.Time) *apperr.Error {
+	var errs []*apperr.Error
 
 	if a.graph == nil || len(a.graph.layers) == 0 {
 		// 没有拓扑图，按已创建实例逆序清理
@@ -1307,7 +1341,7 @@ func (a *App) executeShutdownTopology(cfg Config, totalDeadline, graceDeadline t
 				}
 			}
 		}
-		return errors.Join(errs...)
+		return aggregateErrs(errs...)
 	}
 
 	retainedProviders := make(map[ctxkey.Key]struct{})
@@ -1445,7 +1479,7 @@ func (a *App) executeShutdownTopology(cfg Config, totalDeadline, graceDeadline t
 					InstanceID:   item.rec.instanceID,
 					Stage:        "timeout",
 					RetainedDeps: item.rec.info.Requires,
-					Err:          context.DeadlineExceeded,
+					Err:          normalizeErr(apperr.FrameworkInternalError, "关机总截止时间已到，实例未退", context.DeadlineExceeded),
 				})
 				retainedProviders[item.key] = struct{}{}
 				a.markRetainedTransitiveClosure(item.key, retainedProviders)
@@ -1453,19 +1487,19 @@ func (a *App) executeShutdownTopology(cfg Config, totalDeadline, graceDeadline t
 		}
 	}
 
-	return errors.Join(errs...)
+	return aggregateErrs(errs...)
 }
 
-func (a *App) safeCallQuiesce(rec *staticInstanceRecord, q Quiescer, totalDeadline, graceDeadline time.Time, cleanupLimit time.Duration) (retErr error) {
+func (a *App) safeCallQuiesce(rec *staticInstanceRecord, q Quiescer, totalDeadline, graceDeadline time.Time, cleanupLimit time.Duration) (retErr *apperr.Error) {
 	defer func() {
 		if r := recover(); r != nil {
-			retErr = &HookPanicError{
+			retErr = newHookPanicErr(&HookPanicError{
 				PluginKey:  rec.info.Key,
 				InstanceID: rec.instanceID,
 				Stage:      "quiesce",
 				Value:      r,
 				Stack:      debug.Stack(),
-			}
+			})
 		}
 	}()
 

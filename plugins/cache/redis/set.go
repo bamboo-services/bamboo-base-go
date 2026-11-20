@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	driver "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -24,6 +25,14 @@ func NewSetCache[K any, V any](rdb *goredis.Client, codec driver.Codec, enc driv
 	return &SetCache[K, V]{rdb: rdb, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 Redis 客户端时 panic。
+func (c *SetCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.rdb == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // refreshTTL 在写操作后按需续期。
 func (c *SetCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
 	if ttl > 0 {
@@ -32,7 +41,7 @@ func (c *SetCache[K, V]) refreshTTL(ctx context.Context, key K, ttl time.Duratio
 }
 
 // encodeMembers 把多个成员序列化为 Redis 命令可接受的 []any 参数。
-func (c *SetCache[K, V]) encodeMembers(members []V) ([]any, error) {
+func (c *SetCache[K, V]) encodeMembers(members []V) ([]any, *apperr.Error) {
 	args := make([]any, 0, len(members))
 	for _, m := range members {
 		data, err := c.codec.Marshal(m)
@@ -50,7 +59,10 @@ func (c *SetCache[K, V]) encodeMembers(members []V) ([]any, error) {
 //   - NX：仅当 key 不存在时写入（先 Exists 预检，存在则跳过）
 //   - XX：仅当 key 已存在时写入（先 Exists 预检，不存在则跳过）
 //   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
-func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...driver.SetOption) error {
+func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(members) == 0 {
 		return nil
 	}
@@ -60,7 +72,7 @@ func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...dr
 	if cfg.NX || cfg.XX {
 		exists, err := c.rdb.Exists(ctx, k).Result()
 		if err != nil {
-			return err
+			return opErr(err)
 		}
 		if cfg.NX && exists > 0 {
 			return nil
@@ -74,7 +86,7 @@ func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...dr
 		return err
 	}
 	if err := c.rdb.SAdd(ctx, k, args...).Err(); err != nil {
-		return err
+		return opErr(err)
 	}
 	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
 	if !cfg.NoSlide && !cfg.KeepTTL {
@@ -84,10 +96,13 @@ func (c *SetCache[K, V]) Add(ctx context.Context, key K, members []V, opts ...dr
 }
 
 // Members 获取集合中的所有成员。
-func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
+func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	raw, err := c.rdb.SMembers(ctx, driver.EncodeKey(c.enc, key)).Result()
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	result := make([]V, 0, len(raw))
 	for _, data := range raw {
@@ -101,21 +116,38 @@ func (c *SetCache[K, V]) Members(ctx context.Context, key K) ([]V, error) {
 }
 
 // IsMember 检查指定成员是否存在于集合中。
-func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, error) {
+func (c *SetCache[K, V]) IsMember(ctx context.Context, key K, member V) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	data, err := c.codec.Marshal(member)
 	if err != nil {
 		return false, err
 	}
-	return c.rdb.SIsMember(ctx, driver.EncodeKey(c.enc, key), data).Result()
+	found, cmdErr := c.rdb.SIsMember(ctx, driver.EncodeKey(c.enc, key), data).Result()
+	if cmdErr != nil {
+		return false, opErr(cmdErr)
+	}
+	return found, nil
 }
 
 // Count 获取集合中的成员数量。
-func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, error) {
-	return c.rdb.SCard(ctx, driver.EncodeKey(c.enc, key)).Result()
+func (c *SetCache[K, V]) Count(ctx context.Context, key K) (int64, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return 0, err
+	}
+	count, err := c.rdb.SCard(ctx, driver.EncodeKey(c.enc, key)).Result()
+	if err != nil {
+		return 0, opErr(err)
+	}
+	return count, nil
 }
 
 // Remove 从集合中移除指定的成员。
-func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error {
+func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(members) == 0 {
 		return nil
 	}
@@ -123,10 +155,13 @@ func (c *SetCache[K, V]) Remove(ctx context.Context, key K, members ...V) error 
 	if err != nil {
 		return err
 	}
-	return c.rdb.SRem(ctx, driver.EncodeKey(c.enc, key), args...).Err()
+	return opErr(c.rdb.SRem(ctx, driver.EncodeKey(c.enc, key), args...).Err())
 }
 
 // Delete 删除整个集合。
-func (c *SetCache[K, V]) Delete(ctx context.Context, key K) error {
-	return c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err()
+func (c *SetCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
+	return opErr(c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err())
 }

@@ -44,7 +44,7 @@ func (e *Error) Error() string {
 			base = string(e.ErrorMessage)
 		}
 	}
-	if e.Err != nil {
+	if !IsNil(e.Err) {
 		if base != "" {
 			return fmt.Sprintf("%s: %v", base, e.Err)
 		}
@@ -58,10 +58,10 @@ func (e *Error) Error() string {
 
 // Unwrap 暴露底层根因，供 errors.Is 与 errors.As 判定。
 //
-// 返回 [Error.Err]；e 为 nil 或未携带根因时返回 nil，
+// 返回 [Error.Err]；e 为 nil 或未携带有效根因（含类型化 nil 载体）时返回 nil，
 // 调用方对 nil 结果不应假定任何根因存在。
 func (e *Error) Unwrap() error {
-	if e == nil {
+	if e == nil || IsNil(e.Err) {
 		return nil
 	}
 	return e.Err

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 )
 
 var (
@@ -58,14 +60,14 @@ type RotatingWriter struct {
 	currentDate string     // 当前日期 (用于判断是否跨天)
 
 	closed   bool
-	closeErr error
+	closeErr *apperr.Error
 
 	closeDone     chan struct{}
 	schedulerStop chan struct{}
 	schedulerDone chan struct{}
 
 	archiveWg sync.WaitGroup
-	bgErrors  []error
+	bgErrors  []*apperr.Error
 
 	// 私有测试 hook
 	beforeArchiveFileHook func(filePath string)
@@ -78,7 +80,11 @@ type RotatingWriter struct {
 // 超限文件立即切割、历史文件尝试归档；前两类失败时返回错误，
 // 启动阶段的归档失败不使构造失败，而是推迟到 Close 时一并返回。
 // 返回的写入器可被多个 goroutine 并发使用，由调用方负责 Close。
-func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
+//
+// 失败分类：纯配置问题（例如文件名含路径分隔符）返回 ConfigInvalid；
+// 目录创建、文件打开等 IO 初始化失败返回 RotationFailed，
+// 并保留原始 IO 原因，errors.Is 仍然可达。
+func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, *apperr.Error) {
 	if config.Dir == "" {
 		config.Dir = ".logs"
 	}
@@ -92,8 +98,12 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 		config.MaxSize = 10 * 1024 * 1024 // 默认 10MB
 	}
 
+	if appErr := validateRotatorConfig(config); appErr != nil {
+		return nil, appErr
+	}
+
 	if err := os.MkdirAll(config.Dir, 0755); err != nil {
-		return nil, fmt.Errorf("创建日志目录失败: %w", err)
+		return nil, errRotationFailed("创建日志目录失败", err)
 	}
 
 	w := &RotatingWriter{
@@ -107,8 +117,8 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 		schedulerDone: make(chan struct{}),
 	}
 
-	if err := w.checkStartupState(); err != nil {
-		return nil, fmt.Errorf("启动检查失败: %w", err)
+	if appErr := w.checkStartupState(); appErr != nil {
+		return nil, appErr
 	}
 
 	go w.startArchiveScheduler()
@@ -116,17 +126,56 @@ func NewRotatingWriter(config RotatorConfig) (*RotatingWriter, error) {
 	return w, nil
 }
 
+// validateRotatorConfig 校验轮转写入器的纯配置问题。
+//
+// 该类问题与 IO 无关，因此归类为 ConfigInvalid，且没有原生 cause 可保留。
+// 零值字段已在调用前填充默认值，故此处只拦截显式非法取值。
+func validateRotatorConfig(config RotatorConfig) *apperr.Error {
+	if strings.ContainsAny(config.BaseName, `/\`) {
+		return errConfigInvalid("日志基础文件名不得包含路径分隔符")
+	}
+	if config.BaseName == "." || config.BaseName == ".." {
+		return errConfigInvalid("日志基础文件名不得为相对路径标记")
+	}
+	if strings.ContainsAny(config.Ext, `/\`) {
+		return errConfigInvalid("日志扩展名不得包含路径分隔符")
+	}
+	if strings.ContainsRune(config.Dir, 0) {
+		return errConfigInvalid("日志目录不得包含空字符")
+	}
+	return nil
+}
+
 // Write 将数据追加写入当前日志文件，必要时先执行切割。
 //
-// 写入前按序处理：已关闭时返回 [ErrClosed]；跨天时先将当前文件按
-// 日期重命名并开启新文件，随后异步登记归档；当前文件剩余空间
-// 不足以容纳本次写入时按索引切割。返回底层文件写入的结果，
-// n 为成功写入的字节数。本方法可被多个 goroutine 并发调用。
+// 写入前按序处理：已关闭时返回携带 ErrClosed 根因的 WriteFailed 错误；
+// 跨天时先将当前文件按日期重命名并开启新文件，随后异步登记归档；
+// 当前文件剩余空间不足以容纳本次写入时按索引切割。
+// 返回底层文件写入的结果，n 为成功写入的字节数。
+// 本方法可被多个 goroutine 并发调用。
+//
+// 该方法是 io.Writer 固定签名，必须返回原生 error；
+// 内部由强类型核心 [RotatingWriter.writeCore] 承担分类：
+// 核心成功时返回真正的 nil 错误，核心失败时返回该统一错误。
 func (w *RotatingWriter) Write(p []byte) (n int, err error) {
+	n, appErr := w.writeCore(p)
+	if appErr == nil {
+		return n, nil
+	}
+	return n, appErr
+}
+
+// writeCore 是 [RotatingWriter.Write] 的强类型核心。
+//
+// 成功返回 (n, nil)；失败时返回已分类的统一错误：
+// 写入器已关闭归类为 WriteFailed 并保留 ErrClosed 根因，
+// 跨天重命名与按大小切割等轮转失败归类为 RotationFailed，
+// 底层写入失败归类为 WriteFailed。
+func (w *RotatingWriter) writeCore(p []byte) (int, *apperr.Error) {
 	w.stateMu.Lock()
 	if w.closed {
 		w.stateMu.Unlock()
-		return 0, ErrClosed
+		return 0, errWriteFailed("日志写入器已关闭", ErrClosed)
 	}
 	w.stateMu.Unlock()
 
@@ -137,39 +186,59 @@ func (w *RotatingWriter) Write(p []byte) (n int, err error) {
 	w.stateMu.Lock()
 	if w.closed {
 		w.stateMu.Unlock()
-		return 0, ErrClosed
+		return 0, errWriteFailed("日志写入器已关闭", ErrClosed)
 	}
 	w.stateMu.Unlock()
 
 	today := time.Now().Format("2006-01-02")
 	if w.currentDate != today {
-		if err := w.rotateForNewDayLocked(today); err != nil {
-			return 0, fmt.Errorf("跨天切割日志失败: %w", err)
+		if appErr := w.rotateForNewDayLocked(today); appErr != nil {
+			return 0, appErr
 		}
 	}
 
 	if w.currentSize+int64(len(p)) > w.maxSize {
-		if err := w.rotateLocked(); err != nil {
-			return 0, fmt.Errorf("日志切割失败: %w", err)
+		if appErr := w.rotateLocked(); appErr != nil {
+			return 0, appErr
 		}
 	}
 
 	if w.file == nil {
-		return 0, ErrClosed
+		return 0, errWriteFailed("日志写入器已关闭", ErrClosed)
 	}
 
-	n, err = w.file.Write(p)
+	n, err := w.file.Write(p)
 	w.currentSize += int64(n)
-	return n, err
+	if err != nil {
+		return n, errWriteFailed("日志文件写入失败", err)
+	}
+	return n, nil
 }
 
 // Close 关闭日志文件与归档调度器，等待已登记归档全部完成。
 //
 // 停止顺序为：停止每日调度器、等待在途归档协程退出、关闭当前文件
-// 句柄；返回值以 errors.Join 汇总文件关闭错误与后台归档记录的错误。
+// 句柄；返回值以统一错误聚合文件关闭错误与后台归档记录的错误。
 // 本方法幂等：并发或重复调用都会等待首次关闭完成并返回同一结果；
-// 关闭之后的 Write 返回 [ErrClosed]。
+// 关闭之后的 Write 返回携带 ErrClosed 根因的错误。
+//
+// 该方法是 io.Closer 固定签名，必须返回原生 error；
+// 内部由强类型核心 [RotatingWriter.closeCore] 承担分类与聚合：
+// 核心成功时返回真正的 nil 错误，核心失败时返回该统一错误。
 func (w *RotatingWriter) Close() error {
+	appErr := w.closeCore()
+	if appErr == nil {
+		return nil
+	}
+	return appErr
+}
+
+// closeCore 是 [RotatingWriter.Close] 的强类型核心。
+//
+// 成功返回 nil 指针；失败时返回聚合后的统一错误，
+// 文件关闭失败与后台归档失败均归类为 RotationFailed，
+// 全部原因保留在错误链中，errors.Is 仍然可达。
+func (w *RotatingWriter) closeCore() *apperr.Error {
 	w.stateMu.Lock()
 	if w.closed {
 		closeDone := w.closeDone
@@ -193,20 +262,22 @@ func (w *RotatingWriter) Close() error {
 
 	// 3. 关闭文件句柄
 	w.fileMu.Lock()
-	var closeErr error
+	var closeErr *apperr.Error
 	if w.file != nil {
-		closeErr = w.file.Close()
+		if err := w.file.Close(); err != nil {
+			closeErr = errRotationFailed("关闭日志文件失败", err)
+		}
 		w.file = nil
 	}
 	w.fileMu.Unlock()
 
 	w.stateMu.Lock()
-	var allErrs []error
+	allErrs := make([]*apperr.Error, 0, len(w.bgErrors)+1)
 	if closeErr != nil {
 		allErrs = append(allErrs, closeErr)
 	}
 	allErrs = append(allErrs, w.bgErrors...)
-	w.closeErr = errors.Join(allErrs...)
+	w.closeErr = apperr.Join(RotationFailed, "日志轮转写入器关闭失败", allErrs...)
 	close(w.closeDone)
 	finalErr := w.closeErr
 	w.stateMu.Unlock()
@@ -214,17 +285,17 @@ func (w *RotatingWriter) Close() error {
 	return finalErr
 }
 
-func (w *RotatingWriter) openFileLocked() error {
+func (w *RotatingWriter) openFileLocked() *apperr.Error {
 	filePath := w.currentFilePath()
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("打开日志文件失败: %w", err)
+		return errRotationFailed("打开日志文件失败", err)
 	}
 
 	info, err := file.Stat()
 	if err != nil {
 		_ = file.Close()
-		return fmt.Errorf("获取文件信息失败: %w", err)
+		return errRotationFailed("获取文件信息失败", err)
 	}
 
 	w.file = file
@@ -248,16 +319,15 @@ func (w *RotatingWriter) datedFilePathWithIndex(date string, index int) string {
 	return filepath.Join(w.dir, fmt.Sprintf("%s-%s.%d%s", w.baseName, date, index, w.ext))
 }
 
-func (w *RotatingWriter) renameCurrentLogByDateLocked(date string) error {
+func (w *RotatingWriter) renameCurrentLogByDateLocked(date string) *apperr.Error {
 	currentPath := w.currentFilePath()
-
 	if _, err := os.Stat(currentPath); os.IsNotExist(err) {
 		return nil
 	}
 
 	if w.file != nil {
 		if err := w.file.Close(); err != nil {
-			return fmt.Errorf("关闭日志文件失败: %w", err)
+			return errRotationFailed("关闭日志文件失败", err)
 		}
 		w.file = nil
 	}
@@ -269,23 +339,23 @@ func (w *RotatingWriter) renameCurrentLogByDateLocked(date string) error {
 			break
 		}
 		if counter > 1000 {
-			return fmt.Errorf("无法生成唯一的日期日志文件名")
+			return apperr.New(RotationFailed, "无法生成唯一的日期日志文件名")
 		}
 		targetPath = w.datedFilePathWithIndex(date, counter)
 		counter++
 	}
 
 	if err := os.Rename(currentPath, targetPath); err != nil {
-		return fmt.Errorf("重命名日志文件失败: %w", err)
+		return errRotationFailed("重命名日志文件失败", err)
 	}
 
 	return nil
 }
 
-func (w *RotatingWriter) rotateLocked() error {
+func (w *RotatingWriter) rotateLocked() *apperr.Error {
 	if w.file != nil {
 		if err := w.file.Close(); err != nil {
-			return fmt.Errorf("关闭日志文件失败: %w", err)
+			return errRotationFailed("关闭日志文件失败", err)
 		}
 		w.file = nil
 	}
@@ -296,7 +366,7 @@ func (w *RotatingWriter) rotateLocked() error {
 	currentPath := w.currentFilePath()
 	if _, err := os.Stat(currentPath); err == nil {
 		if err := os.Rename(currentPath, w.rotatedFilePath(nextIndex)); err != nil {
-			return fmt.Errorf("重命名当前日志文件失败: %w", err)
+			return errRotationFailed("重命名当前日志文件失败", err)
 		}
 	}
 
@@ -304,12 +374,12 @@ func (w *RotatingWriter) rotateLocked() error {
 	return w.openFileLocked()
 }
 
-func (w *RotatingWriter) rotateForNewDayLocked(newDate string) error {
+func (w *RotatingWriter) rotateForNewDayLocked(newDate string) *apperr.Error {
 	currentPath := w.currentFilePath()
 	if _, err := os.Stat(currentPath); err == nil {
 		if w.file != nil {
 			if err := w.file.Close(); err != nil {
-				return fmt.Errorf("关闭日志文件失败: %w", err)
+				return errRotationFailed("关闭日志文件失败", err)
 			}
 			w.file = nil
 		}
@@ -321,23 +391,22 @@ func (w *RotatingWriter) rotateForNewDayLocked(newDate string) error {
 				break
 			}
 			if counter > 1000 {
-				return fmt.Errorf("无法生成唯一的日期日志文件名")
+				return apperr.New(RotationFailed, "无法生成唯一的日期日志文件名")
 			}
 			datedPath = w.datedFilePathWithIndex(w.currentDate, counter)
 			counter++
 		}
 
 		if err := os.Rename(currentPath, datedPath); err != nil {
-			return fmt.Errorf("跨天重命名日志失败: %w", err)
+			return errRotationFailed("跨天重命名日志失败", err)
 		}
 	}
 
 	w.currentDate = newDate
 	w.currentSize = 0
-	if err := w.openFileLocked(); err != nil {
-		return err
+	if appErr := w.openFileLocked(); appErr != nil {
+		return appErr
 	}
-
 	w.triggerArchiveAsync()
 	return nil
 }
@@ -417,8 +486,8 @@ func (w *RotatingWriter) archiveYesterday() {
 		return
 	}
 
-	if err := w.createTarGz(archivePath, files); err != nil {
-		w.recordBgError(err)
+	if appErr := w.createTarGz(archivePath, files); appErr != nil {
+		w.recordBgError(appErr)
 		return
 	}
 
@@ -448,28 +517,35 @@ func (w *RotatingWriter) collectFilesToArchive() []string {
 	return files
 }
 
-func (w *RotatingWriter) createTarGz(archivePath string, files []string) (err error) {
+// createTarGz 将给定文件打包为 tar.gz 归档。
+//
+// 该方法只负责 IO 归档动作，错误统一归类为 RotationFailed 并保留原始原因。
+func (w *RotatingWriter) createTarGz(archivePath string, files []string) *apperr.Error {
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
-		return fmt.Errorf("创建归档文件失败: %w", err)
+		return errRotationFailed("创建归档文件失败", err)
 	}
+	return w.writeTarGz(archiveFile, files)
+}
+
+func (w *RotatingWriter) writeTarGz(archiveFile io.WriteCloser, files []string) (appErr *apperr.Error) {
 	defer func() {
-		if cErr := archiveFile.Close(); cErr != nil && err == nil {
-			err = cErr
+		if cErr := archiveFile.Close(); cErr != nil && appErr == nil {
+			appErr = errRotationFailed("关闭归档文件失败", cErr)
 		}
 	}()
 
 	gzWriter := gzip.NewWriter(archiveFile)
 	defer func() {
-		if cErr := gzWriter.Close(); cErr != nil && err == nil {
-			err = cErr
+		if cErr := gzWriter.Close(); cErr != nil && appErr == nil {
+			appErr = errRotationFailed("关闭归档压缩流失败", cErr)
 		}
 	}()
 
 	tarWriter := tar.NewWriter(gzWriter)
 	defer func() {
-		if cErr := tarWriter.Close(); cErr != nil && err == nil {
-			err = cErr
+		if cErr := tarWriter.Close(); cErr != nil && appErr == nil {
+			appErr = errRotationFailed("关闭归档写入器失败", cErr)
 		}
 	}()
 
@@ -478,44 +554,54 @@ func (w *RotatingWriter) createTarGz(archivePath string, files []string) (err er
 			w.beforeArchiveFileHook(file)
 		}
 		if err := w.addFileToTar(tarWriter, file); err != nil {
-			return fmt.Errorf("添加文件 %s 到归档失败: %w", file, err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (w *RotatingWriter) addFileToTar(tarWriter *tar.Writer, filePath string) (err error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
+func (w *RotatingWriter) addFileToTar(tarWriter *tar.Writer, filePath string) (err *apperr.Error) {
+	wrapErr := func(rawErr error) *apperr.Error {
+		return errRotationFailed(apperr.ErrMessage(fmt.Sprintf("添加文件 %s 到归档失败", filepath.Base(filePath))), rawErr)
+	}
+
+	file, rawErr := os.Open(filePath)
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 	defer func() {
 		if cErr := file.Close(); cErr != nil && err == nil {
-			err = cErr
+			err = wrapErr(cErr)
 		}
 	}()
 
-	info, err := file.Stat()
-	if err != nil {
-		return err
+	info, rawErr := file.Stat()
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 
-	header, err := tar.FileInfoHeader(info, "")
-	if err != nil {
-		return err
+	header, rawErr := tar.FileInfoHeader(info, "")
+	if rawErr != nil {
+		return wrapErr(rawErr)
 	}
 	header.Name = filepath.Base(filePath)
 
-	if err := tarWriter.WriteHeader(header); err != nil {
-		return err
+	if rawErr := tarWriter.WriteHeader(header); rawErr != nil {
+		return wrapErr(rawErr)
 	}
 
-	_, err = io.Copy(tarWriter, file)
-	return err
+	if _, rawErr := io.Copy(tarWriter, file); rawErr != nil {
+		return wrapErr(rawErr)
+	}
+	return nil
 }
 
-func (w *RotatingWriter) checkStartupState() error {
+// checkStartupState 执行启动检查：跨天重命名、超限切割与历史归档。
+//
+// 前两类失败直接返回（RotationFailed）；归档失败登记到后台错误账本，
+// 推迟到 Close 时统一交付，不使构造失败。
+func (w *RotatingWriter) checkStartupState() *apperr.Error {
 	currentPath := w.currentFilePath()
 
 	info, err := os.Stat(currentPath)
@@ -525,7 +611,7 @@ func (w *RotatingWriter) checkStartupState() error {
 		return w.openFileLocked()
 	}
 	if err != nil {
-		return fmt.Errorf("获取日志文件信息失败: %w", err)
+		return errRotationFailed("获取日志文件信息失败", err)
 	}
 
 	modTime := info.ModTime()
@@ -536,46 +622,52 @@ func (w *RotatingWriter) checkStartupState() error {
 	defer w.fileMu.Unlock()
 
 	if fileDate != today {
-		if err := w.renameCurrentLogByDateLocked(fileDate); err != nil {
-			return fmt.Errorf("按日期重命名日志失败: %w", err)
+		if appErr := w.renameCurrentLogByDateLocked(fileDate); appErr != nil {
+			return appErr
 		}
-		if err := w.openFileLocked(); err != nil {
-			return err
+		if appErr := w.openFileLocked(); appErr != nil {
+			return appErr
 		}
 	} else {
 		if info.Size() >= w.maxSize {
-			if err := w.rotateLocked(); err != nil {
-				return fmt.Errorf("启动时切割日志失败: %w", err)
+			if appErr := w.rotateLocked(); appErr != nil {
+				return appErr
 			}
 		} else {
-			if err := w.openFileLocked(); err != nil {
-				return err
+			if appErr := w.openFileLocked(); appErr != nil {
+				return appErr
 			}
 		}
 	}
 
-	if err := w.archiveOldFiles(); err != nil {
-		w.recordBgError(err)
+	if appErr := w.archiveOldFiles(); appErr != nil {
+		w.recordBgError(appErr)
 	}
 	return nil
 }
 
-func (w *RotatingWriter) recordBgError(err error) {
-	if err == nil {
+// recordBgError 登记后台归档错误，供 Close 时统一交付。
+//
+// 账本只接受统一错误，保证关闭期聚合时分类一致。
+func (w *RotatingWriter) recordBgError(appErr *apperr.Error) {
+	if appErr == nil {
 		return
 	}
 	w.stateMu.Lock()
-	w.bgErrors = append(w.bgErrors, err)
+	w.bgErrors = append(w.bgErrors, appErr)
 	w.stateMu.Unlock()
 }
 
-func (w *RotatingWriter) archiveOldFiles() error {
+// archiveOldFiles 归档历史文件，按日期分别打包。
+//
+// 单个日期归档失败只登记后台错误并继续处理其余日期，不中断整体归档。
+func (w *RotatingWriter) archiveOldFiles() *apperr.Error {
 	today := time.Now().Format("2006-01-02")
 	filesByDate := make(map[string][]string)
 
 	entries, err := os.ReadDir(w.dir)
 	if err != nil {
-		return err
+		return errRotationFailed("读取日志目录失败", err)
 	}
 
 	rotatedPattern := regexp.MustCompile(
@@ -590,6 +682,7 @@ func (w *RotatingWriter) archiveOldFiles() error {
 		if entry.IsDir() {
 			continue
 		}
+
 		name := entry.Name()
 		if name == w.baseName+w.ext || strings.HasSuffix(name, ".tar.gz") {
 			continue
@@ -613,16 +706,13 @@ func (w *RotatingWriter) archiveOldFiles() error {
 	for date, files := range filesByDate {
 		archiveName := fmt.Sprintf("logger-%s.tar.gz", date)
 		archivePath := filepath.Join(w.dir, archiveName)
-
 		if _, err := os.Stat(archivePath); err == nil {
 			continue
 		}
-
-		if err := w.createTarGz(archivePath, files); err != nil {
-			w.recordBgError(err)
+		if appErr := w.createTarGz(archivePath, files); appErr != nil {
+			w.recordBgError(appErr)
 			continue
 		}
-
 		for _, file := range files {
 			_ = os.Remove(file)
 		}

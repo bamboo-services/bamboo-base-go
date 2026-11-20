@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/dialect"
 	gormsqlserver "gorm.io/driver/sqlserver"
@@ -19,7 +20,7 @@ const DriverName = "sqlserver"
 // adapter 实现 dialect.Adapter 接口。
 type adapter struct {
 	dsn string
-	err error
+	err *apperr.Error
 }
 
 func init() {
@@ -35,7 +36,7 @@ func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
 		return &adapter{
-			err: errors.New("sqlserver: dsn cannot be empty"),
+			err: configInvalid("SQL Server 连接串不能为空", errors.New("sqlserver: dsn cannot be empty")),
 		}
 	}
 
@@ -93,11 +94,11 @@ func FromEnv() dialect.Adapter {
 
 	// 端口与主机格式校验
 	if strings.TrimSpace(port) == "" {
-		return &adapter{err: errors.New("sqlserver: port cannot be empty")}
+		return &adapter{err: configInvalid("SQL Server 端口配置不能为空", errors.New("sqlserver: port cannot be empty"))}
 	}
 	trimmedHost := strings.TrimSpace(host)
 	if trimmedHost == "" {
-		return &adapter{err: errors.New("sqlserver: host cannot be empty")}
+		return &adapter{err: configInvalid("SQL Server 主机配置不能为空", errors.New("sqlserver: host cannot be empty"))}
 	}
 
 	u := &url.URL{
@@ -125,7 +126,12 @@ func (a *adapter) Name() string {
 // Open 构造 gorm.Dialector 实例。
 //
 // 仅做 Dialector 构造，不执行数据库真实建连或网络操作。
-func (a *adapter) Open() (gorm.Dialector, error) {
+// 若在构造或环境变量解析阶段存在配置错误，在此处返回保存的错误。
+// 接收器为 nil 时返回 [dialect.AdapterInvalid] 错误而非触发 panic。
+func (a *adapter) Open() (gorm.Dialector, *apperr.Error) {
+	if a == nil {
+		return nil, apperr.New(dialect.AdapterInvalid, "SQL Server 适配器实例为空", errors.New("sqlserver: adapter instance is nil"))
+	}
 	if a.err != nil {
 		return nil, a.err
 	}
@@ -133,16 +139,23 @@ func (a *adapter) Open() (gorm.Dialector, error) {
 }
 
 // validateDSN 验证 DSN 结构合法性，脱敏任何可能包含凭据的错误信息。
-func validateDSN(raw string) error {
+func validateDSN(raw string) *apperr.Error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return errors.New("sqlserver: invalid DSN format")
+		return configInvalid("SQL Server 连接串格式非法", errors.New("sqlserver: invalid DSN format"))
 	}
 	if u.Scheme != "sqlserver" {
-		return fmt.Errorf("sqlserver: unsupported scheme %q", u.Scheme)
+		return configInvalid("SQL Server 连接串协议非法", fmt.Errorf("sqlserver: unsupported scheme %q", u.Scheme))
 	}
 	if u.Host == "" {
-		return errors.New("sqlserver: host cannot be empty")
+		return configInvalid("SQL Server 连接串主机为空", errors.New("sqlserver: host cannot be empty"))
 	}
 	return nil
+}
+
+// configInvalid 构造 SQL Server 适配器配置非法错误。
+//
+// msg 为安全的中文说明，cause 为已脱敏的底层原因，二者均不携带 DSN 明文或数据库密码。
+func configInvalid(msg string, cause error) *apperr.Error {
+	return apperr.New(dialect.AdapterConfigInvalid, apperr.ErrMessage(msg), cause)
 }

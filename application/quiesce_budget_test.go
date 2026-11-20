@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -20,11 +21,11 @@ type quiesceTestProviderTool struct {
 	stopCalls atomic.Int32
 }
 
-func (p *quiesceTestProviderTool) Start(ctx context.Context) error {
+func (p *quiesceTestProviderTool) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (p *quiesceTestProviderTool) Stop(ctx context.Context) error {
+func (p *quiesceTestProviderTool) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalls.Add(1)
 	return nil
 }
@@ -41,11 +42,11 @@ type quiesceBlockingWorker struct {
 	stopCalls      atomic.Int32
 }
 
-func (q *quiesceBlockingWorker) Start(ctx context.Context) error {
+func (q *quiesceBlockingWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (q *quiesceBlockingWorker) Run(ctx context.Context) error {
+func (q *quiesceBlockingWorker) Run(ctx context.Context) *apperr.Error {
 	select {
 	case <-q.startDone:
 	default:
@@ -55,13 +56,13 @@ func (q *quiesceBlockingWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (q *quiesceBlockingWorker) Quiesce(ctx context.Context) error {
+func (q *quiesceBlockingWorker) Quiesce(ctx context.Context) *apperr.Error {
 	// 忽略 ctx，持续阻塞直至测试显式释放屏障
 	<-q.releaseQuiesce
 	return nil
 }
 
-func (q *quiesceBlockingWorker) Stop(ctx context.Context) error {
+func (q *quiesceBlockingWorker) Stop(ctx context.Context) *apperr.Error {
 	q.stopCalls.Add(1)
 	return nil
 }
@@ -114,7 +115,7 @@ func TestQuiesceBudget_RetainedDepsAndStuckInstance(t *testing.T) {
 		t.Fatalf("failed to register worker: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -205,8 +206,8 @@ func TestQuiesceBudget_RetainedDepsAndStuckInstance(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 var (
-	errSentinelStart = errors.New("sentinel_start_failure")
-	errSentinelStop  = errors.New("sentinel_stop_failure")
+	errSentinelStart = apperr.New(apperr.FrameworkInternalError, "sentinel_start_failure")
+	errSentinelStop  = apperr.New(apperr.FrameworkInternalError, "sentinel_stop_failure")
 )
 
 type startFailProviderTool struct {
@@ -215,12 +216,12 @@ type startFailProviderTool struct {
 	stopCalls  atomic.Int32
 }
 
-func (p *startFailProviderTool) Start(ctx context.Context) error {
+func (p *startFailProviderTool) Start(ctx context.Context) *apperr.Error {
 	p.startCalls.Add(1)
 	return nil
 }
 
-func (p *startFailProviderTool) Stop(ctx context.Context) error {
+func (p *startFailProviderTool) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalls.Add(1)
 	return nil
 }
@@ -236,18 +237,18 @@ type startFailConsumerTool struct {
 	stopCalls  atomic.Int32
 }
 
-func (c *startFailConsumerTool) Start(ctx context.Context) error {
+func (c *startFailConsumerTool) Start(ctx context.Context) *apperr.Error {
 	c.startCalls.Add(1)
 	if ctx == nil {
-		return errors.New("ctx cannot be nil")
+		return apperr.New(apperr.FrameworkInternalError, "ctx cannot be nil")
 	}
 	return errSentinelStart
 }
 
-func (c *startFailConsumerTool) Stop(ctx context.Context) error {
+func (c *startFailConsumerTool) Stop(ctx context.Context) *apperr.Error {
 	c.stopCalls.Add(1)
 	if ctx == nil {
-		return errors.New("ctx cannot be nil")
+		return apperr.New(apperr.FrameworkInternalError, "ctx cannot be nil")
 	}
 	return errSentinelStop
 }

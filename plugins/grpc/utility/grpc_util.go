@@ -7,6 +7,7 @@ import (
 
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/constant"
+	"github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/grpcresult"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -17,20 +18,20 @@ import (
 //
 // # 错误与失败语义
 //
-// 若遇到以下任一情况，函数将返回包含 [apperr.NotExist]（业务错误码 40000）的结构化业务错误，且错误信息中不会打印敏感元数据内容：
-//   - ctx 为 nil；
+// ctx为nil时返回 [grpcresult.ContextMissing] 内部调用错误；
+// 其余元数据缺失返回 [grpcresult.MetadataMissing] 参数错误，不据此推断身份未认证：
 //   - ctx 未通过 [metadata.FromIncomingContext] 携带任何传入元数据；
 //   - 元数据中不存在指定的 key，或该键下的所有值均为空白字符串。
 //
 // 该函数具备并发安全性，可在中间件或业务 RPC 实现中安全调用。
 func ExtractMetadata(ctx context.Context, key xGrpcConst.Metadata) (string, *apperr.Error) {
 	if ctx == nil {
-		return "", apperr.New(apperr.NotExist, "缺少 gRPC 传入元数据", nil)
+		return "", apperr.New(grpcresult.ContextMissing, "缺少 gRPC 请求上下文", nil)
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return "", apperr.New(apperr.NotExist, "缺少 gRPC 传入元数据", nil)
+		return "", apperr.New(grpcresult.MetadataMissing, "缺少 gRPC 传入元数据", nil)
 	}
 
 	values := md.Get(key.String())
@@ -39,5 +40,5 @@ func ExtractMetadata(ctx context.Context, key xGrpcConst.Metadata) (string, *app
 			return trimmed, nil
 		}
 	}
-	return "", apperr.New(apperr.NotExist, apperr.ErrMessage(fmt.Sprintf("元数据中不存在有效值: %s", key.String())), nil)
+	return "", apperr.New(grpcresult.MetadataMissing, apperr.ErrMessage(fmt.Sprintf("元数据中不存在有效值: %s", key.String())), nil)
 }

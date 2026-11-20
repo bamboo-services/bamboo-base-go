@@ -47,14 +47,14 @@ func ExampleNewRotatingWriter() {
 		}
 	}()
 
-	writer, err := logging.NewRotatingWriter(logging.RotatorConfig{
+	writer, appErr := logging.NewRotatingWriter(logging.RotatorConfig{
 		Dir:      dir,
 		BaseName: "app",
 		Ext:      ".log",
 		MaxSize:  1024 * 1024,
 	})
-	if err != nil {
-		log.Fatal(err)
+	if appErr != nil {
+		log.Fatal(appErr)
 	}
 
 	if _, err := writer.Write([]byte("hello bamboo logging\n")); err != nil {

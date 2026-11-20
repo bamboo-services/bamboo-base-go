@@ -2,10 +2,10 @@ package application
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -32,7 +32,7 @@ func (h *runHandleImpl) InstanceID() string {
 	return h.instanceID
 }
 
-func (h *runHandleImpl) Wait(ctx context.Context) (RunResult, error) {
+func (h *runHandleImpl) Wait(ctx context.Context) (RunResult, *apperr.Error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -43,7 +43,7 @@ func (h *runHandleImpl) Wait(ctx context.Context) (RunResult, error) {
 		h.resultMu.RUnlock()
 		return res, res.computeWaitError()
 	case <-ctx.Done():
-		return RunResult{}, ctx.Err()
+		return RunResult{}, normalizeErr(apperr.FrameworkInternalError, "等待组件执行结果被中断", ctx.Err())
 	}
 }
 
@@ -58,7 +58,10 @@ func (h *runHandleImpl) publishResult(res RunResult) {
 }
 
 // computeWaitError 计算按照契约表交付给 Wait 的错误
-func (r *RunResult) computeWaitError() error {
+//
+// 工厂失败与未派发取消各自独占返回；已派发但在 Start/Run 前取消时保留 CancelErr
+// （若同时伴随 StopErr 则一并聚合）；多阶段失败按阶段顺序聚合，全部阶段错误均保留在错误链中。
+func (r *RunResult) computeWaitError() *apperr.Error {
 	if r.FactoryErr != nil {
 		return r.FactoryErr
 	}
@@ -66,7 +69,7 @@ func (r *RunResult) computeWaitError() error {
 		return r.CancelErr
 	}
 
-	var errs []error
+	var errs []*apperr.Error
 	if r.StartErr != nil {
 		errs = append(errs, r.StartErr)
 	}
@@ -82,11 +85,14 @@ func (r *RunResult) computeWaitError() error {
 	if r.StopErr != nil {
 		errs = append(errs, r.StopErr)
 	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
+	if len(errs) == 0 && r.Outcome == OutcomeCancelled && r.CancelErr != nil {
+		return r.CancelErr
 	}
-	return nil
+	if r.Outcome == OutcomeFailed && r.CancelErr != nil && r.StartErr == nil && r.RunErr == nil && r.StopErr != nil {
+		errs = append([]*apperr.Error{r.CancelErr}, errs...)
+	}
+
+	return aggregateErrs(errs...)
 }
 
 type supervisor struct {

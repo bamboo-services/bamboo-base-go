@@ -2,12 +2,12 @@ package builtin
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"sync"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
 )
@@ -89,18 +89,18 @@ type loggerPlugin struct {
 	writer  *logging.RotatingWriter // 底层文件轮转写入器
 	logger  *logging.Logger         // 构造完成的日志器实例
 
-	stopOnce sync.Once // 确保 Stop 只执行一次的同步原语
-	stopErr  error     // 缓存 Stop 执行返回的错误
+	stopOnce sync.Once     // 确保 Stop 只执行一次的同步原语
+	stopErr  *apperr.Error // 缓存 Stop 执行返回的错误
 }
 
 // Start 启动受管日志组件，完成 RotatingWriter、Handler 与 Logger 构造。
 // 启动局部失败时，真实关闭已创建的 writer 并合并错误返回。
-func (p *loggerPlugin) Start(ctx context.Context) error {
+func (p *loggerPlugin) Start(ctx context.Context) *apperr.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.started {
-		return errors.New("builtin logger: already started")
+		return apperr.New(apperr.FrameworkComponentInvalidState, "内置日志组件已处于启动状态")
 	}
 
 	writer, err := logging.NewRotatingWriter(p.cfg.Rotator)
@@ -117,8 +117,9 @@ func (p *loggerPlugin) Start(ctx context.Context) error {
 
 	instLogger, err := logging.New(handler)
 	if err != nil {
-		closeErr := writer.Close()
-		return errors.Join(err, closeErr)
+		// 构造失败时真实关闭已创建的写入器，并保留两条失败原因
+		closeErr := apperr.From(apperr.FrameworkInternalError, "关闭日志写入器失败", writer.Close())
+		return apperr.Join(apperr.FrameworkInternalError, "内置日志组件构造失败", err, closeErr)
 	}
 
 	p.writer = writer
@@ -129,14 +130,15 @@ func (p *loggerPlugin) Start(ctx context.Context) error {
 
 // Stop 停止受管日志组件并释放资源。
 // 无论传入 ctx 是否已过期，均真实等待底层的 writer.Close 退出，不提前返回。
-func (p *loggerPlugin) Stop(ctx context.Context) error {
+func (p *loggerPlugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopOnce.Do(func() {
 		p.mu.Lock()
 		writer := p.writer
 		p.mu.Unlock()
 
 		if writer != nil {
-			p.stopErr = writer.Close()
+			// writer.Close 是 io.Closer 固定签名：此处显式把原生错误转接为统一错误
+			p.stopErr = apperr.From(apperr.FrameworkInternalError, "关闭日志写入器失败", writer.Close())
 		}
 	})
 

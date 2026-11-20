@@ -2,13 +2,16 @@ package application
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
 // 拓扑图构建与依赖校验错误哨兵。
+//
+// 哨兵作为错误链根因保留，对外失败结果统一为 [*apperr.Error]，
+// 错误码由 [sentinelCodes] 登记。
 var (
 	ErrEmptyKey               = errors.New("application: empty key")                            // 插件主键或暴露/依赖的资源键为空。
 	ErrInvalidKey             = errors.New("application: invalid key")                          // 键格式不符合规范（例如未通过 ctxkey.Key.IsValid 校验）。
@@ -33,7 +36,7 @@ type dependencyGraph struct {
 }
 
 // buildGraph 构建并校验插件依赖图。
-func buildGraph(infos []PluginInfo) (*dependencyGraph, error) {
+func buildGraph(infos []PluginInfo) (*dependencyGraph, *apperr.Error) {
 	graph := &dependencyGraph{
 		layers:        make([][]ctxkey.Key, 0),
 		providerByKey: make(map[ctxkey.Key]ctxkey.Key),
@@ -45,51 +48,51 @@ func buildGraph(infos []PluginInfo) (*dependencyGraph, error) {
 		info := clonePluginInfo(raw)
 
 		if info.Key.IsEmpty() {
-			return nil, ErrEmptyKey
+			return nil, newAppErr(ErrEmptyKey, "插件主键或资源键为空")
 		}
 		if !info.Key.IsValid() {
-			return nil, ErrInvalidKey
+			return nil, newAppErr(ErrInvalidKey, "键格式不符合规范")
 		}
 		if info.Key == ctxkey.RequestKey {
-			return nil, ErrRequestKeyShared
+			return nil, newAppErr(ErrRequestKeyShared, "请求级上下文键不得作为共享插件键或暴露键")
 		}
 
 		switch info.Mode {
 		case ModeTool, ModeWorker:
 			if info.Overlap != (OverlapPolicy{}) {
-				return nil, ErrNonComponentHasOverlap
+				return nil, newAppErr(ErrNonComponentHasOverlap, "非 Component 插件不得配置重入策略")
 			}
 		case ModeComponent:
 			if len(info.Provides) > 0 {
-				return nil, ErrComponentHasProvides
+				return nil, newAppErr(ErrComponentHasProvides, "Component 不得声明静态 Provides")
 			}
 			if err := validateComponentOverlap(info.Overlap); err != nil {
 				return nil, err
 			}
 		default:
-			return nil, ErrUnknownMode
+			return nil, newAppErr(ErrUnknownMode, "插件元信息声明了未知的运行形态")
 		}
 
 		if _, exists := graph.providerByKey[info.Key]; exists {
-			return nil, fmt.Errorf("%w: plugin key %s", ErrDuplicateExposedKey, info.Key)
+			return nil, newAppErr(ErrDuplicateExposedKey, "插件主键 "+string(info.Key)+" 重复注册")
 		}
 		graph.providerByKey[info.Key] = info.Key
 
 		for _, p := range info.Provides {
 			if p.IsEmpty() {
-				return nil, ErrEmptyKey
+				return nil, newAppErr(ErrEmptyKey, "插件主键或资源键为空")
 			}
 			if !p.IsValid() {
-				return nil, ErrInvalidKey
+				return nil, newAppErr(ErrInvalidKey, "键格式不符合规范")
 			}
 			if p == ctxkey.RequestKey {
-				return nil, ErrRequestKeyShared
+				return nil, newAppErr(ErrRequestKeyShared, "请求级上下文键不得作为共享插件键或暴露键")
 			}
 			if p == info.Key {
-				return nil, fmt.Errorf("%w: plugin %s provides itself", ErrSelfProvidedKey, info.Key)
+				return nil, newAppErr(ErrSelfProvidedKey, "插件 "+string(info.Key)+" 在 Provides 中声明了自身主键")
 			}
 			if _, exists := graph.providerByKey[p]; exists {
-				return nil, fmt.Errorf("%w: resource key %s", ErrDuplicateExposedKey, p)
+				return nil, newAppErr(ErrDuplicateExposedKey, "资源键 "+string(p)+" 重复注册")
 			}
 			graph.providerByKey[p] = info.Key
 		}
@@ -108,21 +111,21 @@ func buildGraph(infos []PluginInfo) (*dependencyGraph, error) {
 		depEdges[consumerKey] = make(map[ctxkey.Key]struct{})
 		for _, req := range info.Requires {
 			if req.IsEmpty() {
-				return nil, ErrEmptyKey
+				return nil, newAppErr(ErrEmptyKey, "插件主键或资源键为空")
 			}
 			if !req.IsValid() {
-				return nil, ErrInvalidKey
+				return nil, newAppErr(ErrInvalidKey, "键格式不符合规范")
 			}
 			providerKey, ok := graph.providerByKey[req]
 			if !ok {
-				return nil, fmt.Errorf("%w: key %s required by %s", ErrMissingDependency, req, consumerKey)
+				return nil, newAppErr(ErrMissingDependency, "依赖键 "+string(req)+" 在应用中无对应提供者（被 "+string(consumerKey)+" 依赖）")
 			}
 			if providerKey == consumerKey {
-				return nil, fmt.Errorf("%w: %s requires %s provided by itself", ErrSelfDependency, consumerKey, req)
+				return nil, newAppErr(ErrSelfDependency, "插件 "+string(consumerKey)+" 依赖了自身提供的 "+string(req))
 			}
 			providerInfo := graph.infoByKey[providerKey]
 			if providerInfo.Mode == ModeComponent {
-				return nil, fmt.Errorf("%w: component %s cannot be required statically by %s", ErrInvalidDependencyScope, providerKey, consumerKey)
+				return nil, newAppErr(ErrInvalidDependencyScope, "Component "+string(providerKey)+" 不得被 "+string(consumerKey)+" 静态依赖")
 			}
 			depEdges[consumerKey][providerKey] = struct{}{}
 		}
@@ -170,42 +173,42 @@ func buildGraph(infos []PluginInfo) (*dependencyGraph, error) {
 	}
 
 	if processedCount < len(graph.infoByKey) {
-		return nil, ErrDependencyCycle
+		return nil, newAppErr(ErrDependencyCycle, "插件依赖构成有向循环，拓扑排序无法收敛")
 	}
 
 	return graph, nil
 }
 
-func validateComponentOverlap(p OverlapPolicy) error {
+func validateComponentOverlap(p OverlapPolicy) *apperr.Error {
 	switch p.Kind {
 	case 0:
 		if p.MaxConcurrency != 0 || p.MaxQueue != 0 {
-			return ErrInvalidOverlapCapacity
+			return newAppErr(ErrInvalidOverlapCapacity, "重入策略容量配额不合法")
 		}
 		return nil
 	case OverlapSkip:
 		if p.MaxConcurrency != 0 || p.MaxQueue != 0 {
-			return ErrInvalidOverlapCapacity
+			return newAppErr(ErrInvalidOverlapCapacity, "重入策略容量配额不合法")
 		}
 		return nil
 	case OverlapAllow:
 		if p.MaxConcurrency < 1 {
-			return ErrInvalidOverlapCapacity
+			return newAppErr(ErrInvalidOverlapCapacity, "重入策略容量配额不合法")
 		}
 		if p.MaxQueue != 0 {
-			return ErrInvalidOverlapConfig
+			return newAppErr(ErrInvalidOverlapConfig, "重入策略配置冲突")
 		}
 		return nil
 	case OverlapQueue:
 		if p.MaxQueue < 1 {
-			return ErrInvalidOverlapCapacity
+			return newAppErr(ErrInvalidOverlapCapacity, "重入策略容量配额不合法")
 		}
 		if p.MaxConcurrency != 0 {
-			return ErrInvalidOverlapConfig
+			return newAppErr(ErrInvalidOverlapConfig, "重入策略配置冲突")
 		}
 		return nil
 	default:
-		return ErrInvalidOverlapKind
+		return newAppErr(ErrInvalidOverlapKind, "未知的重入策略类型")
 	}
 }
 

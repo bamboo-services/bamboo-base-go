@@ -41,6 +41,9 @@
 - **新路径**：`foundation/apperr/`、`foundation/envelope/`
 - **测试路径**：由 `foundation/apperr/{all_codes,error,new}_test.go` 与 `foundation/envelope/response_test.go` 承接
 - **处置理由**：解耦 Gin 上下文；`envelope.Response.Data` 为 `any` 载荷（非泛型载荷），纯错误构造无副效应。
+- **目录收口与重编（2026-11-06）**：迁移期曾由189项缩至30项，再误以“内核实际使用”保留9项通用码；该中间口径由用户审查纠正。该轮 `apperr` 仅保留8项 `FRAMEWORK_*` 的500系列码，协议与领域定义下放所属包；全库65项按 [错误码分配与受控词表规范](./0002-foundation-error-code-vocabulary.md) 重编，Code/Output全局唯一。下游须同步迁移，旧编号不提供别名；根因链、脱敏与按状态分组映射的机制不变。
+- **P1追加与错误原语（2026-11-09）**：按用户实施授权保留上述65项并追加19项，当前词表84项；`apperr` 为12项框架码，新增同模块 `control` 3项及 `valueerr` 5项，RPC新增7项。新增nil安全转接/聚合和值与控制分类核心，实际实现及检查以 [plan0002 P1](../../plan/0002-foundation-strong-error-migration.md#p1先稳定错误核心码映射和负向编译测试) 和词表为准；不表示全SDK签名或原生RPC信封链路已迁移。
+- **插件专属目录**：邮件服务码由 `plugins/email` 维护，缓存操作码由 `plugins/cache` 维护，事务、记录与数据库约束码由 `plugins/database` 维护。上层按需使用 `apperr.New` 包装；不自动改写插件既有哨兵错误与底层错误，不恢复验证码校验等业务规则预设。
 
 ### 4. 日志与雪花生成
 

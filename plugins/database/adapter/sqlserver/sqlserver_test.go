@@ -124,9 +124,9 @@ func TestAdapter_FromEnv_SpecialCredentials(t *testing.T) {
 		t.Fatalf("expected *gormsqlserver.Dialector, got %T", dialector)
 	}
 
-	u, err := url.Parse(sd.DSN)
-	if err != nil {
-		t.Fatalf("failed to parse generated DSN %q: %v", sd.DSN, err)
+	u, parseErr := url.Parse(sd.DSN)
+	if parseErr != nil {
+		t.Fatalf("failed to parse generated DSN %q: %v", sd.DSN, parseErr)
 	}
 
 	if u.User == nil {
@@ -164,14 +164,14 @@ func TestAdapter_FromEnv_IPv6(t *testing.T) {
 		t.Fatalf("expected *gormsqlserver.Dialector, got %T", dialector)
 	}
 
-	u, err := url.Parse(sd.DSN)
-	if err != nil {
-		t.Fatalf("failed to parse generated DSN %q: %v", sd.DSN, err)
+	u, parseErr := url.Parse(sd.DSN)
+	if parseErr != nil {
+		t.Fatalf("failed to parse generated DSN %q: %v", sd.DSN, parseErr)
 	}
 
-	h, p, err := net.SplitHostPort(u.Host)
-	if err != nil {
-		t.Fatalf("failed to split host port from %q: %v", u.Host, err)
+	h, p, splitErr := net.SplitHostPort(u.Host)
+	if splitErr != nil {
+		t.Fatalf("failed to split host port from %q: %v", u.Host, splitErr)
 	}
 	if h != "::1" || p != "1433" {
 		t.Fatalf("expected host '::1' and port '1433', got host=%q, port=%q", h, p)
@@ -325,14 +325,14 @@ func TestRealEngine_SQLServer(t *testing.T) {
 		t.Fatalf("Open failed: %v", err)
 	}
 
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open failed: %v", err)
+	db, openErr := gorm.Open(dialector, &gorm.Config{})
+	if openErr != nil {
+		t.Fatalf("gorm.Open failed: %v", openErr)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("db.DB() failed: %v", err)
+	sqlDB, dbErr := db.DB()
+	if dbErr != nil {
+		t.Fatalf("db.DB() failed: %v", dbErr)
 	}
 	defer func() {
 		_ = sqlDB.Close()

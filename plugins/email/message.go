@@ -1,9 +1,11 @@
 package email
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"os"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 )
 
 // Attachment 表示随邮件一同发送的二进制或文本附件。
@@ -57,10 +59,16 @@ func NewMessage() *Message {
 
 // AttachFile 从指定的文件系统路径打开文件并作为附件追加至邮件中。
 // 若文件不存在或无法读取，返回相应 I/O 错误。
-func (m *Message) AttachFile(filename string) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 失败按所属域错误码 [EmailError] 归一并保留底层 I/O 原因。
+func (m *Message) AttachFile(filename string) *apperr.Error {
+	if m == nil {
+		return opErr("email: 邮件消息不能为空", errors.New("email: message cannot be nil"))
+	}
 	file, err := os.Open(filename)
 	if err != nil {
-		return fmt.Errorf("打开附件文件失败: %w", err)
+		return opErr("email: 打开附件文件失败", err)
 	}
 
 	m.Attachments = append(m.Attachments, Attachment{

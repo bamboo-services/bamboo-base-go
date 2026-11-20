@@ -2,9 +2,10 @@ package logging
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 )
 
 // Logger 是基于显式 slog.Handler 的基础日志器包装，持有底层的
@@ -19,12 +20,14 @@ type Logger struct {
 
 // New 创建一个新的 Logger 实例。
 //
-// handler 为 nil 时拒绝并返回错误，调用方应改用有效的 slog.Handler
-// 重试；handler 通常是 [NewLogHandler] 的返回值，也可以是任意
-// 第三方 Handler。
-func New(handler slog.Handler) (*Logger, error) {
+// handler 为 nil 时拒绝并返回 HandlerInvalid 错误码的统一错误，
+// 调用方应改用有效的 slog.Handler 重试；handler 通常是
+// [NewLogHandler] 的返回值，也可以是任意第三方 Handler。
+//
+// 成功时返回的第二个结果为 nil 指针，不会出现"非 nil 装入 error 接口"的假失败。
+func New(handler slog.Handler) (*Logger, *apperr.Error) {
 	if handler == nil {
-		return nil, errors.New("logging.New: handler cannot be nil")
+		return nil, errHandlerInvalid()
 	}
 	return &Logger{
 		logger: slog.New(handler),

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/adapter/mysql/v2"
 	database "github.com/bamboo-services/bamboo-base-go/plugins/database/v2"
@@ -32,8 +33,8 @@ type witnessWorker struct {
 	workFn   func(ctx context.Context) error
 	doneCh   chan struct{}
 	workErr  error
-	startErr error
-	stopErr  error
+	startErr *apperr.Error
+	stopErr  *apperr.Error
 	mu       sync.Mutex
 	doneOnce sync.Once
 }
@@ -45,26 +46,26 @@ func newWitnessWorker(workFn func(ctx context.Context) error) *witnessWorker {
 	}
 }
 
-func (w *witnessWorker) Start(_ context.Context) error {
+func (w *witnessWorker) Start(_ context.Context) *apperr.Error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.startErr
 }
 
-func (w *witnessWorker) Run(ctx context.Context) error {
+func (w *witnessWorker) Run(ctx context.Context) *apperr.Error {
 	defer w.doneOnce.Do(func() { close(w.doneCh) })
 	if w.workFn != nil {
 		w.workErr = w.workFn(ctx)
 		w.doneOnce.Do(func() { close(w.doneCh) })
 		if w.workErr != nil {
-			return w.workErr
+			return apperr.New(database.DatabaseError, "集成测试业务逻辑执行失败", w.workErr)
 		}
 	}
 	<-ctx.Done()
-	return ctx.Err()
+	return nil
 }
 
-func (w *witnessWorker) Stop(_ context.Context) error {
+func (w *witnessWorker) Stop(_ context.Context) *apperr.Error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.stopErr
@@ -227,7 +228,7 @@ func TestIntegration_MySQL(t *testing.T) {
 	}
 
 	// 4. 启动应用生命周期
-	appRunErrCh := make(chan error, 1)
+	appRunErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		appRunErrCh <- app.Run()
 	}()

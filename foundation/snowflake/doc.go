@@ -99,14 +99,18 @@
 // [Node] 实例的 [Node.Generate] 方法是并发安全的，内部使用互斥锁保证发号序列单调递增，
 // 适合在应用生命周期内作为单例共享。
 //
-// 关键边界与错误处理策略如下：
-//   - 参数越界：[NewNode] 对超出 [0, 7] 范围的入参返回校验错误；
-//     [Node.Generate] 对超出 [0, 63] 范围的基因参数返回校验错误；
-//   - 空指针调用：未实例化的 nil 节点调用 [Node.Generate] 将返回 [ErrNilNode]，
+// 关键边界与错误处理策略如下（失败一律返回统一错误 [*apperr.Error]，
+// 成功路径返回真正的 nil 错误）：
+//   - 参数越界：[NewNode] 对超出 [0, 7] 范围的入参返回错误码
+//     [NodeInvalid]（50026）的错误；[Node.Generate] 对超出 [0, 63] 范围的
+//     基因参数返回 [valueerr.OutOfRange]（40014）错误；
+//   - 空指针调用：未实例化的 nil 节点调用 [Node.Generate] 将返回
+//     [valueerr.InvalidReceiver]（50019）错误，并以 [ErrNilNode] 为根因，
 //     调用 [Node.MustGenerate] 则直接引发 panic；
 //   - 反序列化空指针：nil 接收器调用 UnmarshalJSON、UnmarshalBinary
-//     或 Scan 方法将返回 [ErrNilReceiver]，解析失败时不会污染原值；
+//     或 Scan 方法将返回 [valueerr.InvalidReceiver]（50019）错误，
+//     并以 [ErrNilReceiver] 为根因，解析失败时不会污染原值；
 //   - 时钟回拨：若检测到系统时钟回退，[Node.Generate] 将立即返回
-//     包含 [ErrClockBackwards] 的错误；
+//     [ClockBackwards]（50027）错误，并以 [ErrClockBackwards] 为根因；
 //   - 序列号耗尽：单毫秒内如果 1024 个序列号完全用尽，节点将主动自旋等待至下一毫秒继续发号。
 package snowflake

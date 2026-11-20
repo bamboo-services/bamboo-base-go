@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/dialect"
 	gormoracle "github.com/oracle-samples/gorm-oracle/oracle"
@@ -17,7 +18,7 @@ const DriverName = "oracle"
 // adapter 实现 dialect.Adapter 接口。
 type adapter struct {
 	dsn string
-	err error
+	err *apperr.Error
 }
 
 func init() {
@@ -33,7 +34,7 @@ func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
 		return &adapter{
-			err: errors.New("oracle: dsn cannot be empty"),
+			err: configInvalid("Oracle 连接串不能为空", errors.New("oracle: dsn cannot be empty")),
 		}
 	}
 
@@ -98,13 +99,13 @@ func FromEnv() dialect.Adapter {
 	}
 
 	if strings.TrimSpace(port) == "" {
-		return &adapter{err: errors.New("oracle: port cannot be empty")}
+		return &adapter{err: configInvalid("Oracle 端口配置不能为空", errors.New("oracle: port cannot be empty"))}
 	}
 	if strings.TrimSpace(host) == "" {
-		return &adapter{err: errors.New("oracle: host cannot be empty")}
+		return &adapter{err: configInvalid("Oracle 主机配置不能为空", errors.New("oracle: host cannot be empty"))}
 	}
 	if strings.TrimSpace(service) == "" {
-		return &adapter{err: errors.New("oracle: service name cannot be empty")}
+		return &adapter{err: configInvalid("Oracle 服务名配置不能为空", errors.New("oracle: service name cannot be empty"))}
 	}
 
 	connectString := fmt.Sprintf("%s:%s/%s", host, port, service)
@@ -130,7 +131,11 @@ func (a *adapter) Name() string {
 //
 // 仅做 Dialector 构造，不执行数据库真实建连或网络操作。
 // 若在构造或环境变量解析阶段存在配置错误，在此处返回保存的错误。
-func (a *adapter) Open() (gorm.Dialector, error) {
+// 接收器为 nil 时返回 [dialect.AdapterInvalid] 错误而非触发 panic。
+func (a *adapter) Open() (gorm.Dialector, *apperr.Error) {
+	if a == nil {
+		return nil, apperr.New(dialect.AdapterInvalid, "Oracle 适配器实例为空", errors.New("oracle: adapter instance is nil"))
+	}
 	if a.err != nil {
 		return nil, a.err
 	}
@@ -138,10 +143,10 @@ func (a *adapter) Open() (gorm.Dialector, error) {
 }
 
 // validateDSN 验证 Oracle DSN 的基本结构合法性，脱敏任何可能包含凭据的错误信息。
-func validateDSN(raw string) error {
+func validateDSN(raw string) *apperr.Error {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return errors.New("oracle: dsn cannot be empty")
+		return configInvalid("Oracle 连接串不能为空", errors.New("oracle: dsn cannot be empty"))
 	}
 
 	// 1. 支持标准 URL 格式 (oracle:// 或 oracledb://)
@@ -149,7 +154,7 @@ func validateDSN(raw string) error {
 		idx := strings.Index(trimmed, "://")
 		rest := trimmed[idx+3:]
 		if rest == "" {
-			return errors.New("oracle: invalid DSN format")
+			return configInvalid("Oracle 连接串格式非法", errors.New("oracle: invalid DSN format"))
 		}
 		atIdx := strings.LastIndex(rest, "@")
 		hostPart := rest
@@ -167,7 +172,7 @@ func validateDSN(raw string) error {
 		}
 		host := strings.TrimSpace(hostPart[:endIdx])
 		if host == "" {
-			return errors.New("oracle: host cannot be empty")
+			return configInvalid("Oracle 连接串主机为空", errors.New("oracle: host cannot be empty"))
 		}
 		return nil
 	}
@@ -183,5 +188,12 @@ func validateDSN(raw string) error {
 		return nil
 	}
 
-	return errors.New("oracle: invalid DSN format")
+	return configInvalid("Oracle 连接串格式非法", errors.New("oracle: invalid DSN format"))
+}
+
+// configInvalid 构造 Oracle 适配器配置非法错误。
+//
+// msg 为安全的中文说明，cause 为已脱敏的底层原因，二者均不携带 DSN 明文或数据库密码。
+func configInvalid(msg string, cause error) *apperr.Error {
+	return apperr.New(dialect.AdapterConfigInvalid, apperr.ErrMessage(msg), cause)
 }

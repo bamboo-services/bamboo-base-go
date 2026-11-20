@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 )
 
@@ -30,8 +31,19 @@ func NewHashCache[K any, F comparable, V any, S any](store *Store, codec driver.
 	return &HashCache[K, F, V, S]{store: store, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 [Store] 时 panic。
+func (c *HashCache[K, F, V, S]) ready() *apperr.Error {
+	if c == nil || c.store == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // Get 获取单个字段的值。
-func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, error) {
+func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -63,7 +75,10 @@ func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bo
 //   - KeepTTL/NoSlide：追加数据但保留原 ExpireAt（不滑动 key 的整体 TTL）
 //
 // 无任何条件选项时走 [Store.Update] 保持原有行为。
-func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if value == nil {
 		return c.Remove(ctx, key, field)
 	}
@@ -107,7 +122,10 @@ func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *
 }
 
 // GetAll 获取所有字段及值，以 map[F]V 形式返回。
-func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, error) {
+func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	result := make(map[F]V)
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
@@ -131,7 +149,11 @@ func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, err
 // GetAllStruct 获取所有字段到结构体 S。
 //
 // 先通过 [GetAll] 拿到 map[F]V，再用 codec 把 map 序列化后反序列化为 S。
-func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, error) {
+func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		var zero S
+		return zero, err
+	}
 	var s S
 	m, err := c.GetAll(ctx, key)
 	if err != nil {
@@ -158,7 +180,10 @@ func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, err
 //   - KeepTTL/NoSlide：保留原 ExpireAt 不滑动
 //
 // 无任何条件选项时走 [Store.Update] 保持原有行为。
-func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -240,7 +265,10 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 }
 
 // SetAllStruct 用结构体批量设置字段。
-func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -258,7 +286,10 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 }
 
 // Exists 判断字段是否存在。
-func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, error) {
+func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	value, ok := c.store.Get(k)
 	if !ok {
@@ -275,7 +306,10 @@ func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (boo
 // Remove 移除指定字段。
 //
 // 通过 [Store.Update] 保证原子性。移除后若 map 为空则整个 hash 被删除。
-func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) error {
+func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -297,7 +331,10 @@ func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) 
 }
 
 // Delete 删除整个 hash。
-func (c *HashCache[K, F, V, S]) Delete(ctx context.Context, key K) error {
+func (c *HashCache[K, F, V, S]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	c.store.Delete(driver.EncodeKey(c.enc, key))
 	return nil
 }

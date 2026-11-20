@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/dialect"
@@ -19,6 +21,18 @@ import (
 
 // PluginKey 是数据库插件在应用组件容器中的权威标识。
 const PluginKey ctxkey.Key = "plugin_database"
+
+// 数据库插件启动阶段的配置类失败哨兵。
+//
+// 哨兵作为错误链根因保留，调用方仍可通过 errors.Is 精确判定失败语义；
+// 对外暴露的失败结果统一为携带 [DatabaseError] 的 [*apperr.Error]。
+var (
+	// errAdapterMissing 表示既未显式传入适配器，也未启用 FromEnv 环境变量解析。
+	errAdapterMissing = errors.New("database: 未指定数据库适配器，请传入 WithAdapter 或使用 FromEnv")
+
+	// errDriverUnset 表示启用 FromEnv 但环境变量 DATABASE_DRIVER 缺失或为空。
+	errDriverUnset = errors.New("database: 环境变量 DATABASE_DRIVER 未配置")
+)
 
 // Plugin 是数据库插件运行时实现，提供数据库连接池管理与生命周期协调。
 type Plugin struct {
@@ -62,32 +76,42 @@ func New(opts ...Option) (application.PluginInfo, func() application.Plugin) {
 // 若未显式传入适配器且启用了 FromEnv，Start 将从环境变量 DATABASE_DRIVER 中读取驱动名称
 // 并从全局方言注册表中查找对应适配器。连接池成功创建后将调用底层 sql.DB.PingContext(ctx)
 // 验证连通性；若探测失败或启动超时，Start 会自动关闭已初始化的底层连接并返回错误。
-func (p *Plugin) Start(ctx context.Context) (retErr error) {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 取消与超时类原因经 [foundation/v2/control] 归一，原生 context 根因保留；
+// 其余失败按所属域错误码 [DatabaseError] 兜底，GORM 与驱动原生错误继续作为根因保留。
+func (p *Plugin) Start(ctx context.Context) (retErr *apperr.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	adapter := p.cfg.adapter
 	if adapter == nil {
 		if !p.cfg.fromEnv {
-			return errors.New("database: 未指定数据库适配器，请传入 WithAdapter 或使用 FromEnv")
+			return lifecycleErr("database: 缺少数据库适配器", errAdapterMissing)
 		}
 		rawDriver, ok := env.Lookup(env.DatabaseDriver)
 		if !ok || strings.TrimSpace(rawDriver.String()) == "" {
-			return errors.New("database: 环境变量 DATABASE_DRIVER 未配置")
+			return lifecycleErr("database: 缺少数据库驱动名称", errDriverUnset)
 		}
 		driverName := dialect.Driver(strings.TrimSpace(rawDriver.String()))
 		adp, err := dialect.Lookup(driverName)
 		if err != nil {
-			return fmt.Errorf("数据库驱动 [%s] 未加载，请传入 WithAdapter(%s.FromEnv()) 或匿名导入 plugins/database/adapter/%s/v2", driverName, driverName, driverName)
+			return lifecycleErr("database: 查找数据库方言适配器失败", fmt.Errorf("数据库驱动 [%s] 未加载，请传入 WithAdapter(%s.FromEnv()) 或匿名导入 plugins/database/adapter/%s/v2: %w", driverName, driverName, driverName, err))
 		}
 		adapter = adp
 	}
 
-	dialector, err := adapter.Open()
-	if err != nil {
-		return fmt.Errorf("database: 构造方言 Dialector 失败: %w", err)
+	if isNilDatabaseValue(adapter) {
+		return apperr.New(dialect.AdapterInvalid, "数据库适配器实例无效", dialect.ErrNilAdapter)
+	}
+	dialector, adapterErr := adapter.Open()
+	if adapterErr != nil {
+		return lifecycleErr("database: 构造方言 Dialector 失败", adapterErr)
 	}
 
+	if isNilDatabaseValue(dialector) {
+		return apperr.New(dialect.AdapterInvalid, "数据库适配器返回了无效 Dialector", errors.New("database: adapter returned nil dialector"))
+	}
 	var gormCfg *gorm.Config
 	if p.cfg.gormConfig != nil {
 		clone := *p.cfg.gormConfig
@@ -103,21 +127,23 @@ func (p *Plugin) Start(ctx context.Context) (retErr error) {
 		gormCfg.Logger = gormlogger.Discard
 	}
 
-	db, err := gorm.Open(dialector, gormCfg)
-	if err != nil {
-		return fmt.Errorf("database: gorm.Open 失败: %w", err)
+	db, gormErr := gorm.Open(dialector, gormCfg)
+	if gormErr != nil {
+		return lifecycleErr("database: gorm.Open 失败", gormErr)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("database: 获取底层 sql.DB 失败: %w", err)
+	sqlDB, sqlErr := db.DB()
+	if sqlErr != nil {
+		return lifecycleErr("database: 获取底层 sql.DB 失败", sqlErr)
 	}
 	p.sqlDB = sqlDB
 	p.db = db
 
 	defer func() {
 		if retErr != nil {
-			_ = p.closeSQLDB()
+			if cleanupErr := p.closeSQLDB(); cleanupErr != nil {
+				retErr = apperr.Join(apperr.FrameworkMultipleFailures, "数据库启动及清理失败", retErr, cleanupErr)
+			}
 		}
 	}()
 
@@ -135,7 +161,7 @@ func (p *Plugin) Start(ctx context.Context) (retErr error) {
 	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
-		return fmt.Errorf("database: 验证数据库连通性失败: %w", err)
+		return lifecycleErr("database: 验证数据库连通性失败", err)
 	}
 
 	return nil
@@ -144,20 +170,40 @@ func (p *Plugin) Start(ctx context.Context) (retErr error) {
 // Stop 在受控关闭阶段安全释放底层 [*sql.DB] 连接池资源。
 //
 // 该方法具备互斥锁保护与幂等性，多次调用不会引发重复关闭或错误。
-func (p *Plugin) Stop(_ context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 关闭失败按所属域错误码 [DatabaseError] 归一，底层 sql.DB 原生错误作为根因保留。
+func (p *Plugin) Stop(_ context.Context) *apperr.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.closeSQLDB()
 }
 
-func (p *Plugin) closeSQLDB() error {
+// closeSQLDB 关闭底层连接池并清空句柄，关闭失败归一为 [*apperr.Error]。
+func (p *Plugin) closeSQLDB() *apperr.Error {
 	if p.sqlDB != nil {
 		err := p.sqlDB.Close()
 		p.sqlDB = nil
 		p.db = nil
-		return err
+		if err != nil {
+			return lifecycleErr("database: 关闭数据库连接池失败", err)
+		}
 	}
 	return nil
+}
+
+// isNilDatabaseValue 检查原生句柄或适配器接口中的 nil 与 typed-nil。
+func isNilDatabaseValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // Expose 交付数据库插件向容器导出的共享对象映射表。

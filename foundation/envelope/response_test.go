@@ -9,11 +9,12 @@ import (
 )
 
 func TestEnvelopeResponseJSON(t *testing.T) {
+	badRequest := apperr.ErrorCode{Code: 40010, Output: "BAD_REQUEST", Message: "错误请求"}
 	resp := envelope.Response{
 		Context:      "req-123456",
-		Code:         apperr.BadRequest.Code,
-		Output:       apperr.BadRequest.Output,
-		Message:      apperr.BadRequest.Message,
+		Code:         badRequest.Code,
+		Output:       badRequest.Output,
+		Message:      badRequest.Message,
 		ErrorMessage: "field 'username' is invalid",
 		Overhead:     12,
 		Data:         map[string]any{"field": "username"},
@@ -32,13 +33,13 @@ func TestEnvelopeResponseJSON(t *testing.T) {
 	if m["context"] != "req-123456" {
 		t.Errorf("context mismatch: got %v", m["context"])
 	}
-	if float64(apperr.BadRequest.Code) != m["code"] {
+	if float64(badRequest.Code) != m["code"] {
 		t.Errorf("code mismatch: got %v", m["code"])
 	}
-	if string(apperr.BadRequest.Output) != m["output"] {
+	if string(badRequest.Output) != m["output"] {
 		t.Errorf("output mismatch: got %v", m["output"])
 	}
-	if string(apperr.BadRequest.Message) != m["message"] {
+	if string(badRequest.Message) != m["message"] {
 		t.Errorf("message mismatch: got %v", m["message"])
 	}
 	if m["error_message"] != "field 'username' is invalid" {
@@ -50,9 +51,9 @@ func TestEnvelopeResponseJSON(t *testing.T) {
 
 	// 验证 omitempty
 	minimalResp := envelope.Response{
-		Code:    apperr.ServerInternalError.Code,
-		Output:  apperr.ServerInternalError.Output,
-		Message: apperr.ServerInternalError.Message,
+		Code:    apperr.FrameworkInternalError.Code,
+		Output:  apperr.FrameworkInternalError.Output,
+		Message: apperr.FrameworkInternalError.Message,
 	}
 
 	minBytes, err := json.Marshal(minimalResp)

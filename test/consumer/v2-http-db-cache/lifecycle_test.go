@@ -45,7 +45,7 @@ type readyWeb struct {
 	startedAddr chan<- string
 }
 
-func (w *readyWeb) Start(ctx context.Context) error {
+func (w *readyWeb) Start(ctx context.Context) *apperr.Error {
 	if err := w.Plugin.Start(ctx); err != nil {
 		return err
 	}
@@ -101,26 +101,26 @@ func TestHTTPDBCacheLifecycle_EndToEnd(t *testing.T) {
 				reqCtx := c.Request.Context()
 				item := DemoRecord{Name: dto.Name}
 				if err := db.WithContext(reqCtx).Create(&item).Error; err != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to insert item", err))
+					httpresult.AbortError(c, apperr.New(database.DatabaseError, "failed to insert item", err))
 					return
 				}
 
 				var count int64
 				if err := db.WithContext(reqCtx).Model(&DemoRecord{}).Count(&count).Error; err != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to count items", err))
+					httpresult.AbortError(c, apperr.New(database.DatabaseError, "failed to count items", err))
 					return
 				}
 
 				keyCache := cache.KeyCacheOf[string, string](mgr)
 				cacheVal := fmt.Sprintf("val-%s-%d", dto.Name, count)
 				if err := keyCache.Set(reqCtx, "last_item", &cacheVal); err != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to set cache", err))
+					httpresult.AbortError(c, apperr.From(&err.Code, "failed to set cache", err))
 					return
 				}
 
 				valPtr, found, err := keyCache.Get(reqCtx, "last_item")
 				if err != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get cache", err))
+					httpresult.AbortError(c, apperr.From(&err.Code, "failed to get cache", err))
 					return
 				}
 				var cachedStr string
@@ -162,7 +162,7 @@ func TestHTTPDBCacheLifecycle_EndToEnd(t *testing.T) {
 	}
 
 	appDone := make(chan struct{})
-	var appRunErr error
+	var appRunErr *apperr.Error
 	var runOnce sync.Once
 	shutdownApp := func() {
 		runOnce.Do(func() {

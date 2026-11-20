@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -13,11 +14,11 @@ type sampleService struct {
 	name string
 }
 
-func (s *sampleService) Start(ctx context.Context) error {
+func (s *sampleService) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (s *sampleService) Stop(ctx context.Context) error {
+func (s *sampleService) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -25,15 +26,15 @@ type sampleWorker struct {
 	app *application.App
 }
 
-func (w *sampleWorker) Start(ctx context.Context) error {
+func (w *sampleWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *sampleWorker) Run(ctx context.Context) error {
+func (w *sampleWorker) Run(ctx context.Context) *apperr.Error {
 	// 从运行期上下文中安全提取依赖的 Tool 共享服务
 	svc, err := application.Get[*sampleService](ctx, ctxkey.Key("sample_service"))
 	if err != nil {
-		return err.Err
+		return err
 	}
 	fmt.Println("Loaded Service:", svc.name)
 
@@ -52,7 +53,7 @@ func (w *sampleWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (w *sampleWorker) Stop(ctx context.Context) error {
+func (w *sampleWorker) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -94,7 +95,7 @@ func Example() {
 // ExampleGet 展示从上下文提取组件时的防御性错误处理。
 func ExampleGet() {
 	// 当直接向未挂载共享容器的原生上下文调用 Get 时，
-	// 函数返回类型零值并返回携带 PARAMETER_EMPTY 的错误
+	// 函数返回类型零值并返回携带 FRAMEWORK_CONTAINER_NOT_MOUNTED 的错误
 	ctx := context.Background()
 	_, appErr := application.Get[string](ctx, ctxkey.Key("unmounted_key"))
 	if appErr != nil {
@@ -102,7 +103,7 @@ func ExampleGet() {
 	}
 
 	// Output:
-	// Error Output: PARAMETER_EMPTY
+	// Error Output: FRAMEWORK_CONTAINER_NOT_MOUNTED
 }
 
 // ExampleBridgeRequest 展示在未挂载合法运行期容器时 BridgeRequest 的防御性安全降级行为。

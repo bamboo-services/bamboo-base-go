@@ -7,15 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	database "github.com/bamboo-services/bamboo-base-go/plugins/database/v2"
+	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/dialect"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/gormlog"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
@@ -25,6 +28,7 @@ import (
 type fakeDriver struct {
 	mu          sync.Mutex
 	pingErr     error
+	closeErr    error
 	closedCount int32
 	openedConns []*fakeConn
 	driverErr   error
@@ -42,6 +46,12 @@ func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
 func (c *fakeConn) Close() error {
 	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		atomic.AddInt32(&c.driver.closedCount, 1)
+	}
+	c.driver.mu.Lock()
+	closeErr := c.driver.closeErr
+	c.driver.mu.Unlock()
+	if closeErr != nil {
+		return closeErr
 	}
 	return nil
 }
@@ -116,9 +126,9 @@ func (a *fakeAdapter) Name() string {
 	return a.name
 }
 
-func (a *fakeAdapter) Open() (gorm.Dialector, error) {
+func (a *fakeAdapter) Open() (gorm.Dialector, *apperr.Error) {
 	if a.openErr != nil {
-		return nil, a.openErr
+		return nil, apperr.From(database.DatabaseError, "测试适配器构造失败", a.openErr)
 	}
 	return a.dialector, nil
 }
@@ -183,6 +193,35 @@ func TestPlugin_StartPingFailureCleansUp(t *testing.T) {
 	// 重复 Stop 幂等
 	if err := p.Stop(ctx); err != nil {
 		t.Fatalf("expected Stop to be idempotent, got: %v", err)
+	}
+}
+
+// TestPlugin_StartPingAndCleanupFailureUsesMultipleFailures 验证启动探测与清理同时失败时
+// 遵循 R04 返回 FrameworkMultipleFailures（50020），并完整保留两阶段根因供 errors.Is 识别。
+func TestPlugin_StartPingAndCleanupFailureUsesMultipleFailures(t *testing.T) {
+	adp, drv := newFakeAdapter("mock")
+	closeSentinel := errors.New("close pool failed")
+	drv.mu.Lock()
+	drv.pingErr = context.DeadlineExceeded
+	drv.closeErr = closeSentinel
+	drv.mu.Unlock()
+
+	_, factory := database.New(database.WithAdapter(adp))
+	p := factory()
+
+	err := p.Start(context.Background())
+	if err == nil {
+		t.Fatal("expected Start to fail when both ping and cleanup fail")
+	}
+	if err.Code.Code != apperr.FrameworkMultipleFailures.Code {
+		t.Fatalf("双阶段失败错误码 = %d, 期望 %d (FrameworkMultipleFailures)",
+			err.Code.Code, apperr.FrameworkMultipleFailures.Code)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("必须保留探测阶段超时根因: %v", err)
+	}
+	if !errors.Is(err, closeSentinel) {
+		t.Fatalf("必须保留清理阶段关闭失败根因: %v", err)
 	}
 }
 
@@ -267,8 +306,14 @@ func TestPlugin_FromEnvDriverNotLoadedError(t *testing.T) {
 		t.Fatal("expected error for unregistered driver")
 	}
 	expected := "数据库驱动 [unregistered_driver] 未加载，请传入 WithAdapter(unregistered_driver.FromEnv()) 或匿名导入 plugins/database/adapter/unregistered_driver/v2"
-	if err.Error() != expected {
-		t.Fatalf("error message mismatch: got %q, want %q", err.Error(), expected)
+	if !strings.Contains(err.Error(), expected) {
+		t.Fatalf("error message mismatch: got %q, want contains %q", err.Error(), expected)
+	}
+	if err.Code.Code != dialect.DriverNotLoaded.Code {
+		t.Fatalf("错误码不匹配: got %d, want %d", err.Code.Code, dialect.DriverNotLoaded.Code)
+	}
+	if err.Code.Output != dialect.DriverNotLoaded.Output || !errors.Is(err, dialect.ErrDriverNotLoaded) {
+		t.Fatalf("驱动未加载的标识或根因丢失: %v", err)
 	}
 }
 

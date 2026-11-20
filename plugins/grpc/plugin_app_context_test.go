@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/constant"
@@ -297,11 +298,11 @@ type toolResourcePlugin struct {
 	val    string
 }
 
-func (t *toolResourcePlugin) Start(ctx context.Context) error {
+func (t *toolResourcePlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (t *toolResourcePlugin) Stop(ctx context.Context) error {
+func (t *toolResourcePlugin) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -315,17 +316,17 @@ type witnessPlugin struct {
 	readyCh chan struct{}
 }
 
-func (w *witnessPlugin) Start(ctx context.Context) error {
+func (w *witnessPlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *witnessPlugin) Run(ctx context.Context) error {
+func (w *witnessPlugin) Run(ctx context.Context) *apperr.Error {
 	close(w.readyCh)
 	<-ctx.Done()
 	return nil
 }
 
-func (w *witnessPlugin) Stop(ctx context.Context) error {
+func (w *witnessPlugin) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -333,11 +334,11 @@ type dummyComponent struct {
 	actCh chan application.InstanceMeta
 }
 
-func (d *dummyComponent) Start(ctx context.Context) error {
+func (d *dummyComponent) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (d *dummyComponent) Run(ctx context.Context) error {
+func (d *dummyComponent) Run(ctx context.Context) *apperr.Error {
 	meta, _ := application.InstanceMetaFrom(ctx)
 	select {
 	case d.actCh <- meta:
@@ -346,7 +347,7 @@ func (d *dummyComponent) Run(ctx context.Context) error {
 	return nil
 }
 
-func (d *dummyComponent) Stop(ctx context.Context) error {
+func (d *dummyComponent) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -652,8 +653,8 @@ func TestPlugin_AppContext_RealTCP_IsolationAndRegistry(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected *generate.BaseResponse, got %T", details[0])
 	}
-	if detail.Code != 50000 {
-		t.Fatalf("Expected BaseResponse code 50000, got %d", detail.Code)
+	if detail.Code != 50011 {
+		t.Fatalf("Expected BaseResponse code 50011, got %d", detail.Code)
 	}
 	if detail.Context == "" {
 		t.Fatalf("Expected BaseResponse context tracking to be non-empty")
@@ -760,15 +761,15 @@ func TestPlugin_AppContext_RealTCP_IsolationAndRegistry(t *testing.T) {
 	noOutCtx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(xGrpcConst.TrailerRequestUUID.String(), "e23b44d1-b287-42e6-ab37-94e4f5287ef4"))
 	err = cc1.Invoke(noOutCtx, "/test.AppContextService/UnaryNoOutput", wrapperspb.String("nil"), new(wrapperspb.StringValue))
 	stNoOut, ok := status.FromError(err)
-	if !ok || stNoOut.Code() != codes.InvalidArgument {
-		t.Fatalf("Expected InvalidArgument for UnaryNoOutput, got err=%v", err)
+	if !ok || stNoOut.Code() != codes.Internal {
+		t.Fatalf("Expected Internal for UnaryNoOutput, got err=%v", err)
 	}
 	detailsNoOut := stNoOut.Details()
 	if len(detailsNoOut) == 0 {
 		t.Fatalf("Expected status details containing BaseResponse for UnaryNoOutput")
 	}
 	detailNoOut, ok := detailsNoOut[0].(*generate.BaseResponse)
-	if !ok || detailNoOut.Code != 40024 || detailNoOut.Context != "e23b44d1-b287-42e6-ab37-94e4f5287ef4" {
+	if !ok || detailNoOut.Code != 50012 || detailNoOut.Context != "e23b44d1-b287-42e6-ab37-94e4f5287ef4" {
 		t.Fatalf("Unexpected BaseResponse in UnaryNoOutput details: %+v", detailNoOut)
 	}
 }
@@ -824,7 +825,7 @@ func TestPlugin_AppContext_StartACLUndeclared(t *testing.T) {
 
 	_ = app.RegisterWorker(grpcInfo, grpcFac)
 
-	var runErr error
+	var runErr *apperr.Error
 	runDone := make(chan struct{})
 
 	t.Cleanup(func() {

@@ -26,7 +26,7 @@
 //
 // 以下函数装配一个控制台与轮转文件双写的日志器：
 //
-//	func setupLogger() (*logging.Logger, *logging.RotatingWriter, error) {
+//	func setupLogger() (*logging.Logger, *logging.RotatingWriter, *apperr.Error) {
 //		writer, err := logging.NewRotatingWriter(logging.RotatorConfig{
 //			Dir:      ".logs",
 //			BaseName: "app",
@@ -62,8 +62,9 @@
 // [LogHandler] 的控制台输出为彩色文本，文件输出为单行 JSON，
 // 两路输出均携带从 [ctxkey.RequestKey] 提取的 TraceID。级别低于
 // [HandlerConfig.Level] 的记录被过滤；ERROR 级别的控制台输出附加
-// 当前 goroutine 堆栈。任一路底层写入失败时，错误以 errors.Join
-// 汇总返回，不静默吞错。
+// 当前 goroutine 堆栈。任一路底层写入失败时，错误不会被静默吞错：
+// 单路失败时返回该路错误（错误码 WriteFailed，底层原因完整保留），
+// 双路失败时以统一错误聚合两路原因，全部原因均可经 errors.Is 识别。
 //
 // # 文件轮转与归档
 //

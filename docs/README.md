@@ -17,12 +17,14 @@
 
 ### 调研模式（`research/`）
 
-| 编号 | 文档                                                                                                                 | Scope     | 调研日期   |
-| ---- | -------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
-| 0001 | [v2.0.0 生命周期内核与三模式插件机制调研](./engineering/research/0001-lifecycle-plugin-runtime.md)                   | lifecycle | 2026-10-17 |
-| 0002 | [v2.0.0 Context 体系与共享组件传递调研](./engineering/research/0002-context-propagation-and-shared-state.md)         | context   | 2026-10-17 |
-| 0003 | [v2.0.0 插件体系分类与第三方库选型调研](./engineering/research/0003-plugin-ecosystem-and-libraries.md)               | plugin    | 2026-10-18 |
-| 0004 | [v2.0.0 Oracle GORM 适配驱动依赖与运行环境调研](./engineering/research/0004-oracle-driver-dependency-and-runtime.md) | plugin    | 2026-10-27 |
+| 编号 | 文档                                                                                                                 | Scope      | 调研日期   |
+| ---- | -------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| 0001 | [v2.0.0 生命周期内核与三模式插件机制调研](./engineering/research/0001-lifecycle-plugin-runtime.md)                   | lifecycle  | 2026-10-17 |
+| 0002 | [v2.0.0 Context 体系与共享组件传递调研](./engineering/research/0002-context-propagation-and-shared-state.md)         | context    | 2026-10-17 |
+| 0003 | [v2.0.0 插件体系分类与第三方库选型调研](./engineering/research/0003-plugin-ecosystem-and-libraries.md)               | plugin     | 2026-10-18 |
+| 0004 | [v2.0.0 Oracle GORM 适配驱动依赖与运行环境调研](./engineering/research/0004-oracle-driver-dependency-and-runtime.md) | plugin     | 2026-10-27 |
+| 0005 | [V2 强类型错误 P0 逐符号核对、例外与消费者模板](./engineering/research/0005-foundation-strong-error-p0-inventory.md) | foundation | 2026-11-08 |
+| 0006 | [V2 强类型错误 P0 仓内引用与接口实现者台账](./engineering/research/0006-foundation-strong-error-p0-callers.md)       | foundation | 2026-11-08 |
 
 ### 设计模式（`design/`）
 
@@ -43,6 +45,8 @@ v2 全仓实施安排见 [0001 总实施计划（已归档）](./plan/archive/00
 | 编号 | 文档                                                                                                        | Scope      | 阶段状态 |
 | ---- | ----------------------------------------------------------------------------------------------------------- | ---------- | -------- |
 | 0001 | [v2.0.0 foundation 能力与测试迁移规范](./engineering/spec/0001-foundation-capability-and-test-inventory.md) | foundation | draft    |
+| 0002 | [v2.0.0 错误码分配与受控词表规范](./engineering/spec/0002-foundation-error-code-vocabulary.md)              | foundation | draft    |
+| 0003 | [v2.0.0 强类型错误返回与协议适配规范](./engineering/spec/0003-foundation-strong-error-contract.md)          | foundation | draft    |
 
 ### 手册模式（`runbook/`）
 

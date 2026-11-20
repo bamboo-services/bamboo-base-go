@@ -1,10 +1,10 @@
 package application
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -43,18 +43,18 @@ func (c *sharedContainer) freeze() {
 	c.frozen.Store(true)
 }
 
-func (c *sharedContainer) publishBatch(items []publishItem) error {
+func (c *sharedContainer) publishBatch(items []publishItem) *apperr.Error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.frozen.Load() {
-		return fmt.Errorf("%w: container is frozen", ErrRegistrationClosed)
+		return newAppErr(ErrRegistrationClosed, "共享容器已冻结，拒绝写入")
 	}
 
 	// 校验 batch 内与当前已入库条目是否存在冲突（先到先得，不覆盖原 owner）
 	for _, item := range items {
 		if _, exists := c.entries[item.key]; exists {
-			return fmt.Errorf("%w: key %s already registered", ErrDuplicateExposedKey, item.key)
+			return newAppErr(ErrDuplicateExposedKey, "键 "+string(item.key)+" 已被注册")
 		}
 	}
 
@@ -62,7 +62,7 @@ func (c *sharedContainer) publishBatch(items []publishItem) error {
 	seen := make(map[ctxkey.Key]struct{}, len(items))
 	for _, item := range items {
 		if _, ok := seen[item.key]; ok {
-			return fmt.Errorf("%w: duplicate key %s in publish batch", ErrDuplicateExposedKey, item.key)
+			return newAppErr(ErrDuplicateExposedKey, "发布批次内键 "+string(item.key)+" 重复")
 		}
 		seen[item.key] = struct{}{}
 	}
@@ -119,13 +119,13 @@ type startScopeView struct {
 	allowedKeys map[ctxkey.Key]struct{}
 }
 
-func (v *startScopeView) getEntry(key ctxkey.Key) (*containerEntry, error) {
+func (v *startScopeView) getEntry(key ctxkey.Key) (*containerEntry, *apperr.Error) {
 	if _, ok := v.allowedKeys[key]; !ok {
-		return nil, fmt.Errorf("%w: 插件 [%s] 未在 Requires 中声明依赖 [%s]，禁止在 Start 阶段越权读取", ErrUndeclaredDependency, v.ownerKey, key)
+		return nil, newAppErr(ErrUndeclaredDependency, "插件 ["+string(v.ownerKey)+"] 未在 Requires 中声明依赖 ["+string(key)+"]，禁止在 Start 阶段越权读取")
 	}
 	entry, ok := v.container.getEntry(key)
 	if !ok {
-		return nil, ErrComponentNotFound
+		return nil, newAppErr(ErrComponentNotFound, "组件 ["+string(key)+"] 未找到")
 	}
 	return entry, nil
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -53,12 +54,12 @@ type realExitProviderTool struct {
 	stopCalled  atomic.Int32
 }
 
-func (p *realExitProviderTool) Start(ctx context.Context) error {
+func (p *realExitProviderTool) Start(ctx context.Context) *apperr.Error {
 	p.startCalled.Add(1)
 	return nil
 }
 
-func (p *realExitProviderTool) Stop(ctx context.Context) error {
+func (p *realExitProviderTool) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	return nil
 }
@@ -76,7 +77,7 @@ type realExitConsumerTool struct {
 	stopCalled   atomic.Int32
 }
 
-func (c *realExitConsumerTool) Start(ctx context.Context) error {
+func (c *realExitConsumerTool) Start(ctx context.Context) *apperr.Error {
 	c.startCalled.Add(1)
 	select {
 	case <-c.startEntered:
@@ -88,7 +89,7 @@ func (c *realExitConsumerTool) Start(ctx context.Context) error {
 	return nil
 }
 
-func (c *realExitConsumerTool) Stop(ctx context.Context) error {
+func (c *realExitConsumerTool) Stop(ctx context.Context) *apperr.Error {
 	c.stopCalled.Add(1)
 	return nil
 }
@@ -143,7 +144,7 @@ func TestKernelStartTimeout_NoExternalShutdown_RealExit(t *testing.T) {
 		t.Fatalf("failed to register consumer: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -211,11 +212,11 @@ type realExitMockDBProvider struct {
 	stopCalled atomic.Int32
 }
 
-func (p *realExitMockDBProvider) Start(ctx context.Context) error {
+func (p *realExitMockDBProvider) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (p *realExitMockDBProvider) Stop(ctx context.Context) error {
+func (p *realExitMockDBProvider) Stop(ctx context.Context) *apperr.Error {
 	p.stopCalled.Add(1)
 	return nil
 }
@@ -232,11 +233,11 @@ type realExitStubWorker struct {
 	stopCount  atomic.Int32
 }
 
-func (w *realExitStubWorker) Start(ctx context.Context) error {
+func (w *realExitStubWorker) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (w *realExitStubWorker) Run(ctx context.Context) error {
+func (w *realExitStubWorker) Run(ctx context.Context) *apperr.Error {
 	select {
 	case <-w.runEntered:
 	default:
@@ -254,7 +255,7 @@ func (w *realExitStubWorker) Run(ctx context.Context) error {
 	return nil
 }
 
-func (w *realExitStubWorker) Stop(ctx context.Context) error {
+func (w *realExitStubWorker) Stop(ctx context.Context) *apperr.Error {
 	w.stopCount.Add(1)
 	select {
 	case <-w.stopCalled:
@@ -314,7 +315,7 @@ func TestKernelRealExit_WorkerIgnoresCancel_StopReturnsNil_ShutdownIncomplete(t 
 		t.Fatalf("failed to register worker: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	runErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		runErrCh <- app.Run()
 	}()
@@ -329,7 +330,7 @@ func TestKernelRealExit_WorkerIgnoresCancel_StopReturnsNil_ShutdownIncomplete(t 
 	}
 
 	// 主动调用 Shutdown（短预算），Run 仍在阻塞
-	shutErrCh := make(chan error, 1)
+	shutErrCh := make(chan *apperr.Error, 1)
 	go func() {
 		shutErrCh <- app.Shutdown()
 	}()
@@ -342,7 +343,7 @@ func TestKernelRealExit_WorkerIgnoresCancel_StopReturnsNil_ShutdownIncomplete(t 
 	}
 
 	// 等待 Shutdown 结算：由于 Run 尚未退出，Shutdown 必须返回 Incomplete 错误
-	var firstShutErr error
+	var firstShutErr *apperr.Error
 	select {
 	case firstShutErr = <-shutErrCh:
 		if firstShutErr == nil {
@@ -391,11 +392,11 @@ type realExitComponentPlugin struct {
 	releaseRun chan struct{}
 }
 
-func (c *realExitComponentPlugin) Start(ctx context.Context) error {
+func (c *realExitComponentPlugin) Start(ctx context.Context) *apperr.Error {
 	return nil
 }
 
-func (c *realExitComponentPlugin) Run(ctx context.Context) error {
+func (c *realExitComponentPlugin) Run(ctx context.Context) *apperr.Error {
 	select {
 	case <-c.runEntered:
 	default:
@@ -405,7 +406,7 @@ func (c *realExitComponentPlugin) Run(ctx context.Context) error {
 	return nil
 }
 
-func (c *realExitComponentPlugin) Stop(ctx context.Context) error {
+func (c *realExitComponentPlugin) Stop(ctx context.Context) *apperr.Error {
 	return nil
 }
 
@@ -470,7 +471,7 @@ func TestKernelRealExit_StoppingBeforeParentExit_QueuedCancelledPromptly(t *test
 		Mode: ModeWorker,
 	}, func() RunnablePlugin {
 		return &stubWorker{
-			runFn: func(ctx context.Context) error {
+			runFn: func(ctx context.Context) *apperr.Error {
 				close(parentStarted)
 
 				// 1. 激活首个任务，占住唯一的执行槽
@@ -483,7 +484,7 @@ func TestKernelRealExit_StoppingBeforeParentExit_QueuedCancelledPromptly(t *test
 				select {
 				case <-firstEntered:
 				case <-time.After(1 * time.Second):
-					return errors.New("timeout waiting for first component run")
+					return apperr.New(apperr.FrameworkInternalError, "timeout waiting for first component run")
 				}
 
 				// 2. 激活次个任务，进入 OverlapQueue 排队

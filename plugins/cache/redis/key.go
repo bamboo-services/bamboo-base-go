@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	driver "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -28,17 +29,29 @@ func NewKeyCache[K any, V any](rdb *goredis.Client, codec driver.Codec, enc driv
 	return &KeyCache[K, V]{rdb: rdb, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 Redis 客户端时 panic。
+func (c *KeyCache[K, V]) ready() *apperr.Error {
+	if c == nil || c.rdb == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // Get 从 Redis 读取键对应的值。
 //
-// 键不存在时（goredis.Nil）返回 nil, false, nil。
-func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
+// 键不存在时（goredis.Nil）返回 nil, false, nil，不是失败。
+// 其余故障按 [opErr] 归一：取消与超时为 49900 / 50401，其它为 50039。
+func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	data, err := c.rdb.Get(ctx, k).Bytes()
 	if errors.Is(err, goredis.Nil) {
 		return nil, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, opErr(err)
 	}
 	var v V
 	if err := c.codec.Unmarshal(data, &v); err != nil {
@@ -55,7 +68,10 @@ func (c *KeyCache[K, V]) Get(ctx context.Context, key K) (*V, bool, error) {
 //   - KeepTTL：保留原有 TTL 不重设（Redis SET KEEPTTL），与 TTL 互斥
 //
 // 当 NX/XX 条件不满足时返回 nil（非错误），与 Redis SET NX/XX 返回 nil 的语义对齐。
-func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...driver.SetOption) error {
+func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if value == nil {
 		return c.Delete(ctx, key)
 	}
@@ -84,24 +100,30 @@ func (c *KeyCache[K, V]) Set(ctx context.Context, key K, value *V, opts ...drive
 		if errors.Is(err, goredis.Nil) {
 			return nil
 		}
-		return err
+		return opErr(err)
 	}
 	if cfg.TTL > 0 {
-		return c.rdb.Set(ctx, k, data, cfg.TTL).Err()
+		return opErr(c.rdb.Set(ctx, k, data, cfg.TTL).Err())
 	}
-	return c.rdb.Set(ctx, k, data, 0).Err()
+	return opErr(c.rdb.Set(ctx, k, data, 0).Err())
 }
 
 // Exists 判断键是否存在。
-func (c *KeyCache[K, V]) Exists(ctx context.Context, key K) (bool, error) {
+func (c *KeyCache[K, V]) Exists(ctx context.Context, key K) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	n, err := c.rdb.Exists(ctx, driver.EncodeKey(c.enc, key)).Result()
 	if err != nil {
-		return false, err
+		return false, opErr(err)
 	}
 	return n > 0, nil
 }
 
-// Delete 删除键。
-func (c *KeyCache[K, V]) Delete(ctx context.Context, key K) error {
-	return c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err()
+// Delete 删除键。键不存在时幂等成功，不是失败。
+func (c *KeyCache[K, V]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
+	return opErr(c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err())
 }

@@ -1,141 +1,153 @@
 package typed
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/valueerr"
 )
 
+// 本文件的解析方法是本包自有失败出口，失败时返回 [*apperr.Error]，
+// 成功时返回真正的 nil。
+//
+// 错误分类按实际失败分支显式给出：
+//
+//   - 语法非法（无法按目标格式解析）：InvalidFormat（40013）；
+//   - 超出目标位宽范围（strconv 报告 ErrRange）：OutOfRange（40014）。
+//
+// 原生 strconv 与 time 错误原样作为根因保留，安全描述不复制原始输入内容。
+
 // Int 将原始文本去除首尾空白后，按十进制解析为 Go 原生 int。
-// 位宽遵循当前平台（32 位或 64 位），不先按 64 位解析再截断；
-// 格式非法或超出范围时，原样返回 strconv.ParseInt 的错误。
-func (s String) Int() (int, error) {
+// 位宽遵循当前平台（32 位或 64 位），不先按 64 位解析再截断。
+// 失败时返回 [*apperr.Error]：语法非法归 40013，超出范围归 40014。
+func (s String) Int() (int, *apperr.Error) {
 	v, err := strconv.ParseInt(strings.TrimSpace(string(s)), 10, 0)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 int 失败")
 	}
 	return int(v), nil
 }
 
 // Int8 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 int8。
-// 超出 [-128, 127] 范围时，原样返回 strconv.ParseInt 的错误。
-func (s String) Int8() (int8, error) {
+// 超出 [-128, 127] 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Int8() (int8, *apperr.Error) {
 	v, err := strconv.ParseInt(strings.TrimSpace(string(s)), 10, 8)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 int8 失败")
 	}
 	return int8(v), nil
 }
 
 // Int16 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 int16。
-// 超出 [-32768, 32767] 范围时，原样返回 strconv.ParseInt 的错误。
-func (s String) Int16() (int16, error) {
+// 超出 [-32768, 32767] 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Int16() (int16, *apperr.Error) {
 	v, err := strconv.ParseInt(strings.TrimSpace(string(s)), 10, 16)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 int16 失败")
 	}
 	return int16(v), nil
 }
 
 // Int32 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 int32。
-// 超出 [-2147483648, 2147483647] 范围时，原样返回 strconv.ParseInt 的错误。
-func (s String) Int32() (int32, error) {
+// 超出 [-2147483648, 2147483647] 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Int32() (int32, *apperr.Error) {
 	v, err := strconv.ParseInt(strings.TrimSpace(string(s)), 10, 32)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 int32 失败")
 	}
 	return int32(v), nil
 }
 
 // Int64 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 int64。
-// 超出 int64 范围时，原样返回 strconv.ParseInt 的错误。
-func (s String) Int64() (int64, error) {
+// 超出 int64 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Int64() (int64, *apperr.Error) {
 	v, err := strconv.ParseInt(strings.TrimSpace(string(s)), 10, 64)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 int64 失败")
 	}
 	return v, nil
 }
 
 // Uint 将原始文本去除首尾空白后，按十进制解析为 Go 原生 uint。
-// 位宽遵循当前平台（32 位或 64 位），不先按 uint64 解析再截断；
-// 格式非法或为负数时，原样返回 strconv.ParseUint 的错误。
-func (s String) Uint() (uint, error) {
+// 位宽遵循当前平台（32 位或 64 位），不先按 uint64 解析再截断。
+// 失败时返回 [*apperr.Error]：语法非法（含负数）归 40013，超出范围归 40014。
+func (s String) Uint() (uint, *apperr.Error) {
 	v, err := strconv.ParseUint(strings.TrimSpace(string(s)), 10, 0)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 uint 失败")
 	}
 	return uint(v), nil
 }
 
 // Uint8 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 uint8。
-// 超出 [0, 255] 范围时，原样返回 strconv.ParseUint 的错误。
-func (s String) Uint8() (uint8, error) {
+// 超出 [0, 255] 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Uint8() (uint8, *apperr.Error) {
 	v, err := strconv.ParseUint(strings.TrimSpace(string(s)), 10, 8)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 uint8 失败")
 	}
 	return uint8(v), nil
 }
 
 // Uint16 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 uint16。
-// 超出 [0, 65535] 范围时，原样返回 strconv.ParseUint 的错误。
-func (s String) Uint16() (uint16, error) {
+// 超出 [0, 65535] 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Uint16() (uint16, *apperr.Error) {
 	v, err := strconv.ParseUint(strings.TrimSpace(string(s)), 10, 16)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 uint16 失败")
 	}
 	return uint16(v), nil
 }
 
 // Uint32 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 uint32。
-// 超出 uint32 范围时，原样返回 strconv.ParseUint 的错误。
-func (s String) Uint32() (uint32, error) {
+// 超出 uint32 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Uint32() (uint32, *apperr.Error) {
 	v, err := strconv.ParseUint(strings.TrimSpace(string(s)), 10, 32)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 uint32 失败")
 	}
 	return uint32(v), nil
 }
 
 // Uint64 将原始文本去除首尾空白后，按十进制严格解析为 Go 原生 uint64。
-// 超出 uint64 范围时，原样返回 strconv.ParseUint 的错误。
-func (s String) Uint64() (uint64, error) {
+// 超出 uint64 范围时返回 [*apperr.Error]（40014），语法非法归 40013。
+func (s String) Uint64() (uint64, *apperr.Error) {
 	v, err := strconv.ParseUint(strings.TrimSpace(string(s)), 10, 64)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 uint64 失败")
 	}
 	return v, nil
 }
 
 // Float32 将原始文本去除首尾空白后，解析为 Go 原生 float32。
-// 格式非法或超出范围时，原样返回 strconv.ParseFloat 的错误；
-// 严格拒绝 NaN 与 ±Inf（含 Infinity 拼写），此时返回本包错误。
-func (s String) Float32() (float32, error) {
+// 语法非法归 [*apperr.Error] 40013，超出 float32 范围归 40014；
+// 严格拒绝 NaN 与 ±Inf（含 Infinity 拼写），此时返回 40013。
+func (s String) Float32() (float32, *apperr.Error) {
 	trimmed := strings.TrimSpace(string(s))
 	v, err := strconv.ParseFloat(trimmed, 32)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 float32 失败")
 	}
 	if math.IsNaN(v) || math.IsInf(v, 0) {
-		return 0, fmt.Errorf("typed.String: float value %q is not finite", trimmed)
+		return 0, errInvalidFormat("浮点值不是有限数")
 	}
 	return float32(v), nil
 }
 
 // Float64 将原始文本去除首尾空白后，解析为 Go 原生 float64。
-// 格式非法或超出范围时，原样返回 strconv.ParseFloat 的错误；
-// 严格拒绝 NaN 与 ±Inf（含 Infinity 拼写），此时返回本包错误。
-func (s String) Float64() (float64, error) {
+// 语法非法归 [*apperr.Error] 40013，超出 float64 范围归 40014；
+// 严格拒绝 NaN 与 ±Inf（含 Infinity 拼写），此时返回 40013。
+func (s String) Float64() (float64, *apperr.Error) {
 	trimmed := strings.TrimSpace(string(s))
 	v, err := strconv.ParseFloat(trimmed, 64)
 	if err != nil {
-		return 0, err
+		return 0, errParse(err, "解析为 float64 失败")
 	}
 	if math.IsNaN(v) || math.IsInf(v, 0) {
-		return 0, fmt.Errorf("typed.String: float value %q is not finite", trimmed)
+		return 0, errInvalidFormat("浮点值不是有限数")
 	}
 	return v, nil
 }
@@ -145,8 +157,8 @@ func (s String) Float64() (float64, error) {
 //   - 真值仅接受："true"、"1"、"yes"、"on"、"enabled"；
 //   - 假值仅接受："false"、"0"、"no"、"off"、"disabled"。
 //
-// 其余输入一律返回错误，错误文本包含原始输入内容。
-func (s String) Bool() (bool, error) {
+// 其余输入返回 [*apperr.Error]（40013），安全描述不复制原始输入内容。
+func (s String) Bool() (bool, *apperr.Error) {
 	trimmed := strings.ToLower(strings.TrimSpace(string(s)))
 	switch trimmed {
 	case "true", "1", "yes", "on", "enabled":
@@ -154,13 +166,17 @@ func (s String) Bool() (bool, error) {
 	case "false", "0", "no", "off", "disabled":
 		return false, nil
 	default:
-		return false, fmt.Errorf("typed.String: invalid boolean value %q", s)
+		return false, errInvalidFormat("布尔值格式非法")
 	}
 }
 
 // Duration 将原始文本去除首尾空白后，委托 time.ParseDuration
 // 解析为 time.Duration，支持 "30s"、"500ms"、"1h30m" 等标准写法。
-// 解析失败时原样返回 time.ParseDuration 的错误。
-func (s String) Duration() (time.Duration, error) {
-	return time.ParseDuration(strings.TrimSpace(string(s)))
+// 解析失败返回 [*apperr.Error]（40013），原生 time 错误作为根因保留。
+func (s String) Duration() (time.Duration, *apperr.Error) {
+	d, err := time.ParseDuration(strings.TrimSpace(string(s)))
+	if err != nil {
+		return 0, valueerr.From(valueerr.KindInvalidFormat, "解析为时间间隔失败", err)
+	}
+	return d, nil
 }

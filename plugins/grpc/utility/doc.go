@@ -22,6 +22,7 @@
 // # 错误安全与脱敏
 //
 // 当上下文缺失元数据或未包含指定键时，[ExtractMetadata] 返回标准结构化
-// 业务错误 [*apperr.Error]（包含 [apperr.NotExist] 错误码）。
+// 业务错误 [*apperr.Error]（包含 [grpcresult.MetadataMissing] 错误码）。
+// nil上下文返回 [grpcresult.ContextMissing] 内部调用错误，不等同于缺少凭证。
 // 错误信息仅说明键名缺失，不打印任何外部传入的脏数据或敏感内容。
 package xGrpcUtil

@@ -3,7 +3,6 @@ package logging
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 )
 
@@ -76,36 +76,58 @@ func (h *LogHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 // Handle 处理一条日志记录，执行控制台与文件双写输出。
-//
 // 控制台输出彩色文本，文件输出单行 JSON，两路输出均携带从
 // context 的 [ctxkey.RequestKey] 提取的 TraceID；ERROR 级别的
 // 控制台输出附加当前 goroutine 堆栈。若任一底层 Writer 写入失败，
-// 将保留并以 errors.Join 汇总返回该错误，避免静默吞错，
+// 错误不会被静默吞掉：单路失败时返回该路错误（错误码 WriteFailed，
+// 底层原因完整保留），双路失败时以 apperr.Join 聚合两路原因，
 // 另一路输出仍会执行。
+//
+// 该方法是 [slog.Handler] 固定签名，必须返回原生 error；
+// 内部由强类型核心 [LogHandler.handle] 承担分类与聚合：
+// 核心成功时返回真正的 nil 错误，核心失败时返回该统一错误。
 func (h *LogHandler) Handle(ctx context.Context, r slog.Record) error {
+	appErr := h.handle(ctx, r)
+	if appErr == nil {
+		return nil
+	}
+	return appErr
+}
+
+// handle 是 [LogHandler.Handle] 的强类型核心。
+//
+// 成功路径返回 nil 指针，失败路径返回携带 WriteFailed 错误码的统一错误：
+// 仅控制台或仅文件一路失败时返回该路错误并保留原始原因；
+// 两路都失败时以 [apperr.Join] 聚合，两路原因均可经 errors.Is 识别。
+func (h *LogHandler) handle(ctx context.Context, r slog.Record) *apperr.Error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// 提取 context 中的 RequestKey (TraceID)
 	contextUUID := h.extractContextUUID(ctx)
 
-	var errs []error
+	var consoleErr, fileErr *apperr.Error
 
 	// 写入控制台（彩色格式）
 	if h.console != nil {
-		if err := h.writeConsole(r, contextUUID); err != nil {
-			errs = append(errs, fmt.Errorf("logging: console write failed: %w", err))
-		}
+		consoleErr = h.writeConsole(r, contextUUID)
 	}
 
 	// 写入文件（JSON 格式）
 	if h.file != nil {
-		if err := h.writeFile(r, contextUUID); err != nil {
-			errs = append(errs, fmt.Errorf("logging: file write failed: %w", err))
-		}
+		fileErr = h.writeFile(r, contextUUID)
 	}
 
-	return errors.Join(errs...)
+	switch {
+	case consoleErr != nil && fileErr != nil:
+		return apperr.Join(WriteFailed, "日志控制台与文件双路写入失败", consoleErr, fileErr)
+	case consoleErr != nil:
+		return apperr.From(WriteFailed, "日志控制台写入失败", consoleErr)
+	case fileErr != nil:
+		return apperr.From(WriteFailed, "日志文件写入失败", fileErr)
+	default:
+		return nil
+	}
 }
 
 // WithAttrs 返回追加了属性的 Handler 派生副本。
@@ -171,7 +193,10 @@ func (h *LogHandler) extractContextUUID(ctx context.Context) string {
 // 格式: 时间 [LEVEL] [trace] [NAME] 消息
 //
 //	变量（换行棕色显示）
-func (h *LogHandler) writeConsole(r slog.Record, contextUUID string) error {
+//
+// 成功返回 nil 指针；失败返回携带 WriteFailed 错误码的统一错误，
+// 底层写入原因完整保留，errors.Is 仍然可达。
+func (h *LogHandler) writeConsole(r slog.Record, contextUUID string) *apperr.Error {
 	var buf strings.Builder
 
 	// 时间戳（灰色）
@@ -262,11 +287,14 @@ func (h *LogHandler) writeConsole(r slog.Record, contextUUID string) error {
 	}
 
 	_, err := io.WriteString(h.console, buf.String())
-	return err
+	return errWriteFailed("日志控制台写入失败", err)
 }
 
 // writeFile 写入文件（JSON 格式）
-func (h *LogHandler) writeFile(r slog.Record, trace string) error {
+//
+// 成功返回 nil 指针；失败返回携带 WriteFailed 错误码的统一错误，
+// 底层序列化或写入原因完整保留，errors.Is 仍然可达。
+func (h *LogHandler) writeFile(r slog.Record, trace string) *apperr.Error {
 	entry := map[string]interface{}{
 		"time":    r.Time.Format(time.RFC3339Nano),
 		"level":   r.Level.String(),
@@ -293,11 +321,11 @@ func (h *LogHandler) writeFile(r slog.Record, trace string) error {
 
 	data, err := json.Marshal(entry)
 	if err != nil {
-		return err
+		return errWriteFailed("日志文件序列化失败", err)
 	}
 	data = append(data, '\n')
 	_, err = h.file.Write(data)
-	return err
+	return errWriteFailed("日志文件写入失败", err)
 }
 
 // colorLevel 返回带颜色的日志级别。

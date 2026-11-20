@@ -13,6 +13,7 @@ import (
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2"
 	xGrpcConst "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/constant"
+	"github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/grpcresult"
 	xGrpcMiddle "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2/middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -103,7 +104,7 @@ func unaryAppErrorHandler(srv any, ctx context.Context, dec func(any) error, int
 		return nil, err
 	}
 	h := func(ctx context.Context, req any) (any, error) {
-		return nil, apperr.New(apperr.ParameterError, "参数校验失败", errors.New("underlying private db err"))
+		return nil, apperr.New(grpcresult.ParameterError, "参数校验失败", errors.New("underlying private db err"))
 	}
 	if interceptor != nil {
 		return interceptor(ctx, req, &grpc.UnaryServerInfo{
@@ -180,7 +181,7 @@ func TestPlugin_BasicLifecycleAndUnary(t *testing.T) {
 		t.Fatalf("Addr() 返回了未解析的地址: %s", addr)
 	}
 
-	runDone := make(chan error, 1)
+	runDone := make(chan *apperr.Error, 1)
 	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
 	defer cancelLifetime()
 
@@ -432,11 +433,11 @@ func TestPlugin_GracefulStopAndForceCancel(t *testing.T) {
 	defer cancel()
 
 	stopStart := time.Now()
-	err := plugin.Stop(stopCtx)
+	stopErr := plugin.Stop(stopCtx)
 	stopCost := time.Since(stopStart)
 
-	if err == nil && stopCost < 100*time.Millisecond {
-		t.Logf("Stop 正常返回: %v", err)
+	if stopErr == nil && stopCost < 100*time.Millisecond {
+		t.Logf("Stop 正常返回: %v", stopErr)
 	}
 
 	// 验证 Handler 真正被 cancel 打退并完成计数退还

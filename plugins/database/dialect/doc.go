@@ -27,7 +27,12 @@
 //
 // # 错误语义
 //
-// 驱动查找可能返回以下哨兵错误：
+// [Lookup] 与 [Adapter.Open] 的失败结果为统一错误指针；成功返回真 nil。
+// [DriverInvalid] 用于非法声明（Register 仍 panic），[DriverNotLoaded] 用于未加载驱动，
+// [AdapterInvalid] 用于对象契约，[AdapterConfigInvalid] 用于适配器自身的部署配置失败。
+// 下列哨兵只作为根因保留，仍可经 errors.Is 精确判断。
+//
+// 驱动查找失败的统一错误保留以下哨兵原因：
 //
 //   - [ErrDriverNotLoaded]：请求的驱动未被注册或未被匿名导入加载时返回。
 //   - [ErrNilAdapter]：已注册驱动的工厂函数返回了 nil 或包含类型信息的 typed nil 时返回。

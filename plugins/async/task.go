@@ -7,7 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/valueerr"
 )
 
 // Task 表示一个已提交异步任务的执行句柄。
@@ -100,26 +103,64 @@ func (t *Task) PanicStack() []byte {
 }
 
 // Wait 阻塞等待任务完成。
-// 若传入了可选的 ctx 且在等待期间该上下文超时或被取消，立即返回对应错误（如 [context.DeadlineExceeded]）；
+//
+// 若传入了可选的 ctx 且在等待期间该上下文超时或被取消，立即返回对应错误：
+// 取消归一为 [control.Canceled]（49900），超时归一为 [control.DeadlineExceeded]（50401），
+// 原生 context 哨兵继续作为根因保留，供 errors.Is 精确判定；
 // 超时仅代表调用方放弃继续等待，绝不会中断或取消后台正在运行的任务。
 // 若未传入 ctx 或传入 nil，则无期限阻塞直至任务结束。本方法并发安全。
-func (t *Task) Wait(ctx ...context.Context) error {
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 接收器为 nil 时返回 [valueerr.InvalidReceiver]（50019）错误，并以 [ErrNotInitialized] 为根因。
+func (t *Task) Wait(ctx ...context.Context) *apperr.Error {
+	if t == nil {
+		return apperr.New(valueerr.InvalidReceiver, "异步任务实例为空", ErrNotInitialized)
+	}
 	if len(ctx) > 0 && ctx[0] != nil {
+		// 优先判定任务已完成，避免已完成任务被随机选中为超时分支。
+		select {
+		case <-t.done:
+			return nil
+		default:
+		}
 		select {
 		case <-t.done:
 			return nil
 		case <-ctx[0].Done():
-			return ctx[0].Err()
+			return waitControlError(ctx[0].Err())
 		}
 	}
 	<-t.done
 	return nil
 }
 
+// waitControlError 将等待期间的控制类原因归一为控制类统一错误。
+//
+// 取消归一为 49900，超时归一为 50401；原生 context 哨兵作为根因完整保留。
+// 未知原因由调用方的所属域兜底，绝不伪装成控制类失败。
+func waitControlError(ctxErr error) *apperr.Error {
+	if apperr.IsNil(ctxErr) {
+		return nil
+	}
+	classified := control.Classify(ctxErr, control.PhaseOperation)
+	if classified == nil {
+		return apperr.From(PoolError, "异步任务等待失败", ctxErr)
+	}
+	return apperr.New(&classified.Code, "异步任务等待被取消或超时", ctxErr)
+}
+
 // WaitFor 等待任务完成，最多等待指定的超时时长 timeout。
-// 若等待超时，返回 [context.DeadlineExceeded]；任务仍在后台继续执行，不被取消或强杀。
+//
+// 若等待超时，归一为 [control.DeadlineExceeded]（50401），并保留 [context.DeadlineExceeded]
+// 作为根因供 errors.Is 精确判定；任务仍在后台继续执行，不被取消或强杀。
+//
+// 失败结果为 [*apperr.Error]：成功必须返回真正的 nil 指针；
+// 接收器为 nil 时返回 [valueerr.InvalidReceiver]（50019）错误，并以 [ErrNotInitialized] 为根因。
 // 本方法并发安全。
-func (t *Task) WaitFor(timeout time.Duration) error {
+func (t *Task) WaitFor(timeout time.Duration) *apperr.Error {
+	if t == nil {
+		return apperr.New(valueerr.InvalidReceiver, "异步任务实例为空", ErrNotInitialized)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return t.Wait(ctx)

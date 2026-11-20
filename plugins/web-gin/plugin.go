@@ -3,7 +3,6 @@ package webgin
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/control"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/ctxkey"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/logging"
@@ -32,7 +32,59 @@ var (
 	ErrServerClosed         = errors.New("webgin: 服务已停止")               // 服务处于已关闭或正在关闭状态，拒绝接纳新请求。
 	ErrNoLifetimeContext    = errors.New("webgin: 缺少 lifetime context") // 缺少有效的应用生命周期上下文，请求无法被安全调度。
 	ErrStopTimeout          = errors.New("webgin: 停机等待超时")              // 服务停机等待已超出预设的超时时限。
+	ErrNotStarted           = errors.New("webgin: 服务尚未启动")              // 插件尚未完成 [Plugin.Start]，服务不可用。
 )
+
+// normalizeLifecycleErr 按内核统一的归因顺序归一生命周期内部失败。
+//
+// 归一顺序与 application/errors.go 的 normalizeErr 保持一致：
+//   - 原因为空或 nil 载体时返回 nil，表示没有失败；
+//   - 原因链中已存在 [*apperr.Error] 时沿用其错误码与描述，并保留整条原因链；
+//   - 取消与超时经 [control.Classify] 归一为控制类错误码，原生 context 哨兵继续作为根因保留；
+//   - 其余普通原因按调用方给出的所属错误码兜底，原始原因链完整保留。
+func normalizeLifecycleErr(code *apperr.ErrorCode, msg apperr.ErrMessage, cause error) *apperr.Error {
+	if apperr.IsNil(cause) {
+		return nil
+	}
+	if structured := apperr.Find(cause); structured != nil {
+		return apperr.From(&structured.Code, structured.ErrorMessage, cause)
+	}
+	if classified := control.Classify(cause, control.PhaseOperation); classified != nil {
+		return apperr.New(&classified.Code, msg, cause)
+	}
+	return apperr.From(code, msg, cause)
+}
+
+// joinLifecycleErrs 聚合多个生命周期失败结果。
+//
+// 没有有效成员时返回 nil（真正的 nil 指针），只有一个成员时原样返回；
+// 多个成员时最外层错误使用 [apperr.FrameworkMultipleFailures]（50020），
+// 全部成员按入参顺序保留为根因，可经 errors.Is 与 errors.As 逐个遍历。
+func joinLifecycleErrs(errs ...*apperr.Error) *apperr.Error {
+	kept := make([]*apperr.Error, 0, len(errs))
+	for _, appErr := range errs {
+		if appErr != nil {
+			kept = append(kept, appErr)
+		}
+	}
+
+	switch len(kept) {
+	case 0:
+		return nil
+	case 1:
+		return kept[0]
+	}
+	return apperr.Join(apperr.FrameworkMultipleFailures, "多个生命周期阶段失败", kept...)
+}
+
+// isSameStopContextErr 判断 srv.Shutdown(ctx) 返回的错误是否与本次停机上下文取消/超时同源，
+// 避免将同一次取消或超时事件重复聚合为 [apperr.FrameworkMultipleFailures]。
+func isSameStopContextErr(stopReason, shutErr *apperr.Error, ctxErr error) bool {
+	if stopReason == nil || shutErr == nil || ctxErr == nil {
+		return false
+	}
+	return stopReason.Code.Code == shutErr.Code.Code && errors.Is(shutErr, ctxErr)
+}
 
 // RouteRegistrar 定义路由注册回调函数签名。
 //
@@ -52,7 +104,7 @@ type config struct {
 	name                string
 	requires            []ctxkey.Key
 	routes              []RouteRegistrar
-	validatorRegistrars []func(*validator.Engine) error
+	validatorRegistrars []func(*validator.Engine) *apperr.Error
 	logger              *logging.Logger
 	readTimeout         time.Duration
 	writeTimeout        time.Duration
@@ -121,8 +173,8 @@ func WithRoute(fn RouteRegistrar) Option {
 //
 // 回调函数在插件执行 [Plugin.Start] 并创建私有 [*validator.Engine] 实例后、
 // 初始化绑定器之前执行。业务可通过此函数注册领域特定的参数校验规则。
-// 若回调返回错误，[Plugin.Start] 流程将立即终止并返回该错误。传入 nil 时忽略。
-func WithValidatorRegistrar(fn func(*validator.Engine) error) Option {
+// 若回调返回非 nil 统一错误，[Plugin.Start] 流程将立即终止并返回该错误。传入 nil 时忽略。
+func WithValidatorRegistrar(fn func(*validator.Engine) *apperr.Error) Option {
 	return func(c *config) {
 		if fn != nil {
 			c.validatorRegistrars = append(c.validatorRegistrars, fn)
@@ -197,7 +249,7 @@ func (g *requestGate) closeGate() {
 	g.closed = true
 }
 
-func (g *requestGate) waitDrained(ctx context.Context) error {
+func (g *requestGate) waitDrained(ctx context.Context) *apperr.Error {
 	g.mu.Lock()
 	g.closed = true
 	if g.inflight == 0 {
@@ -220,7 +272,10 @@ func (g *requestGate) waitDrained(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return normalizeLifecycleErr(httpresult.InternalError, "排空在途请求被中断", ctxErr)
+		}
+		return apperr.New(httpresult.InternalError, "排空在途请求被中断")
 	}
 }
 
@@ -249,7 +304,7 @@ type Plugin struct {
 	lifetimeMu  sync.RWMutex
 
 	stopOnce sync.Once
-	stopErr  error
+	stopErr  *apperr.Error
 	doneChan chan struct{}
 
 	namedLog *logging.LogNamedLogger
@@ -280,7 +335,7 @@ func New(opts ...Option) (application.PluginInfo, func() application.RunnablePlu
 	routesCopy := make([]RouteRegistrar, len(cfg.routes))
 	copy(routesCopy, cfg.routes)
 
-	validatorRegistrarsCopy := make([]func(*validator.Engine) error, len(cfg.validatorRegistrars))
+	validatorRegistrarsCopy := make([]func(*validator.Engine) *apperr.Error, len(cfg.validatorRegistrars))
 	copy(validatorRegistrarsCopy, cfg.validatorRegistrars)
 
 	cfg.requires = requiresCopy
@@ -346,7 +401,8 @@ func (p *Plugin) Addr() string {
 // Start 执行插件启动前的资源准备与服务初始化。
 //
 // 该方法依次执行以下关键动作：
-//   - 校验启动状态，防止并发或重复启动，重复启动返回 [ErrServerAlreadyStarted]；
+//   - 校验启动状态，防止并发或重复启动，重复启动返回 [ErrServerAlreadyStarted]
+//     作为根因的统一错误（错误码 [httpresult.InvalidState]）；
 //   - 派生实例独立的强制取消上下文，关联框架强制停止信号；
 //   - 创建全新的私有 [*gin.Engine] 实例并开启 ContextWithFallback；
 //   - 初始化私有 [*validator.Engine] 并执行用户注册的自定义验证器扩展；
@@ -355,11 +411,11 @@ func (p *Plugin) Addr() string {
 //   - 绑定并启动底层 TCP 监听器（若监听失败，自动释放所有已申请的资源并返回错误）。
 //
 // 该方法不阻塞等待网络请求，真正的服务监听循环由 [Plugin.Run] 接管。
-func (p *Plugin) Start(ctx context.Context) error {
+func (p *Plugin) Start(ctx context.Context) *apperr.Error {
 	p.stateMu.Lock()
 	if p.starting || p.started {
 		p.stateMu.Unlock()
-		return ErrServerAlreadyStarted
+		return apperr.From(httpresult.InvalidState, "服务已启动，禁止重复启动", ErrServerAlreadyStarted)
 	}
 	p.starting = true
 	p.stateMu.Unlock()
@@ -381,34 +437,22 @@ func (p *Plugin) Start(ctx context.Context) error {
 	engine := gin.New()
 	engine.ContextWithFallback = true
 
-	vEngine, err := validator.New()
-	if err != nil {
-		cancelForce()
-		p.stateMu.Lock()
-		p.starting = false
-		p.stateMu.Unlock()
-		return fmt.Errorf("webgin: 初始化 validator 引擎失败: %w", err)
+	vEngine, appErr := validator.New()
+	if appErr != nil {
+		return normalizeLifecycleErr(httpresult.InternalError, "初始化 validator 引擎失败", appErr)
 	}
 
 	for _, vr := range p.cfg.validatorRegistrars {
 		if vr != nil {
-			if err := vr(vEngine); err != nil {
-				cancelForce()
-				p.stateMu.Lock()
-				p.starting = false
-				p.stateMu.Unlock()
-				return fmt.Errorf("webgin: 注册自定义验证器失败: %w", err)
+			if vrErr := vr(vEngine); vrErr != nil {
+				return normalizeLifecycleErr(httpresult.InternalError, "注册自定义验证器失败", vrErr)
 			}
 		}
 	}
 
-	b, err := bind.New(vEngine)
-	if err != nil {
-		cancelForce()
-		p.stateMu.Lock()
-		p.starting = false
-		p.stateMu.Unlock()
-		return fmt.Errorf("webgin: 初始化 binder 失败: %w", err)
+	b, appErr := bind.New(vEngine)
+	if appErr != nil {
+		return normalizeLifecycleErr(httpresult.InternalError, "初始化 binder 失败", appErr)
 	}
 
 	// 挂载核心请求处理管道与基础中间件
@@ -442,11 +486,7 @@ func (p *Plugin) Start(ctx context.Context) error {
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", listenAddr)
 	if err != nil {
-		cancelForce()
-		p.stateMu.Lock()
-		p.starting = false
-		p.stateMu.Unlock()
-		return fmt.Errorf("webgin: 监听地址 %s 失败: %w", listenAddr, err)
+		return normalizeLifecycleErr(httpresult.InternalError, apperr.ErrMessage("监听地址 "+listenAddr+" 失败"), err)
 	}
 
 	p.stateMu.Lock()
@@ -466,19 +506,21 @@ func (p *Plugin) Start(ctx context.Context) error {
 // Run 封存应用生命周期上下文并启动阻塞式的 HTTP 服务事件循环。
 //
 // 参数 lifetimeCtx 为应用生命周期上下文，包含宿主应用的共享依赖容器与上下文凭据。
-// 若尚未成功执行 [Plugin.Start] 即调用此方法，将直接返回错误。
+// 若尚未成功执行 [Plugin.Start] 即调用此方法，将返回错误码 [httpresult.ServiceUnavailable]
+// 的统一错误，并以 [ErrNotStarted] 作为根因。
 //
 // 当底层 HTTP 服务由于 [Plugin.Stop]、[http.Server.Shutdown] 或 [http.Server.Close] 退出时，
 // 若退出原因为普通的 [http.ErrServerClosed]，本方法返回 nil 表示正常退出；
-// 其余非预期的网络中断或运行时异常将原样返回。
-func (p *Plugin) Run(lifetimeCtx context.Context) error {
+// 其余非预期的网络中断或运行时异常归一为错误码 [httpresult.InternalError] 的统一错误，
+// 底层错误继续作为根因保留。
+func (p *Plugin) Run(lifetimeCtx context.Context) *apperr.Error {
 	p.stateMu.Lock()
 	srv := p.server
 	ln := p.listener
 	p.stateMu.Unlock()
 
 	if srv == nil || ln == nil {
-		return errors.New("webgin: 服务未完成 Start 即调用 Run")
+		return apperr.From(httpresult.ServiceUnavailable, "服务未完成 Start 即调用 Run", ErrNotStarted)
 	}
 
 	p.lifetimeMu.Lock()
@@ -487,7 +529,7 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 
 	err := srv.Serve(ln)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+		return normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务监听循环异常退出", err)
 	}
 	return nil
 }
@@ -497,7 +539,7 @@ func (p *Plugin) Run(lifetimeCtx context.Context) error {
 // 关闸后到达的新 HTTP 请求将被内部准入中间件拦截并直接返回 503 Service Unavailable 错误；
 // 当前已接纳且正在处理中的存量请求不受影响，继续正常执行。
 // 该方法不会主动中断网络连接，也不会调用 [Plugin.Stop]。
-func (p *Plugin) Quiesce(ctx context.Context) error {
+func (p *Plugin) Quiesce(ctx context.Context) *apperr.Error {
 	p.gate.closeGate()
 	return nil
 }
@@ -513,7 +555,7 @@ func (p *Plugin) Quiesce(ctx context.Context) error {
 //   - 阻塞等待准入门禁中所有处于飞行中的请求彻底执行完毕并退出，绝不因超时虚假返回。
 //
 // 多次重复调用此方法并发安全，且共享同一次执行结果。
-func (p *Plugin) Stop(ctx context.Context) error {
+func (p *Plugin) Stop(ctx context.Context) *apperr.Error {
 	p.stopOnce.Do(func() {
 		p.stopErr = p.doStop(ctx)
 		close(p.doneChan)
@@ -522,7 +564,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return p.stopErr
 }
 
-func (p *Plugin) doStop(ctx context.Context) error {
+func (p *Plugin) doStop(ctx context.Context) *apperr.Error {
 	p.stateMu.Lock()
 	srv := p.server
 	p.stateMu.Unlock()
@@ -535,36 +577,44 @@ func (p *Plugin) doStop(ctx context.Context) error {
 	p.gate.closeGate()
 
 	// 2. 异步启动 http.Server.Shutdown
-	shutdownDone := make(chan error, 1)
+	shutdownDone := make(chan *apperr.Error, 1)
 	go func() {
-		// 使用独立的 Context 还是传入的 ctx？传入 ctx 作为 Shutdown 的等待上限
-		shutdownDone <- srv.Shutdown(ctx)
+		// 使用传入的 ctx 作为 Shutdown 的等待上限；正常关闭返回真正的 nil
+		if err := srv.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			shutdownDone <- normalizeLifecycleErr(httpresult.InternalError, "HTTP 服务优雅关闭失败", err)
+			return
+		}
+		shutdownDone <- nil
 	}()
 
-	var stopReason error
+	var stopReason *apperr.Error
 
 	// 3. 监控超时或取消通知
 	select {
-	case err := <-shutdownDone:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopReason = err
+	case shutErr := <-shutdownDone:
+		if shutErr != nil {
+			stopReason = shutErr
+			if ctx.Err() != nil {
+				_ = srv.Close()
+			}
 		}
 	case <-ctx.Done():
-		stopReason = ctx.Err()
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
+			stopReason = normalizeLifecycleErr(httpresult.InternalError, "停机等待被取消或超时", ctxErr)
+		} else {
+			stopReason = apperr.New(httpresult.InternalError, "停机等待被取消或超时")
+		}
 		// 超时/取消推进传输关闭
 		_ = srv.Close()
-		if err := <-shutdownDone; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			if stopReason == nil {
-				stopReason = err
-			} else if !errors.Is(err, stopReason) && !errors.Is(stopReason, err) {
-				stopReason = errors.Join(stopReason, err)
-			}
+		if shutErr := <-shutdownDone; shutErr != nil && !isSameStopContextErr(stopReason, shutErr, ctxErr) {
+			stopReason = joinLifecycleErrs(stopReason, shutErr)
 		}
 	case <-p.forceCtx.Done():
 		// App Force 信号通知关闭底层传输，不把正常 AppForce 信号当作 Stop 错误
 		_ = srv.Close()
-		if err := <-shutdownDone; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			stopReason = err
+		if shutErr := <-shutdownDone; shutErr != nil {
+			stopReason = shutErr
 		}
 	}
 
@@ -574,9 +624,8 @@ func (p *Plugin) doStop(ctx context.Context) error {
 	}
 
 	// 5. 核心：必须真正等待所有普通 Handler 退出（active 归零），绝不因 ctx deadline 提前释放或返回假 Done
-	drainErr := p.gate.waitDrained(context.Background())
-	if drainErr != nil && stopReason == nil {
-		stopReason = drainErr
+	if drainErr := p.gate.waitDrained(context.Background()); drainErr != nil && stopReason == nil {
+		stopReason = normalizeLifecycleErr(httpresult.InternalError, "排空在途请求失败", drainErr)
 	}
 
 	return stopReason
@@ -593,7 +642,7 @@ func (p *Plugin) requestBridgeMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 同一把锁先判断准入与递增 inflight
 		if !p.gate.enter() {
-			httpresult.AbortError(c, apperr.New(apperr.ServiceUnavailable, "服务已停止或正在关机", ErrServerClosed))
+			httpresult.AbortError(c, apperr.New(httpresult.ServiceUnavailable, "服务已停止或正在关机", ErrServerClosed))
 			return
 		}
 		defer p.gate.leave()
@@ -604,7 +653,7 @@ func (p *Plugin) requestBridgeMiddleware() gin.HandlerFunc {
 		// 3. 检查 lifetimeCtx，缺失则拒绝请求（严禁 fallback 到背景 context）
 		lifetime := p.getLifetimeCtx()
 		if lifetime == nil {
-			httpresult.AbortError(c, apperr.New(apperr.ServiceUnavailable, "服务未完全就绪，缺少 lifetimeContext", ErrNoLifetimeContext))
+			httpresult.AbortError(c, apperr.New(httpresult.ServiceUnavailable, "服务未完全就绪，缺少 lifetimeContext", ErrNoLifetimeContext))
 			return
 		}
 

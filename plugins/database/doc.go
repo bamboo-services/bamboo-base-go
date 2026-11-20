@@ -24,10 +24,16 @@
 //
 //   - [Get]：从传入的 [context.Context] 中安全提取 [*gorm.DB] 句柄。
 //     若提取成功且 ctx 非空，方法内部自动执行 db.WithContext(ctx)，
-//     使后续的 SQL 查询具备上下文取消与超时感知能力；若提取失败或句柄为 nil，
-//     返回包含 [apperr.DatabaseError] 的业务级错误。
+//     使后续的 SQL 查询具备上下文取消与超时感知能力；提取失败时透传 application 的错误，
+//     仅在提取成功但句柄为 nil 时返回包含 [DatabaseError] 的业务级错误。
 //   - [MustGet]：从上下文中提取已绑定请求上下文的 [*gorm.DB]，提取失败时直接触发 panic，
 //     适合在确定数据库插件已成功启动且强依赖数据库的场景下使用。
+//
+// # 插件专属错误码
+//
+// 本包维护 [DatabaseError]、[TransactionFailed]、[RecordNotFound] 及数据库约束冲突错误码，
+// 调用方可使用 [apperr.New] 按需构造标准响应，保留底层根因。
+// 这些定义不会自动将 GORM 或驱动错误转换为业务错误；[Get] 仍透传 application 的提取错误。
 //
 // # 典型用法
 //

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	"github.com/bamboo-services/bamboo-base-go/foundation/v2/env"
 	"github.com/bamboo-services/bamboo-base-go/plugins/database/v2/dialect"
 	gormpostgres "gorm.io/driver/postgres"
@@ -17,7 +18,7 @@ const DriverName = "postgres"
 // adapter 实现 dialect.Adapter 接口。
 type adapter struct {
 	dsn string
-	err error
+	err *apperr.Error
 }
 
 func init() {
@@ -33,7 +34,7 @@ func New(dsn string) dialect.Adapter {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
 		return &adapter{
-			err: errors.New("postgres: dsn cannot be empty"),
+			err: configInvalid("PostgreSQL 连接串不能为空", errors.New("postgres: dsn cannot be empty")),
 		}
 	}
 
@@ -69,34 +70,28 @@ func FromEnv() dialect.Adapter {
 	if val, ok := env.Lookup(env.DatabaseHost); ok {
 		host = string(val)
 	}
-
 	user := "postgres"
 	if val, ok := env.Lookup(env.DatabaseUser); ok {
 		user = string(val)
 	}
-
 	pass := ""
 	if val, ok := env.Lookup(env.DatabasePass); ok {
 		pass = string(val)
 	}
-
 	name := "postgres"
 	if val, ok := env.Lookup(env.DatabaseName); ok {
 		name = string(val)
 	}
-
 	port := "5432"
 	if val, ok := env.Lookup(env.DatabasePort); ok {
 		port = string(val)
 	}
-
 	timezone := "Asia/Shanghai"
 	if val, ok := env.Lookup(env.DatabaseTimezone); ok {
 		timezone = string(val)
 	}
-
 	if strings.TrimSpace(port) == "" {
-		return &adapter{err: errors.New("postgres: port cannot be empty")}
+		return &adapter{err: configInvalid("PostgreSQL 端口配置不能为空", errors.New("postgres: port cannot be empty"))}
 	}
 
 	dsn := fmt.Sprintf(
@@ -108,7 +103,6 @@ func FromEnv() dialect.Adapter {
 		escapeKeyValue(port),
 		escapeKeyValue(timezone),
 	)
-
 	if err := validateDSN(dsn); err != nil {
 		return &adapter{err: err}
 	}
@@ -124,7 +118,11 @@ func (a *adapter) Name() string {
 // Open 构造 gorm.Dialector 实例。
 //
 // 仅做 Dialector 构造，不执行数据库真实建连或网络操作。
-func (a *adapter) Open() (gorm.Dialector, error) {
+// 接收器为 nil 时返回 [dialect.AdapterInvalid] 错误而非触发 panic。
+func (a *adapter) Open() (gorm.Dialector, *apperr.Error) {
+	if a == nil {
+		return nil, apperr.New(dialect.AdapterInvalid, "PostgreSQL 适配器实例为空", errors.New("postgres: adapter instance is nil"))
+	}
 	if a.err != nil {
 		return nil, a.err
 	}
@@ -144,11 +142,18 @@ func escapeKeyValue(val string) string {
 	return "'" + escaped + "'"
 }
 
+// configInvalid 构造 PostgreSQL 适配器配置非法错误。
+//
+// msg 为安全的中文说明，cause 为已脱敏的底层原因，二者均不携带 DSN 明文或数据库密码。
+func configInvalid(msg string, cause error) *apperr.Error {
+	return apperr.New(dialect.AdapterConfigInvalid, apperr.ErrMessage(msg), cause)
+}
+
 // validateDSN 验证 DSN 结构合法性，脱敏任何可能包含凭据的错误信息。
-func validateDSN(raw string) error {
+func validateDSN(raw string) *apperr.Error {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return errors.New("postgres: dsn cannot be empty")
+		return configInvalid("PostgreSQL 连接串不能为空", errors.New("postgres: dsn cannot be empty"))
 	}
 
 	// 支持 URL 格式 (postgres:// 或 postgresql://)
@@ -157,7 +162,7 @@ func validateDSN(raw string) error {
 		scheme := trimmed[:idx]
 		rest := trimmed[idx+3:]
 		if rest == "" {
-			return errors.New("postgres: invalid DSN format")
+			return configInvalid("PostgreSQL 连接串格式非法：URL 缺少连接信息", errors.New("postgres: invalid DSN format"))
 		}
 		atIdx := strings.LastIndex(rest, "@")
 		hostPart := rest
@@ -175,7 +180,7 @@ func validateDSN(raw string) error {
 		}
 		host := strings.TrimSpace(hostPart[:endIdx])
 		if host == "" {
-			return errors.New("postgres: host cannot be empty")
+			return configInvalid("PostgreSQL 连接串格式非法：主机地址为空", errors.New("postgres: host cannot be empty"))
 		}
 		_ = scheme
 		return nil
@@ -186,5 +191,5 @@ func validateDSN(raw string) error {
 		return nil
 	}
 
-	return errors.New("postgres: invalid DSN format")
+	return configInvalid("PostgreSQL 连接串格式非法：需为 URL 或 key=value 格式", errors.New("postgres: invalid DSN format"))
 }

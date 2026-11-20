@@ -56,6 +56,9 @@
 //     （底层不泄漏 SQL 或内部敏感堆栈），并调用 [gin.Context.Abort] 中断后续 Handler 执行，
 //     方法最终返回 nil。
 //
+// 参数绑定兜底错误码 [ParameterError] 由本包维护；结构体校验的 [validator.BodyError]
+// 与 [validator.ValidationError] 由验证器子包维护，不反向依赖绑定器。
+//
 // # 并发安全
 //
 // [Binder] 实例在完成初始化后属于只读状态，可被多个请求协程并发安全共享。

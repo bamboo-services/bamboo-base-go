@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	driver "github.com/bamboo-services/bamboo-base-go/plugins/cache/v2/driver"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -29,6 +30,14 @@ func NewHashCache[K any, F comparable, V any, S any](rdb *goredis.Client, codec 
 	return &HashCache[K, F, V, S]{rdb: rdb, codec: codec, enc: enc, ttl: ttl}
 }
 
+// ready 校验缓存实例是否可用，避免 nil 接收器或未注入 Redis 客户端时 panic。
+func (c *HashCache[K, F, V, S]) ready() *apperr.Error {
+	if c == nil || c.rdb == nil {
+		return notInitializedErr()
+	}
+	return nil
+}
+
 // refreshTTL 在写操作后按需续期。
 func (c *HashCache[K, F, V, S]) refreshTTL(ctx context.Context, key K, ttl time.Duration) {
 	if ttl > 0 {
@@ -37,14 +46,19 @@ func (c *HashCache[K, F, V, S]) refreshTTL(ctx context.Context, key K, ttl time.
 }
 
 // Get 获取单个字段的值。
-func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, error) {
+//
+// 键或字段不存在时（goredis.Nil）返回 nil, false, nil，不是失败。
+func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, false, err
+	}
 	k := driver.EncodeKey(c.enc, key)
 	data, err := c.rdb.HGet(ctx, k, driver.EncodeKey(c.enc, field)).Bytes()
 	if errors.Is(err, goredis.Nil) {
 		return nil, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, opErr(err)
 	}
 	var v V
 	if err := c.codec.Unmarshal(data, &v); err != nil {
@@ -60,7 +74,10 @@ func (c *HashCache[K, F, V, S]) Get(ctx context.Context, key K, field F) (*V, bo
 //   - NX：仅当 field 不存在时写入（Redis HSETNX）
 //   - XX：仅当 field 已存在时写入（先 HExists 预检，不存在则跳过）
 //   - NoSlide/KeepTTL：写入但不续期（跳过 refreshTTL）
-func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if value == nil {
 		return c.Remove(ctx, key, field)
 	}
@@ -75,23 +92,23 @@ func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *
 	case cfg.NX:
 		// HSETNX 仅当 field 不存在时写入，条件不满足时返回 false（非错误）
 		if err := c.rdb.HSetNX(ctx, k, f, data).Err(); err != nil {
-			return err
+			return opErr(err)
 		}
 	case cfg.XX:
 		// XX：field 已存在才写入，不存在则跳过
 		exists, err := c.rdb.HExists(ctx, k, f).Result()
 		if err != nil {
-			return err
+			return opErr(err)
 		}
 		if !exists {
 			return nil
 		}
 		if err := c.rdb.HSet(ctx, k, f, data).Err(); err != nil {
-			return err
+			return opErr(err)
 		}
 	default:
 		if err := c.rdb.HSet(ctx, k, f, data).Err(); err != nil {
-			return err
+			return opErr(err)
 		}
 	}
 	// NoSlide/KeepTTL 时跳过续期，保留原有 TTL
@@ -104,17 +121,22 @@ func (c *HashCache[K, F, V, S]) Set(ctx context.Context, key K, field F, value *
 // GetAll 获取所有字段及值，以 map[F]V 形式返回。
 //
 // Redis HGETALL 返回 map[string]string，要求 F 为 string 兼容类型。
-// F 非 string 时返回错误，避免静默返回空 map 与「key 不存在」混淆。
-func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, error) {
+// F 非 string 时返回 [driver.OperationFailed]（50039），避免静默返回空 map
+// 与「key 不存在」混淆。
+func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
 	result := make(map[F]V)
 	var fZero F
 	if t := reflect.TypeOf(fZero); t == nil || t.Kind() != reflect.String {
-		return nil, fmt.Errorf("redis HashCache.GetAll: F must be string kind, got %T", fZero)
+		return nil, apperr.New(driver.OperationFailed, "Redis 哈希字段类型必须为 string 类型",
+			fmt.Errorf("redis HashCache.GetAll: F must be string kind, got %T", fZero))
 	}
 	k := driver.EncodeKey(c.enc, key)
 	raw, err := c.rdb.HGetAll(ctx, k).Result()
 	if err != nil {
-		return nil, err
+		return nil, opErr(err)
 	}
 	for f, data := range raw {
 		var v V
@@ -131,7 +153,11 @@ func (c *HashCache[K, F, V, S]) GetAll(ctx context.Context, key K) (map[F]V, err
 // 先通过 [GetAll] 解码为 map[string]V（F 必须为 string），再用 codec 把 map 序列化后
 // 反序列化为 S。与 memory 后端的 GetAllStruct 走等价路径，避免直接拼接 raw string
 // 导致双重编码。
-func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, error) {
+func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		var zero S
+		return zero, err
+	}
 	var s S
 	m, err := c.GetAll(ctx, key)
 	if err != nil {
@@ -154,7 +180,10 @@ func (c *HashCache[K, F, V, S]) GetAllStruct(ctx context.Context, key K) (S, err
 //
 // opts 用于覆盖默认 TTL 或附加条件：NoSlide/KeepTTL 时跳过续期。
 // NX/XX 对批量 HSET 无原生对应，此处不预检（与单字段 Set 语义不同），仅尊重 NoSlide/KeepTTL。
-func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]*V, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -174,7 +203,7 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 		return nil
 	}
 	if err := c.rdb.HSet(ctx, k, args...).Err(); err != nil {
-		return err
+		return opErr(err)
 	}
 	cfg := driver.ApplySet(c.ttl, opts)
 	if !cfg.NoSlide && !cfg.KeepTTL {
@@ -188,7 +217,10 @@ func (c *HashCache[K, F, V, S]) SetAll(ctx context.Context, key K, fields map[F]
 // 先把 S 序列化为 []byte，再反序列化为 map[string]V（要求 field 名为 string），
 // 最后逐字段以 codec 编码为 []byte 通过 HSET 写入。
 // opts 用于覆盖默认 TTL 或附加条件：NoSlide/KeepTTL 时跳过续期。
-func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...driver.SetOption) error {
+func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S, opts ...driver.SetOption) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	data, err := c.codec.Marshal(value)
 	if err != nil {
 		return err
@@ -198,7 +230,7 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 		return err
 	}
 	k := driver.EncodeKey(c.enc, key)
-	args := make([]any, 0, len(m)*2)
+	var args []any
 	for f, v := range m {
 		vData, err := c.codec.Marshal(v)
 		if err != nil {
@@ -210,7 +242,7 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 		return nil
 	}
 	if err := c.rdb.HSet(ctx, k, args...).Err(); err != nil {
-		return err
+		return opErr(err)
 	}
 	cfg := driver.ApplySet(c.ttl, opts)
 	if !cfg.NoSlide && !cfg.KeepTTL {
@@ -220,16 +252,22 @@ func (c *HashCache[K, F, V, S]) SetAllStruct(ctx context.Context, key K, value S
 }
 
 // Exists 判断字段是否存在。
-func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, error) {
+func (c *HashCache[K, F, V, S]) Exists(ctx context.Context, key K, field F) (bool, *apperr.Error) {
+	if err := c.ready(); err != nil {
+		return false, err
+	}
 	n, err := c.rdb.HExists(ctx, driver.EncodeKey(c.enc, key), driver.EncodeKey(c.enc, field)).Result()
 	if err != nil {
-		return false, err
+		return false, opErr(err)
 	}
 	return n, nil
 }
 
 // Remove 移除指定字段。
-func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) error {
+func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
 	if len(fields) == 0 {
 		return nil
 	}
@@ -237,10 +275,13 @@ func (c *HashCache[K, F, V, S]) Remove(ctx context.Context, key K, fields ...F) 
 	for _, f := range fields {
 		args = append(args, driver.EncodeKey(c.enc, f))
 	}
-	return c.rdb.HDel(ctx, driver.EncodeKey(c.enc, key), args...).Err()
+	return opErr(c.rdb.HDel(ctx, driver.EncodeKey(c.enc, key), args...).Err())
 }
 
 // Delete 删除整个 hash。
-func (c *HashCache[K, F, V, S]) Delete(ctx context.Context, key K) error {
-	return c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err()
+func (c *HashCache[K, F, V, S]) Delete(ctx context.Context, key K) *apperr.Error {
+	if err := c.ready(); err != nil {
+		return err
+	}
+	return opErr(c.rdb.Del(ctx, driver.EncodeKey(c.enc, key)).Err())
 }

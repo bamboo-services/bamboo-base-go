@@ -83,7 +83,7 @@
 //   - 循环依赖检测：若插件间存在依赖环，[App.Run] 立即中止并返回 [ErrDependencyCycle]；
 //   - 启动期受限视图：在插件的 [Plugin.Start] 钩子中，上下文挂载严格受限的视图。
 //     插件只能通过 [Get] 访问其在 [PluginInfo.Requires] 中显式声明的直接依赖键，
-//     越权读取未声明组件将返回携带 [foundation/v2/apperr.Forbidden] 的错误；
+//     越权读取未声明组件将返回携带 [foundation/v2/apperr.FrameworkDependencyUndeclared] 的错误；
 //   - 资源原子发布：若插件声明了额外的 [PluginInfo.Provides] 资源键，
 //     必须同时实现 [foundation/v2/ctxkey.Exposer] 接口并在 Expose 方法中交付。
 //     内核严格校验交付集合，并在启动成功后原子发布至共享容器。
@@ -116,13 +116,32 @@
 //
 // [App.Run] 具备单次消耗性语义，多次调用同一实例的 Run 将返回 [ErrAlreadyRun]。
 //
+// # 错误出口契约
+//
+// 本包全部自有失败出口统一为 [*foundation/v2/apperr.Error] 强类型错误：
+//
+//   - 生命周期钩子：[Plugin.Start]、[Plugin.Stop]、[RunnablePlugin.Run] 与 [Quiescer.Quiesce]
+//     的失败结果均为强类型错误，成功路径返回真正的 nil 指针；
+//   - 内核出口：[App.Run]、[App.Shutdown]、[App.RegisterTool] 等注册方法、
+//     [Activator.Activate] 与 [RunHandle.Wait] 同样返回强类型错误；
+//   - 结果账本：[RunResult] 的各阶段错误字段与 [StuckInstance.Err] 均为强类型错误。
+//
+// 错误语义保持稳定：
+//
+//   - 原有哨兵（如 [ErrAlreadyRun]、[ErrWorkerUnexpectedExit]、[ErrComponentSkipped]）
+//     继续作为错误链根因保留，调用方仍可用 errors.Is 精确判定；
+//   - 框架诊断对象 [HookPanicError] 与 [StopIncompleteError] 继续可经 errors.As 命中，
+//     且关机残留清单中每个成员的结构化错误逐个可达；
+//   - 取消与超时经 [foundation/v2/control] 归一为控制类错误码，
+//     原生 context 哨兵同时保留为根因。
+//
 // # 看门狗与错误隔离
 //
 // 内核看门狗协程在应用运行期间持续监督常驻 Worker：
 //
 //   - 早退故障捕获：在 [StateRunning] 阶段，若某个 Worker 的 Run 异常返回
 //     （即使返回 nil），看门狗均将其判定为非预期崩溃，触发应用级自动平滑关机，
-//     并记录 [ErrWorkerUnexpectedExit]；
+//     并记录 [ErrWorkerUnexpectedExit]（错误链保留该哨兵与原始退出错误，可经 errors.Is / errors.As 精确判定）；
 //   - Panic 隔离与诊断：任何插件工厂函数、Start、Expose、Run、Quiesce、Stop 发生 panic，
 //     内核均会安全捕获并包装为结构化错误 [HookPanicError]，保留调用阶段、插件主键、
 //     实例标识与完整堆栈，防止工作进程裸崩溃。

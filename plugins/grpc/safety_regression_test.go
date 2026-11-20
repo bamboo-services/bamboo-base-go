@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/bamboo-services/bamboo-base-go/application/v2"
+	"github.com/bamboo-services/bamboo-base-go/foundation/v2/apperr"
 	xGrpc "github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2"
 )
 
@@ -56,7 +57,7 @@ func TestSafetyRegression_StartRegistrarPanic_ReleasesListener(t *testing.T) {
 
 	runDone := make(chan struct{})
 	var (
-		runErr   error
+		runErr   *apperr.Error
 		runErrMu sync.Mutex
 	)
 

@@ -68,26 +68,26 @@ func main() {
 
 				item := DemoItem{Name: "bamboo-item"}
 				if dbErr := db.WithContext(reqCtx).Create(&item).Error; dbErr != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to insert db item", dbErr))
+					httpresult.AbortError(c, apperr.New(database.DatabaseError, "failed to insert db item", dbErr))
 					return
 				}
 
 				var count int64
 				if dbErr := db.WithContext(reqCtx).Model(&DemoItem{}).Count(&count).Error; dbErr != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to count db items", dbErr))
+					httpresult.AbortError(c, apperr.New(database.DatabaseError, "failed to count db items", dbErr))
 					return
 				}
 
 				keyCache := cache.KeyCacheOf[string, string](mgr)
 				cacheVal := fmt.Sprintf("total-%d", count)
 				if setErr := keyCache.Set(reqCtx, "item_count", &cacheVal); setErr != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to set cache", setErr))
+					httpresult.AbortError(c, apperr.New(cache.CacheError, "failed to set cache", setErr))
 					return
 				}
 
 				valPtr, found, getErr := keyCache.Get(reqCtx, "item_count")
 				if getErr != nil {
-					httpresult.AbortError(c, apperr.New(apperr.ServerInternalError, "failed to get cache", getErr))
+					httpresult.AbortError(c, apperr.New(cache.CacheError, "failed to get cache", getErr))
 					return
 				}
 

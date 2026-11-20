@@ -194,12 +194,12 @@ func (e *HookPanicError) Error() string {
 }
 
 // Unwrap 返回原始 panic 转换后的错误对象。
-// 若 Value 实现了 error 接口则返回该错误，否则返回 nil。
+// 若 Value 实现了 error 接口且非 typed-nil 则返回该错误，否则返回 nil。
 func (e *HookPanicError) Unwrap() error {
 	if e == nil {
 		return nil
 	}
-	if err, ok := e.Value.(error); ok {
+	if err, ok := e.Value.(error); ok && !apperr.IsNil(err) {
 		return err
 	}
 	return nil

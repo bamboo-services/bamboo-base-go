@@ -145,3 +145,15 @@ func TestTypedNil_ExposeReturnsTypedNil(t *testing.T) {
 		t.Fatal("typed nil resource should not be published to container")
 	}
 }
+
+func TestTypedNil_HookPanicErrorUnwrap(t *testing.T) {
+	var nilAppErr *apperr.Error
+	panicErr := &HookPanicError{
+		PluginKey: "demo",
+		Stage:     "start",
+		Value:     nilAppErr,
+	}
+	if unwrapped := panicErr.Unwrap(); unwrapped != nil {
+		t.Fatalf("HookPanicError.Unwrap() should filter typed-nil error, got %#v", unwrapped)
+	}
+}

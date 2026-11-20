@@ -163,6 +163,7 @@ func DefaultWhitelist() []WhitelistEntry {
 		// 结构原因载体字段（非失败出口）
 		WhitelistEntry{ID: "STRUCT-CAUSE", Contract: "error-cause-carrier", Kind: KindField, PkgPath: "foundation/apperr", Symbol: "Error.Err", Reason: "结构化错误底层原因字段"},
 		WhitelistEntry{ID: "STRUCT-CAUSE", Contract: "error-cause-carrier", Kind: KindField, PkgPath: "foundation/apperr", Symbol: "chainIdentity.value", Reason: "原因链环检测节点键值载体"},
+		WhitelistEntry{ID: "STRUCT-CAUSE", Contract: "error-sentinel-map", Kind: KindVar, PkgPath: "application", Symbol: "sentinelCodes", Reason: "应用哨兵错误码映射索引表（非失败出口）"},
 	)
 
 	return entries

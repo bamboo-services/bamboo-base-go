@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -279,6 +280,11 @@ func checkPackage(
 									allowOrRecord(s.Pos(), KindFuncType, s.Name.Name, fmt.Sprintf("类型别名暴露了原生 error: %s (%s)", types.TypeString(t, nil), reason))
 								}
 							}
+							if sig, isSig := t.Underlying().(*types.Signature); isSig {
+								if reason := inspectParamCallbacks(sig, errorType); reason != "" {
+									allowOrRecord(s.Pos(), KindFuncType, s.Name.Name+":param-callback", reason)
+								}
+							}
 							continue
 						}
 
@@ -335,10 +341,17 @@ func checkPackage(
 							if obj == nil {
 								continue
 							}
-							if sig, ok := obj.Type().Underlying().(*types.Signature); ok {
+							vt := obj.Type()
+							if sig, ok := vt.Underlying().(*types.Signature); ok {
 								if reason := inspectSignatureReturn(sig, errorType); reason != "" {
 									allowOrRecord(name.Pos(), KindVar, name.Name, reason)
 								}
+								if reason := inspectParamCallbacks(sig, errorType); reason != "" {
+									allowOrRecord(name.Pos(), KindVar, name.Name+":param-callback", reason)
+								}
+							} else if !types.Identical(vt, errorType) && containsErrorType(vt, errorType) {
+								// 包级哨兵错误（类型为原生 error）允许作为根因保留，其余原生 error 载体需拦截
+								allowOrRecord(name.Pos(), KindVar, name.Name, fmt.Sprintf("包级变量暴露了原生 error 载体: %s", types.TypeString(vt, nil)))
 							}
 							if idx < len(s.Values) {
 								inspectFuncLits(s.Values[idx], name.Name, pkg, errorType, allowOrRecord)
@@ -369,10 +382,17 @@ func inspectFuncLits(
 		if !ok {
 			return true
 		}
-		if reason := inspectSignatureReturn(sig, errorType); reason != "" {
+		retReason := inspectSignatureReturn(sig, errorType)
+		cbReason := inspectParamCallbacks(sig, errorType)
+		if retReason != "" || cbReason != "" {
 			litIdx++
 			litSymbol := fmt.Sprintf("%s/lit#%d", enclosingSymbol, litIdx)
-			allowOrRecord(fl.Pos(), KindFuncLit, litSymbol, reason)
+			if retReason != "" {
+				allowOrRecord(fl.Pos(), KindFuncLit, litSymbol, retReason)
+			}
+			if cbReason != "" {
+				allowOrRecord(fl.Pos(), KindFuncLit, litSymbol+":param-callback", cbReason)
+			}
 		}
 		return true
 	})
@@ -475,6 +495,10 @@ func walkType(t types.Type, visited map[types.Type]bool, match func(types.Type) 
 				}
 			}
 		}
+		// 第三方命名接口（如 net.Error）仍需展开底层接口以拦截非受控 error 接口载体
+		if _, isIface := u.Underlying().(*types.Interface); isIface {
+			return walkType(u.Underlying(), visited, match)
+		}
 		// 仅展开本库自有非结构体命名类型；命名结构体字段由 TypeSpec 统一检查并受白名单约束
 		if u.Obj() == nil || u.Obj().Pkg() == nil || !strings.HasPrefix(u.Obj().Pkg().Path(), modulePrefix) {
 			return false
@@ -497,18 +521,26 @@ func walkType(t types.Type, visited map[types.Type]bool, match func(types.Type) 
 	return false
 }
 
+var generatedCommentRe = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)
+
 func isCustomErrorInterface(iface *types.Interface, errorType types.Type) bool {
 	errIface := errorType.Underlying().(*types.Interface)
 	if iface.NumMethods() == 0 {
 		return false
 	}
-	return types.Implements(errorType, iface) && types.Implements(iface, errIface) && iface.NumMethods() == 1
+	return types.Implements(iface, errIface)
 }
 
 func isGeneratedFile(file *ast.File) bool {
 	for _, cg := range file.Comments {
+		if cg.Pos() >= file.Package {
+			continue
+		}
 		for _, c := range cg.List {
-			if strings.Contains(c.Text, "Code generated") && strings.Contains(c.Text, "DO NOT EDIT") {
+			if c.Pos() >= file.Package {
+				continue
+			}
+			if generatedCommentRe.MatchString(strings.TrimRight(c.Text, "\r")) {
 				return true
 			}
 		}

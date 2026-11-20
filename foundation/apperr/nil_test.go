@@ -89,3 +89,16 @@ func TestNew_KeepsNonNilSiblingOfTypedNil(t *testing.T) {
 		t.Fatal("真实根因必须可经 errors.Is 识别")
 	}
 }
+
+func TestErrorLiteral_FiltersTypedNilCause(t *testing.T) {
+	var typedNil *panicNilError
+	appErr := &apperr.Error{
+		Err: typedNil,
+	}
+	if got := appErr.Error(); got != "error code 0" {
+		t.Fatalf("Error() 应安全降级且不触发 typed-nil Panic，实际: %q", got)
+	}
+	if unwrapped := appErr.Unwrap(); unwrapped != nil {
+		t.Fatalf("Unwrap() 应过滤 typed-nil 并返回 nil，实际: %#v", unwrapped)
+	}
+}

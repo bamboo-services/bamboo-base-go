@@ -227,8 +227,7 @@ func (b *Binding[T]) handleBindError(err error) {
 		return
 	}
 	// 缺失 Binder 明确报错，绝不偷建全局引擎或将未知原始文本拼入安全文案
-	var appErr *apperr.Error
-	if errors.As(err, &appErr) {
+	if appErr := apperr.Find(err); appErr != nil {
 		httpresult.AbortError(b.Context, appErr)
 		return
 	}

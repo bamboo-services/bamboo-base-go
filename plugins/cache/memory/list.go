@@ -256,13 +256,9 @@ func (c *ListCache[K, V]) Pop(ctx context.Context, key K) (*V, *apperr.Error) {
 		if len(l) == 0 {
 			return nil // 空列表删除 key（若存在）
 		}
-		data := l[0]
-		// 反序列化在锁外做以避免 codec 慢导致拖累分片；先暂存 raw
-		raw := make([]byte, len(data))
-		copy(raw, data)
-		// 闭包内只解码，不写外部状态（result 与 unmarshalErr 是闭包捕获的指针）
+		// 必须在锁内反序列化，才能保证解码失败时不弹出首元素
 		var v V
-		if err := c.codec.Unmarshal(raw, &v); err != nil {
+		if err := c.codec.Unmarshal(l[0], &v); err != nil {
 			// 解码失败：记录错误并保留列表原样，不弹出元素
 			unmarshalErr = err
 			return UpdateNoChange
@@ -298,11 +294,9 @@ func (c *ListCache[K, V]) PopLast(ctx context.Context, key K) (*V, *apperr.Error
 		if len(l) == 0 {
 			return nil
 		}
-		data := l[len(l)-1]
-		raw := make([]byte, len(data))
-		copy(raw, data)
+		// 必须在锁内反序列化，才能保证解码失败时不弹出尾元素
 		var v V
-		if err := c.codec.Unmarshal(raw, &v); err != nil {
+		if err := c.codec.Unmarshal(l[len(l)-1], &v); err != nil {
 			// 解码失败：记录错误并保留列表原样，不弹出元素
 			unmarshalErr = err
 			return UpdateNoChange

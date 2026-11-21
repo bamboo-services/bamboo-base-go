@@ -23,22 +23,22 @@ Bamboo Base Go 是 Bamboo 服务的基础组件库，面向 Web HTTP API 与 gRP
 
 项目使用 Go Workspace (`go.work`) 统一管理以下 14 个独立模块：
 
-| 模块目录                             | 模块路径                                                        | 说明                                                                     |
-| :----------------------------------- | :-------------------------------------------------------------- | :----------------------------------------------------------------------- |
-| `foundation`                         | `github.com/bamboo-services/bamboo-base-go/foundation/v2`       | 基础原语（typed, ctxkey, apperr, envelope, logging, snowflake, toolkit） |
-| `application`                        | `github.com/bamboo-services/bamboo-base-go/application/v2`      | 应用内核（App, Plugin, Worker, Tool, Component, Container, Supervisor）  |
-| `plugins/database`                   | `github.com/bamboo-services/bamboo-base-go/plugins/database/v2` | 数据库核心接口与 GORM 模型基类                                           |
-| `plugins/cache`                      | `github.com/bamboo-services/bamboo-base-go/plugins/cache/v2`    | 泛型缓存系统（Memory / Redis 双后端）                                    |
-| `plugins/email`                      | `github.com/bamboo-services/bamboo-base-go/plugins/email/v2`    | 邮件客户端与模板引擎                                                     |
-| `plugins/web-gin`                    | `github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2`  | Gin Web HTTP 服务插件与参数绑定                                          |
-| `plugins/grpc`                       | `github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2`     | gRPC 服务插件与统一响应拦截器                                            |
-| `plugins/cron`                       | `github.com/bamboo-services/bamboo-base-go/plugins/cron/v2`     | Cron 定时调度插件                                                        |
-| `plugins/async`                      | `github.com/bamboo-services/bamboo-base-go/plugins/async/v2`    | 异步任务池插件                                                           |
-| `plugins/database/adapter/mysql`     | `.../plugins/database/adapter/mysql/v2`                         | MySQL 数据库驱动适配器                                                   |
-| `plugins/database/adapter/postgres`  | `.../plugins/database/adapter/postgres/v2`                      | PostgreSQL 数据库驱动适配器                                              |
-| `plugins/database/adapter/sqlite`    | `.../plugins/database/adapter/sqlite/v2`                        | SQLite 纯 Go 数据库驱动适配器                                            |
-| `plugins/database/adapter/sqlserver` | `.../plugins/database/adapter/sqlserver/v2`                     | SQL Server 数据库驱动适配器                                              |
-| `plugins/database/adapter/oracle`    | `.../plugins/database/adapter/oracle/v2`                        | Oracle 数据库驱动适配器                                                  |
+| 模块目录                             | 模块路径                                                        | 说明                                                                                             |
+| :----------------------------------- | :-------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| `foundation`                         | `github.com/bamboo-services/bamboo-base-go/foundation/v2`       | 基础原语（typed, ctxkey, env, apperr, control, valueerr, envelope, logging, snowflake, toolkit） |
+| `application`                        | `github.com/bamboo-services/bamboo-base-go/application/v2`      | 应用内核（App, Plugin, Worker, Tool, Component, Container, Supervisor）                          |
+| `plugins/database`                   | `github.com/bamboo-services/bamboo-base-go/plugins/database/v2` | 数据库核心接口与 GORM 模型基类                                                                   |
+| `plugins/cache`                      | `github.com/bamboo-services/bamboo-base-go/plugins/cache/v2`    | 泛型缓存系统（Memory / Redis 双后端）                                                            |
+| `plugins/email`                      | `github.com/bamboo-services/bamboo-base-go/plugins/email/v2`    | 邮件客户端与模板引擎                                                                             |
+| `plugins/web-gin`                    | `github.com/bamboo-services/bamboo-base-go/plugins/web-gin/v2`  | Gin Web HTTP 服务插件与参数绑定                                                                  |
+| `plugins/grpc`                       | `github.com/bamboo-services/bamboo-base-go/plugins/grpc/v2`     | gRPC 服务插件与统一响应拦截器                                                                    |
+| `plugins/cron`                       | `github.com/bamboo-services/bamboo-base-go/plugins/cron/v2`     | Cron 定时调度插件                                                                                |
+| `plugins/async`                      | `github.com/bamboo-services/bamboo-base-go/plugins/async/v2`    | 异步任务池插件                                                                                   |
+| `plugins/database/adapter/mysql`     | `.../plugins/database/adapter/mysql/v2`                         | MySQL 数据库驱动适配器                                                                           |
+| `plugins/database/adapter/postgres`  | `.../plugins/database/adapter/postgres/v2`                      | PostgreSQL 数据库驱动适配器                                                                      |
+| `plugins/database/adapter/sqlite`    | `.../plugins/database/adapter/sqlite/v2`                        | SQLite 纯 Go 数据库驱动适配器                                                                    |
+| `plugins/database/adapter/sqlserver` | `.../plugins/database/adapter/sqlserver/v2`                     | SQL Server 数据库驱动适配器                                                                      |
+| `plugins/database/adapter/oracle`    | `.../plugins/database/adapter/oracle/v2`                        | Oracle 数据库驱动适配器                                                                          |
 
 ## 快速开始（HTTP + SQLite + 缓存）
 

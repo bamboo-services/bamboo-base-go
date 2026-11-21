@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0
 	github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0
-	github.com/go-co-op/gocron/v2 v2.16.1
+	github.com/go-co-op/gocron/v2 v2.23.2
 )
 
 require (

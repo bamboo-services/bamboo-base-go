@@ -1,10 +1,10 @@
-github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0 h1:ut7HcfMm4/jXlaPBFQ2PxWq71vgcJZ2r/7iCS4Jh7N8=
+github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0 h1:DywCaHa+DMlTsjGk7xPzK8VyhhRCnV3XkRhKByFrozI=
 github.com/bamboo-services/bamboo-base-go/application/v2 v2.0.0/go.mod h1:5luj2qpYbYboBGl2JjwRxkhnnJk0F+JUIyFRqvcnAwo=
-github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0 h1:UOEE2Q+LNHXt8rRm7WDFXhJYr98PB4aDjy7LX2qCLiI=
-github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0/go.mod h1:rfxomp46fpkk965L0QtfQxLXUA168e7ubUDEpfwY9Wg=
+github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0 h1:ZTjDnjPynwPMYEr58l6TdZJfn1X0XE4DP+kTptLUUrA=
+github.com/bamboo-services/bamboo-base-go/foundation/v2 v2.0.0/go.mod h1:TCy/AZIROAjf2kZmmfEboz/4O7jficT8ZkQxWVLoHcU=
 github.com/wneessen/go-mail v0.8.1 h1:tVcncj02/QySVFw3zr/kXOzZcuFQqBNT6K+Rbgm/pcM=
 github.com/wneessen/go-mail v0.8.1/go.mod h1:dWZ61zadzCIyvB4y1/YzC5O7MrbbzBfPkARmbosdf8w=
-golang.org/x/crypto v0.54.0 h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=
-golang.org/x/crypto v0.54.0/go.mod h1:KWL8ny2AZdGR2cWmzeHrp2azQPGogOv+HeQaVEXC2dk=
-golang.org/x/text v0.40.0 h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=
-golang.org/x/text v0.40.0/go.mod h1:hpnzDAfGV753zIKo+wk3u1bVKCGPbrnF7+7LBF/UHVY=
+golang.org/x/crypto v0.55.0 h1:+KWHjbgOaAQ66dh/YlkZKHlz9ZUlq61AFirAR9ntP8M=
+golang.org/x/crypto v0.55.0/go.mod h1:uq0V9dE/fzQuJtbnL+2EhWOE63vo164FY8xqEnV9xis=
+golang.org/x/text v0.41.0 h1:vz/seA0lnX87Othu2f/0L24RcgrXD9/YFTSuGjj3rH8=
+golang.org/x/text v0.41.0/go.mod h1:jvf1O8ajNzZqhSrQBPbutR/EB83Cc0CFrezNQIwbb5M=

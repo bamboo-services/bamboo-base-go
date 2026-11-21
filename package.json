@@ -11,7 +11,7 @@
     "format:docs:check": "prettier --check --no-error-on-unmatched-pattern README.md \"docs/**/*.md\""
   },
   "devDependencies": {
-    "markdownlint-cli2": "0.23.3",
-    "prettier": "3.9.9"
+    "markdownlint-cli2": "0.24.2",
+    "prettier": "3.10.1"
   }
 }

@@ -95,8 +95,8 @@ echo "   ✅ /v2 依赖精确替换成功，下游模块正确升级到 v${TARGE
 echo "   🔍 校验 14 个模块的 go.mod 语法有效性..."
 syntax_count=0
 for mod_dir in "${MOD_DIRS[@]}"; do
-	(cd "$mod_dir" && go list -m >/dev/null)
-	((syntax_count++))
+	(cd "$mod_dir" && GOWORK=off go list -m >/dev/null)
+	syntax_count=$((syntax_count + 1))
 done
 if [ "$syntax_count" -ne 14 ]; then
 	echo "❌ 语法校验模块计数不符: 期望 14, 实际 $syntax_count" >&2
@@ -136,7 +136,7 @@ tag_count=0
 for mod_dir in "${MOD_DIRS[@]}"; do
 	sub_tag="${mod_dir}/${TEST_VERSION}"
 	git tag -a "${sub_tag}" -m "Release ${sub_tag}"
-	((tag_count++))
+	tag_count=$((tag_count + 1))
 done
 
 if [ "$tag_count" -ne 14 ]; then
@@ -169,7 +169,7 @@ for mod_dir in "${MOD_DIRS[@]}"; do
 		existing_commit=$(git rev-parse "refs/tags/${sub_tag}^{commit}")
 		current_commit=$(git rev-parse HEAD)
 		if [ "$existing_commit" = "$current_commit" ]; then
-			((reenter_count++))
+			reenter_count=$((reenter_count + 1))
 		else
 			echo "❌ 意外的 commit 不匹配" >&2
 			exit 1

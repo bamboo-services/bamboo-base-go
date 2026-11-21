@@ -117,8 +117,8 @@ jobs:
           while read -r mod_dir mod_path; do
             [[ "$mod_dir" =~ ^#.*$ || -z "$mod_dir" ]] && continue
             echo "🔍 校验 $mod_dir/go.mod"
-            (cd "$mod_dir" && go list -m > /dev/null)
-            ((count++))
+            (cd "$mod_dir" && GOWORK=off go list -m > /dev/null)
+            count=$((count + 1))
           done < .github/scripts/manifest/v2-modules.txt
 
           if [ "$count" -ne 14 ]; then
@@ -157,7 +157,7 @@ jobs:
           echo "📋 为 commit ${COMMIT_SHA} 生成 Release ${TAG} 清单..."
 
           # 使用 release-manifest.go 直接从权威清单生成、校验并规范化写入 .github/release-manifest.json
-          go run .github/scripts/release/release-manifest.go \
+          GOWORK=off go run .github/scripts/release/release-manifest.go \
             -modules-file .github/scripts/manifest/v2-modules.txt \
             -version "v${VERSION}" \
             -commit "${COMMIT_SHA}" \
@@ -188,7 +188,7 @@ jobs:
               git tag -a "${sub_tag}" -m "Release ${sub_tag}"
               echo "✅ 已打 tag: ${sub_tag}"
             fi
-            ((count++))
+            count=$((count + 1))
           done < .github/scripts/manifest/v2-modules.txt
 
           if [ "$count" -ne 14 ]; then

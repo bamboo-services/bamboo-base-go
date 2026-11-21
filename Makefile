@@ -140,6 +140,8 @@ endif
 	@command -v gh >/dev/null 2>&1 || { echo "❌ 未找到 gh CLI,请先安装: https://cli.github.com/"; exit 1; }
 	@set -e; \
 	PREV_TAG=$$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude 'v*-*' HEAD^ 2>/dev/null || true); \
+	PRERELEASE_OPT=""; \
+	case "$(VERSION)" in *-*) PRERELEASE_OPT="--prerelease"; echo "   🏷️ 检测到预发布版本 $(VERSION)，将标记为 Pre-release" ;; esac; \
 	NOTES_OPTS="--generate-notes"; \
 	if [ -n "$$PREV_TAG" ]; then NOTES_OPTS="--generate-notes --notes-start-tag $$PREV_TAG"; fi; \
 	NOTES_FILE="$(RELEASE_NOTES_FILE)"; \
@@ -158,7 +160,7 @@ endif
 	else \
 		echo "   📝 未配置 AI (设置 AI_API_KEY 启用), 使用 GitHub 自动生成"; \
 	fi; \
-	gh release create "$(VERSION)" --title "$(VERSION)" $$NOTES_OPTS; \
+	gh release create "$(VERSION)" --title "$(VERSION)" $$PRERELEASE_OPT $$NOTES_OPTS; \
 	rm -f "$$NOTES_FILE"; \
 	echo "✅ Release $(VERSION) 已创建"; \
 	echo "   👀 查看: https://github.com/bamboo-services/bamboo-base-go/releases/tag/$(VERSION)"; \
